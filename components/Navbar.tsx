@@ -11,9 +11,9 @@ export default function Navbar() {
           <Link href="/" className="hover:text-[#000000] transition-colors">Home</Link>
           <Link href="/about" className="hover:text-[#000000] transition-colors">About</Link>
           <Link href="/services" className="hover:text-[#000000] transition-colors">Services</Link>
-          <Link href="/contact" className="hover:text-[#000000] transition-colors">Contact</Link>
+          <Link href="/#contact" className="hover:text-[#000000] transition-colors">Contact</Link>
         </div>
-        <Link href="/contact" className="hidden md:inline-flex items-center justify-center h-10 px-6 rounded-full bg-[#000000] text-white text-sm font-medium hover:-translate-y-0.5 transition-transform">
+        <Link href="/#contact" className="hidden md:inline-flex items-center justify-center h-10 px-6 rounded-full bg-[#000000] text-white text-sm font-medium hover:-translate-y-0.5 transition-transform">
           Start a Project
         </Link>
       </div>
