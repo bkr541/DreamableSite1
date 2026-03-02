@@ -1,11 +1,13 @@
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Navbar() {
   return (
     <nav className="sticky top-0 z-50 w-full px-4 pt-4">
       <div className="max-w-[1100px] mx-auto bg-white/80 backdrop-blur-md rounded-full shadow-[0_2px_20px_rgba(0,0,0,0.08)] border border-[#E8E8E8]/60 px-8 h-16 flex items-center justify-between">
-        <Link href="/" className="text-lg font-semibold tracking-tight text-[#000000]">
-          Dreamable<span className="text-[#999]">.</span>studio
+        <Link href="/" className="flex items-center gap-2 text-lg font-semibold tracking-tight text-[#000000]">
+          <Image src="/images/logo.png" alt="Dreamable.studio logo" width={32} height={32} className="rounded-md" />
+          <span>Dreamable<span className="text-[#999]">.</span>studio</span>
         </Link>
         <div className="hidden md:flex items-center gap-2">
           <div className="flex items-center gap-6 text-sm font-medium text-[#707070] mr-4">

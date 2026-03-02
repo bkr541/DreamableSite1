@@ -6,26 +6,34 @@ import Link from 'next/link';
 import { motion } from 'motion/react';
 import SplineBackground from '@/components/SplineBackground';
 import InteractiveElement from '@/components/InteractiveElement';
+import HeroRibbons from '@/components/HeroRibbons';
 import HeroCarousel from '@/components/HeroCarousel';
 
 export default function Home() {
   const [formData, setFormData] = useState({
-    name: '', email: '', projectType: 'App or Web Development', budgetRange: '$5k - $10k', message: '',
+    name: '', email: '', projectType: 'App or Web Development', message: '',
   });
+  const [attachment, setAttachment] = useState<File | null>(null);
   const [formStatus, setFormStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormStatus('sending');
     try {
+      const fd = new FormData();
+      fd.append('name', formData.name);
+      fd.append('email', formData.email);
+      fd.append('projectType', formData.projectType);
+      fd.append('message', formData.message);
+      if (attachment) fd.append('attachment', attachment);
       const res = await fetch('/api/contact', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: fd,
       });
       if (!res.ok) throw new Error('Failed');
       setFormStatus('sent');
-      setFormData({ name: '', email: '', projectType: 'App or Web Development', budgetRange: '$5k - $10k', message: '' });
+      setFormData({ name: '', email: '', projectType: 'App or Web Development', message: '' });
+      setAttachment(null);
     } catch {
       setFormStatus('error');
     }
@@ -35,8 +43,7 @@ export default function Home() {
     <div className="flex flex-col w-full">
       {/* SECTION 1 – HERO */}
       <section className="relative min-h-[calc(100vh-80px)] flex items-center px-6 py-24 overflow-hidden">
-        {/* Subtle cyan glow in center */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full bg-cyan-200/20 blur-[100px] pointer-events-none" />
+        <HeroRibbons />
         <div className="relative z-10 max-w-[1200px] mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           {/* Left – Text */}
           <div className="flex flex-col items-start">
@@ -326,18 +333,23 @@ export default function Home() {
                     </select>
                   </div>
                   <div className="flex flex-col">
-                    <label htmlFor="contact-budget" className="text-sm font-medium text-[#555] mb-2">Budget Range</label>
-                    <select
-                      id="contact-budget"
-                      value={formData.budgetRange}
-                      onChange={(e) => setFormData({ ...formData, budgetRange: e.target.value })}
-                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-white/40 transition-all appearance-none cursor-pointer"
+                    <label htmlFor="contact-attachment" className="text-sm font-medium text-[#555] mb-2">Attachment <span className="text-[#aaa] font-normal">(optional)</span></label>
+                    <label
+                      htmlFor="contact-attachment"
+                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] focus-within:ring-2 focus-within:ring-cyan-200/50 border border-white/40 transition-all cursor-pointer flex items-center gap-2"
                     >
-                      <option value="$5k - $10k">$5k - $10k</option>
-                      <option value="$10k - $25k">$10k - $25k</option>
-                      <option value="$25k - $50k">$25k - $50k</option>
-                      <option value="$50k+">$50k+</option>
-                    </select>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#999] shrink-0"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66L9.41 17.41a2 2 0 01-2.83-2.83l8.49-8.49" /></svg>
+                      <span className={`text-sm truncate ${attachment ? 'text-[#1a1a1a]' : 'text-[#bbb]'}`}>
+                        {attachment ? attachment.name : 'PDF, image, or doc'}
+                      </span>
+                      <input
+                        type="file"
+                        id="contact-attachment"
+                        className="sr-only"
+                        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.svg,.sketch,.fig,.xd"
+                        onChange={(e) => setAttachment(e.target.files?.[0] || null)}
+                      />
+                    </label>
                   </div>
                 </div>
 
