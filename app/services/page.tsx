@@ -1,20 +1,67 @@
+'use client';
+
 import Link from 'next/link';
+import { motion } from 'motion/react';
 
 export default function Services() {
   return (
     <div className="flex flex-col w-full">
       {/* Intro */}
-      <section className="px-6 pt-32 pb-24 max-w-[1200px] mx-auto w-full">
-        <h1 className="text-5xl md:text-7xl font-semibold tracking-tight mb-8">Services</h1>
-        <p className="text-xl md:text-2xl text-[#707070] leading-relaxed max-w-[800px]">
-          We focus on small-team efficiency, not enterprise complexity. Everything we do is designed to get your product to market faster, with a stronger foundation.
-        </p>
+      <section className="px-8 md:px-16 pt-32 pb-24 max-w-[1200px] mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+        <div>
+          <h1 className="text-5xl md:text-7xl font-semibold tracking-tight mb-8">Services</h1>
+          <p className="text-xl md:text-2xl text-[#707070] leading-relaxed max-w-[800px]">
+            We focus on small-team efficiency, not enterprise complexity. Everything we do is designed to get your product to market faster, with a stronger foundation.
+          </p>
+        </div>
+
+        {/* Cascading stacked images */}
+        <div className="relative h-[350px] md:h-[400px] hidden md:block">
+          {[
+            { src: '/images/carousel-1.jpg', alt: 'Marketing & Branding', left: '0%', top: '25%', rotate: -3, delay: 0, z: 5, gradient: 'linear-gradient(135deg, #f472b6, #a855f7)' },
+            { src: '/images/carousel-2.jpg', alt: 'Automation', left: '14%', top: '15%', rotate: 2, delay: 0.12, z: 4, gradient: 'linear-gradient(135deg, #818cf8, #6366f1)' },
+            { src: '/images/carousel-3.jpg', alt: 'Website Development', left: '28%', top: '22%', rotate: -1, delay: 0.24, z: 3, gradient: 'linear-gradient(135deg, #fb923c, #f59e0b)' },
+            { src: '/images/carousel-4.jpg', alt: 'Logo Design', left: '42%', top: '12%', rotate: 3, delay: 0.36, z: 2, gradient: 'linear-gradient(135deg, #c084fc, #a855f7)' },
+            { src: '/images/carousel-5.jpg', alt: 'Custom Visuals', left: '56%', top: '20%', rotate: -2, delay: 0.48, z: 1, gradient: 'linear-gradient(135deg, #2dd4bf, #06b6d4)' },
+          ].map((img, i) => (
+            <motion.div
+              key={i}
+              className="absolute rounded-2xl p-[3px]"
+              style={{
+                width: 190, height: 190,
+                left: img.left, top: img.top,
+                zIndex: img.z,
+                rotate: img.rotate,
+                background: img.gradient,
+                boxShadow: '0 10px 35px rgba(0,0,0,0.1)',
+              }}
+              initial={{ opacity: 0, x: 40, scale: 0.9 }}
+              animate={{
+                opacity: 1, x: 0, y: [0, -(5 + i * 2), 0], scale: 1,
+              }}
+              transition={{
+                opacity: { duration: 0.5, delay: img.delay },
+                x: { duration: 0.6, delay: img.delay },
+                scale: { duration: 0.5, delay: img.delay },
+                y: { duration: 6 + i, delay: img.delay + 0.6, repeat: Infinity, ease: 'easeInOut' },
+              }}
+            >
+              <div className="w-full h-full rounded-[13px] overflow-hidden">
+                <img
+                  src={img.src}
+                  alt={img.alt}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </motion.div>
+          ))}
+        </div>
       </section>
 
       {/* Service Blocks */}
       <section className="px-6 py-24 border-t border-[#F5F5F5] bg-[#F9F9F9]">
         <div className="max-w-[1200px] mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-8">
-          
+
           <div className="p-10 bg-white rounded-[32px] border border-[#E5E5E5] flex flex-col h-full">
             <div className="w-12 h-12 rounded-xl bg-[#F5F5F5] mb-8 flex items-center justify-center">
               {/* Icon Placeholder */}
@@ -73,61 +120,17 @@ export default function Services() {
         </div>
       </section>
 
-      {/* Engagement Models */}
-      <section className="px-6 py-32 border-t border-[#F5F5F5]">
-        <div className="max-w-[1200px] mx-auto w-full">
-          <h2 className="text-3xl font-semibold tracking-tight mb-16">Engagement Models</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="flex flex-col border-t border-[#000000] pt-6">
-              <h3 className="text-xl font-semibold mb-4">Project Sprint</h3>
-              <p className="text-[#707070]">Fixed scope, high speed. Ideal for specific deliverables like a brand identity or a marketing site.</p>
-            </div>
-            <div className="flex flex-col border-t border-[#000000] pt-6">
-              <h3 className="text-xl font-semibold mb-4">Build + Launch</h3>
-              <p className="text-[#707070]">End-to-end product development. From initial concept to the final shipped application.</p>
-            </div>
-            <div className="flex flex-col border-t border-[#000000] pt-6">
-              <h3 className="text-xl font-semibold mb-4">Ongoing Support</h3>
-              <p className="text-[#707070]">Retained design and engineering to keep your product evolvable and maintained over time.</p>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* Scenarios */}
-      <section className="px-6 py-32 border-t border-[#F5F5F5] bg-[#000000] text-white overflow-hidden">
-        <div className="max-w-[1200px] mx-auto w-full">
-          <h2 className="text-3xl font-semibold tracking-tight mb-16">Example Scenarios</h2>
-          <div className="flex overflow-x-auto pb-8 gap-6 snap-x snap-mandatory hide-scrollbar">
-            
-            <div className="min-w-[300px] md:min-w-[400px] p-8 rounded-2xl bg-[#111111] border border-[#222222] snap-start">
-              <div className="text-sm font-medium text-[#888888] mb-4">Scenario 01</div>
-              <h3 className="text-xl font-semibold mb-4">The Founder</h3>
-              <p className="text-[#AAAAAA]">Needs a brand identity and a V1 mobile app to raise their first round.</p>
-            </div>
 
-            <div className="min-w-[300px] md:min-w-[400px] p-8 rounded-2xl bg-[#111111] border border-[#222222] snap-start">
-              <div className="text-sm font-medium text-[#888888] mb-4">Scenario 02</div>
-              <h3 className="text-xl font-semibold mb-4">The Scaling Team</h3>
-              <p className="text-[#AAAAAA]">Needs to automate their content pipeline with a custom internal tool.</p>
-            </div>
 
-            <div className="min-w-[300px] md:min-w-[400px] p-8 rounded-2xl bg-[#111111] border border-[#222222] snap-start">
-              <div className="text-sm font-medium text-[#888888] mb-4">Scenario 03</div>
-              <h3 className="text-xl font-semibold mb-4">The Established Product</h3>
-              <p className="text-[#AAAAAA]">Needs a complete UI system overhaul to improve user retention.</p>
-            </div>
 
-          </div>
-        </div>
-      </section>
 
       {/* FAQ */}
       <section className="px-6 py-32 border-t border-[#F5F5F5]">
         <div className="max-w-[800px] mx-auto w-full">
           <h2 className="text-3xl font-semibold tracking-tight mb-16">Frequently Asked Questions</h2>
           <div className="space-y-8">
-            
+
             <div className="border-b border-[#F5F5F5] pb-8">
               <h3 className="text-lg font-semibold mb-4">What is your typical timeline?</h3>
               <p className="text-[#707070]">Most projects take 6–12 weeks from kickoff to launch.</p>

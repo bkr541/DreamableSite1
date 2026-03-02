@@ -2,152 +2,170 @@
 
 import { motion } from 'motion/react';
 
+/* ── Floating code snippets ────────────────────────────────── */
+const codeSnippets = [
+    { code: 'const app = create();', x: '5%', y: '12%', rotate: -3, delay: 0, size: 'text-[11px]' },
+    { code: '<Component />', x: '78%', y: '8%', rotate: 4, delay: 1.2, size: 'text-xs' },
+    { code: 'async deploy()', x: '70%', y: '72%', rotate: -2, delay: 2.5, size: 'text-[11px]' },
+    { code: 'npm run build', x: '8%', y: '75%', rotate: 3, delay: 0.8, size: 'text-[10px]' },
+    { code: 'git push origin main', x: '82%', y: '40%', rotate: -4, delay: 3.2, size: 'text-[10px]' },
+    { code: 'export default', x: '15%', y: '45%', rotate: 2, delay: 1.8, size: 'text-[10px]' },
+];
+
+/* ── Floating symbols ──────────────────────────────────────── */
+const symbols = [
+    { char: '{  }', x: '22%', y: '18%', delay: 0.5 },
+    { char: '< />', x: '65%', y: '22%', delay: 1.5 },
+    { char: '( )', x: '40%', y: '78%', delay: 2.8 },
+    { char: '[ ]', x: '88%', y: '58%', delay: 0.2 },
+    { char: '=>', x: '50%', y: '10%', delay: 3.5 },
+    { char: '&&', x: '30%', y: '65%', delay: 1 },
+    { char: '...', x: '72%', y: '85%', delay: 2 },
+];
+
+/* ── Animated connection lines (like a node graph) ─────────── */
+const connections = [
+    { x1: 10, y1: 30, x2: 35, y2: 20 },
+    { x1: 60, y1: 15, x2: 85, y2: 35 },
+    { x1: 20, y1: 70, x2: 45, y2: 85 },
+    { x1: 55, y1: 60, x2: 80, y2: 75 },
+    { x1: 30, y1: 40, x2: 55, y2: 30 },
+];
+
+/* ── Small dot nodes ───────────────────────────────────────── */
+const nodes = [
+    { x: '10%', y: '30%', color: 'bg-cyan-400/30' },
+    { x: '35%', y: '20%', color: 'bg-purple-400/25' },
+    { x: '60%', y: '15%', color: 'bg-pink-400/25' },
+    { x: '85%', y: '35%', color: 'bg-amber-400/25' },
+    { x: '20%', y: '70%', color: 'bg-teal-400/30' },
+    { x: '45%', y: '85%', color: 'bg-indigo-400/20' },
+    { x: '55%', y: '60%', color: 'bg-cyan-400/20' },
+    { x: '80%', y: '75%', color: 'bg-purple-400/20' },
+    { x: '30%', y: '40%', color: 'bg-pink-400/20' },
+    { x: '55%', y: '30%', color: 'bg-amber-400/20' },
+];
+
 export default function HeroRibbons() {
     return (
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            {/* Soft glow base */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[500px] rounded-full bg-gradient-to-r from-cyan-100/20 via-purple-100/15 to-pink-100/20 blur-[80px]" />
+        <div className="absolute inset-0 overflow-hidden pointer-events-none select-none">
+            {/* Soft gradient glow base */}
+            <div className="absolute top-1/3 left-1/4 w-[500px] h-[400px] rounded-full bg-cyan-200/30 blur-[120px]" />
+            <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[350px] rounded-full bg-purple-200/25 blur-[100px]" />
 
-            <svg
-                className="absolute inset-0 w-full h-full"
-                viewBox="0 0 1400 800"
-                fill="none"
-                preserveAspectRatio="xMidYMid slice"
-            >
+            {/* Grid pattern overlay */}
+            <svg className="absolute inset-0 w-full h-full opacity-[0.07]">
                 <defs>
-                    {/* Ribbon 1: Cyan to Teal */}
-                    <linearGradient id="ribbon1" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="rgba(6,182,212,0.35)" />
-                        <stop offset="50%" stopColor="rgba(34,211,238,0.25)" />
-                        <stop offset="100%" stopColor="rgba(20,184,166,0.15)" />
-                    </linearGradient>
-                    {/* Ribbon 2: Pink to Purple */}
-                    <linearGradient id="ribbon2" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="rgba(244,114,182,0.3)" />
-                        <stop offset="50%" stopColor="rgba(192,132,252,0.2)" />
-                        <stop offset="100%" stopColor="rgba(168,85,247,0.15)" />
-                    </linearGradient>
-                    {/* Ribbon 3: Yellow to Orange */}
-                    <linearGradient id="ribbon3" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="rgba(251,191,36,0.25)" />
-                        <stop offset="50%" stopColor="rgba(251,146,60,0.2)" />
-                        <stop offset="100%" stopColor="rgba(245,158,11,0.12)" />
-                    </linearGradient>
-                    {/* Ribbon 4: Iridescent multi */}
-                    <linearGradient id="ribbon4" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="rgba(6,182,212,0.2)" />
-                        <stop offset="30%" stopColor="rgba(168,85,247,0.18)" />
-                        <stop offset="60%" stopColor="rgba(244,114,182,0.2)" />
-                        <stop offset="100%" stopColor="rgba(34,211,238,0.12)" />
-                    </linearGradient>
-                    {/* Sheen filter */}
-                    <filter id="ribbonBlur">
-                        <feGaussianBlur in="SourceGraphic" stdDeviation="2" />
-                    </filter>
+                    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+                        <path d="M 60 0 L 0 0 0 60" fill="none" stroke="#1a1a1a" strokeWidth="0.5" />
+                    </pattern>
                 </defs>
-
-                {/* Ribbon 1 – Cyan, flowing across center */}
-                <motion.path
-                    d="M-100,420 C150,350 350,500 600,380 C850,260 1050,450 1300,350 L1500,380 L1500,440 C1250,520 1050,380 800,460 C550,540 350,380 100,480 L-100,460 Z"
-                    fill="url(#ribbon1)"
-                    filter="url(#ribbonBlur)"
-                    animate={{
-                        d: [
-                            'M-100,420 C150,350 350,500 600,380 C850,260 1050,450 1300,350 L1500,380 L1500,440 C1250,520 1050,380 800,460 C550,540 350,380 100,480 L-100,460 Z',
-                            'M-100,400 C150,320 350,480 600,400 C850,320 1050,420 1300,370 L1500,400 L1500,460 C1250,500 1050,400 800,440 C550,480 350,360 100,460 L-100,440 Z',
-                            'M-100,420 C150,350 350,500 600,380 C850,260 1050,450 1300,350 L1500,380 L1500,440 C1250,520 1050,380 800,460 C550,540 350,380 100,480 L-100,460 Z',
-                        ],
-                    }}
-                    transition={{ duration: 12, repeat: Infinity, ease: 'easeInOut' }}
-                />
-
-                {/* Ribbon 2 – Pink/Purple, upper sweep */}
-                <motion.path
-                    d="M-50,300 C200,220 400,380 650,280 C900,180 1100,320 1400,240 L1500,260 L1500,310 C1200,380 1000,250 750,340 C500,430 300,280 50,370 L-50,350 Z"
-                    fill="url(#ribbon2)"
-                    filter="url(#ribbonBlur)"
-                    animate={{
-                        d: [
-                            'M-50,300 C200,220 400,380 650,280 C900,180 1100,320 1400,240 L1500,260 L1500,310 C1200,380 1000,250 750,340 C500,430 300,280 50,370 L-50,350 Z',
-                            'M-50,320 C200,260 400,350 650,300 C900,250 1100,340 1400,280 L1500,300 L1500,350 C1200,400 1000,310 750,360 C500,410 300,300 50,350 L-50,330 Z',
-                            'M-50,300 C200,220 400,380 650,280 C900,180 1100,320 1400,240 L1500,260 L1500,310 C1200,380 1000,250 750,340 C500,430 300,280 50,370 L-50,350 Z',
-                        ],
-                    }}
-                    transition={{ duration: 14, delay: 1, repeat: Infinity, ease: 'easeInOut' }}
-                />
-
-                {/* Ribbon 3 – Yellow/Orange, lower sweep */}
-                <motion.path
-                    d="M-100,520 C150,480 400,580 650,500 C900,420 1100,540 1400,480 L1500,500 L1500,545 C1200,590 1000,490 750,550 C500,610 300,500 50,570 L-100,560 Z"
-                    fill="url(#ribbon3)"
-                    filter="url(#ribbonBlur)"
-                    animate={{
-                        d: [
-                            'M-100,520 C150,480 400,580 650,500 C900,420 1100,540 1400,480 L1500,500 L1500,545 C1200,590 1000,490 750,550 C500,610 300,500 50,570 L-100,560 Z',
-                            'M-100,540 C150,500 400,560 650,510 C900,460 1100,520 1400,490 L1500,510 L1500,555 C1200,580 1000,510 750,540 C500,570 300,510 50,550 L-100,540 Z',
-                            'M-100,520 C150,480 400,580 650,500 C900,420 1100,540 1400,480 L1500,500 L1500,545 C1200,590 1000,490 750,550 C500,610 300,500 50,570 L-100,560 Z',
-                        ],
-                    }}
-                    transition={{ duration: 10, delay: 2, repeat: Infinity, ease: 'easeInOut' }}
-                />
-
-                {/* Ribbon 4 – Thin iridescent accent line */}
-                <motion.path
-                    d="M-50,380 C200,320 450,440 700,360 C950,280 1150,400 1450,340"
-                    stroke="url(#ribbon4)"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    fill="none"
-                    animate={{
-                        d: [
-                            'M-50,380 C200,320 450,440 700,360 C950,280 1150,400 1450,340',
-                            'M-50,360 C200,300 450,420 700,380 C950,340 1150,380 1450,360',
-                            'M-50,380 C200,320 450,440 700,360 C950,280 1150,400 1450,340',
-                        ],
-                    }}
-                    transition={{ duration: 8, delay: 0.5, repeat: Infinity, ease: 'easeInOut' }}
-                />
-
-                {/* Ribbon 5 – Thin secondary accent */}
-                <motion.path
-                    d="M-50,450 C250,400 500,510 750,430 C1000,350 1200,470 1500,410"
-                    stroke="url(#ribbon1)"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    fill="none"
-                    opacity="0.5"
-                    animate={{
-                        d: [
-                            'M-50,450 C250,400 500,510 750,430 C1000,350 1200,470 1500,410',
-                            'M-50,430 C250,380 500,480 750,440 C1000,400 1200,440 1500,420',
-                            'M-50,450 C250,400 500,510 750,430 C1000,350 1200,470 1500,410',
-                        ],
-                    }}
-                    transition={{ duration: 11, delay: 3, repeat: Infinity, ease: 'easeInOut' }}
-                />
+                <rect width="100%" height="100%" fill="url(#grid)" />
             </svg>
 
-            {/* Sparkle accents */}
-            {[
-                { x: '15%', y: '25%', d: 0 },
-                { x: '70%', y: '35%', d: 1.5 },
-                { x: '45%', y: '65%', d: 3 },
-                { x: '85%', y: '55%', d: 2 },
-            ].map((s, i) => (
+            {/* Connection lines (node graph) */}
+            <svg className="absolute inset-0 w-full h-full">
+                {connections.map((c, i) => (
+                    <motion.line
+                        key={`line-${i}`}
+                        x1={`${c.x1}%`} y1={`${c.y1}%`}
+                        x2={`${c.x2}%`} y2={`${c.y2}%`}
+                        stroke="rgba(120,160,190,0.2)"
+                        strokeWidth="1"
+                        strokeDasharray="6 4"
+                        initial={{ pathLength: 0, opacity: 0 }}
+                        animate={{ pathLength: 1, opacity: 1 }}
+                        transition={{ duration: 2, delay: i * 0.4, ease: 'easeOut' }}
+                    />
+                ))}
+                {/* Animated data pulses along lines */}
+                {connections.map((c, i) => (
+                    <motion.circle
+                        key={`pulse-${i}`}
+                        r="2"
+                        fill="rgba(6,182,212,0.45)"
+                        animate={{
+                            cx: [`${c.x1}%`, `${c.x2}%`],
+                            cy: [`${c.y1}%`, `${c.y2}%`],
+                            opacity: [0, 0.6, 0],
+                        }}
+                        transition={{
+                            duration: 3,
+                            delay: i * 1.2 + 2,
+                            repeat: Infinity,
+                            ease: 'easeInOut',
+                        }}
+                    />
+                ))}
+            </svg>
+
+            {/* Dot nodes */}
+            {nodes.map((n, i) => (
                 <motion.div
-                    key={i}
-                    className="absolute w-1.5 h-1.5 rounded-full"
-                    style={{
-                        left: s.x, top: s.y,
-                        background: 'radial-gradient(circle, rgba(255,255,255,0.8), rgba(200,220,255,0.3))',
-                    }}
+                    key={`node-${i}`}
+                    className={`absolute w-2.5 h-2.5 rounded-full ${n.color}`}
+                    style={{ left: n.x, top: n.y }}
                     animate={{
-                        scale: [0, 1.5, 0],
-                        opacity: [0, 0.8, 0],
+                        scale: [1, 1.8, 1],
+                        opacity: [0.3, 0.6, 0.3],
                     }}
-                    transition={{ duration: 4, delay: s.d, repeat: Infinity, ease: 'easeInOut' }}
+                    transition={{ duration: 4, delay: i * 0.5, repeat: Infinity, ease: 'easeInOut' }}
                 />
             ))}
+
+            {/* Floating code snippets */}
+            {codeSnippets.map((s, i) => (
+                <motion.div
+                    key={`code-${i}`}
+                    className={`absolute font-mono ${s.size} text-[#1a1a1a]/[0.18] whitespace-nowrap`}
+                    style={{ left: s.x, top: s.y, rotate: s.rotate }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{
+                        opacity: 1,
+                        y: [0, -8, 0],
+                    }}
+                    transition={{
+                        opacity: { duration: 1, delay: s.delay },
+                        y: { duration: 8 + i, delay: s.delay, repeat: Infinity, ease: 'easeInOut' },
+                    }}
+                >
+                    {s.code}
+                </motion.div>
+            ))}
+
+            {/* Floating bracket/syntax symbols */}
+            {symbols.map((s, i) => (
+                <motion.div
+                    key={`sym-${i}`}
+                    className="absolute font-mono text-lg md:text-xl text-[#1a1a1a]/[0.12] font-light"
+                    style={{ left: s.x, top: s.y }}
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={{
+                        opacity: 1,
+                        scale: [1, 1.15, 1],
+                        y: [0, -12, 0],
+                        rotate: [0, i % 2 === 0 ? 5 : -5, 0],
+                    }}
+                    transition={{
+                        opacity: { duration: 0.8, delay: s.delay },
+                        scale: { duration: 7 + i, delay: s.delay, repeat: Infinity, ease: 'easeInOut' },
+                        y: { duration: 9 + i, delay: s.delay, repeat: Infinity, ease: 'easeInOut' },
+                        rotate: { duration: 12, delay: s.delay, repeat: Infinity, ease: 'easeInOut' },
+                    }}
+                >
+                    {s.char}
+                </motion.div>
+            ))}
+
+            {/* Blinking terminal cursor */}
+            <motion.div
+                className="absolute font-mono text-sm text-cyan-500/30"
+                style={{ left: '45%', top: '50%' }}
+                animate={{ opacity: [1, 0, 1] }}
+                transition={{ duration: 1.2, repeat: Infinity }}
+            >
+                █
+            </motion.div>
         </div>
     );
 }

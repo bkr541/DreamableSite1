@@ -4,7 +4,7 @@ export default function About() {
   return (
     <div className="flex flex-col w-full">
       {/* Intro */}
-      <section className="px-6 pt-32 pb-24 max-w-[1200px] mx-auto w-full">
+      <section className="px-8 md:px-16 pt-32 pb-24 max-w-[1200px] mx-auto w-full">
         <h1 className="text-5xl md:text-7xl font-semibold tracking-tight mb-8">About Dreamable.studio</h1>
         <p className="text-xl md:text-2xl text-[#707070] leading-relaxed max-w-[800px]">
           We are a small, focused team of designers and engineers who believe that digital products should be as beautiful as they are functional. We don't do "digital transformation." We build software that works and brands that matter.
@@ -83,7 +83,7 @@ export default function About() {
               </div>
             </div>
           </div>
-          
+
           <div className="w-full lg:w-1/2">
             <h2 className="text-3xl font-semibold tracking-tight mb-12">What You Can Expect</h2>
             <ul className="space-y-6 text-lg text-[#707070]">
