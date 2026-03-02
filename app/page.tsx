@@ -70,7 +70,7 @@ export default function Home() {
   return (
     <div className="flex flex-col w-full">
       {/* SECTION 1 – HERO */}
-      <section className="relative min-h-[calc(100vh-80px)] flex items-center px-8 md:px-16 py-24 overflow-hidden">
+      <section className="relative min-h-[calc(100vh-80px)] flex items-center px-8 md:px-16 py-24 overflow-hidden snap-start scroll-mt-0">
         <HeroRibbons />
         <div className="relative z-10 max-w-[1200px] mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
           {/* Left – Text */}
@@ -103,7 +103,7 @@ export default function Home() {
         </div>
       </section>
 
-      <div id="principles" className="w-full">
+      <div id="principles" className="w-full snap-start scroll-mt-24 pt-4">
         <section className="relative px-6 py-24 border-t border-[#F5F5F5] overflow-hidden">
           <div className="max-w-[1200px] mx-auto w-full">
             {/* Section header */}
@@ -162,7 +162,7 @@ export default function Home() {
               ].map((item, i) => {
                 const isEven = i % 2 === 0;
                 return (
-                  <div key={item.step} className="relative mb-24 last:mb-0">
+                  <div key={item.step} className="relative mb-32 last:mb-16 snap-center scroll-m-24 py-8">
                     {/* Timeline dot */}
                     <motion.div
                       className={`absolute left-6 md:left-1/2 -translate-x-1/2 w-4 h-4 rounded-full ${item.dotColor} ring-4 ring-white z-10`}
@@ -211,7 +211,7 @@ export default function Home() {
       </div>
 
       {/* SECTION 7 – CONTACT */}
-      <section id="contact" className="relative px-6 py-32 border-t border-[#F5F5F5] overflow-hidden">
+      <section id="contact" className="relative px-6 py-32 border-t border-[#F5F5F5] overflow-hidden snap-start scroll-mt-0">
         <SplineBackground theme="buildable" />
         <div className="relative z-10 max-w-[800px] mx-auto w-full">
           <motion.div
@@ -337,6 +337,20 @@ export default function Home() {
                       />
                     </label>
                   </div>
+                </div>
+
+                {/* Row 4: Message */}
+                <div className="flex flex-col">
+                  <label htmlFor="contact-message" className="text-sm font-medium text-[#555] mb-2">Message</label>
+                  <textarea
+                    id="contact-message"
+                    rows={4}
+                    required
+                    value={formData.message}
+                    onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                    className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-white/40 transition-all resize-none"
+                    placeholder="Tell us about your project..."
+                  />
                 </div>
 
                 {/* Honeypot – hidden from real users */}
