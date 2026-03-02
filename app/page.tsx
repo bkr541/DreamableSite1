@@ -3,10 +3,10 @@
 import { useState } from 'react';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { motion } from 'motion/react';
 import SplineBackground from '@/components/SplineBackground';
 import InteractiveElement from '@/components/InteractiveElement';
+import HeroCarousel from '@/components/HeroCarousel';
 
 export default function Home() {
   const [formData, setFormData] = useState({
@@ -35,14 +35,7 @@ export default function Home() {
     <div className="flex flex-col w-full">
       {/* SECTION 1 – HERO */}
       <section className="relative min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 py-32 text-center overflow-hidden">
-        <Image
-          src="/images/hero.jpg"
-          alt="Dreamable.studio services showcase"
-          fill
-          className="object-cover"
-          priority
-        />
-        <div className="absolute inset-0 bg-white/60" />
+        <HeroCarousel />
         <div className="relative z-10 max-w-[1200px] mx-auto w-full flex flex-col items-center">
           <h1 className="font-semibold tracking-tight leading-[1.1] mb-8">
             <span className="text-3xl md:text-5xl lg:text-6xl text-[#707070]">Evolvable. Buildable.<br className="hidden md:block" /> Launchable. Memorable.<br className="hidden md:block" /> </span>
