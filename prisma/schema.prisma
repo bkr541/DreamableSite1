@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Inquiry {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  name        String
+  email       String
+  company     String?
+  website     String?
+
+  service     String   // WEBSITE, NATIVE_APP, LOGO, MARKETING_BRANDING, CUSTOM_VISUALS, NOT_SURE
+  description String   @db.Text
+  budgetRange String?  @map("budget_range")  // UNDER_5K, 5_15K, 15_50K, 50K_PLUS, NOT_SURE
+  timeline    String?  // ASAP, 1_2_MONTHS, 3_6_MONTHS, FLEXIBLE
+
+  status      String   @default("INQUIRY") // QUALIFYING, DISCOVERY, PROPOSAL, WON, LOST, ARCHIVED
+
+  source      String?
+  utmSource   String?  @map("utm_source")
+  utmMedium   String?  @map("utm_medium")
+  utmCampaign String?  @map("utm_campaign")
+  utmTerm     String?  @map("utm_term")
+  utmContent  String?  @map("utm_content")
+  referrer    String?
+  metadata    Json?
+
+  @@index([createdAt(sort: Desc)])
+  @@index([status])
+  @@index([email])
+  @@map("inquiries")
+}
