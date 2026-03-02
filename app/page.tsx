@@ -34,28 +34,73 @@ export default function Home() {
   return (
     <div className="flex flex-col w-full">
       {/* SECTION 1 – HERO */}
-      <section className="relative min-h-[calc(100vh-80px)] flex flex-col items-center justify-center px-6 py-32 text-center overflow-hidden">
-        <HeroCarousel />
-        <div className="relative z-10 max-w-[1200px] mx-auto w-full flex flex-col items-center">
-          <h1 className="font-semibold tracking-tight leading-[1.1] mb-8">
-            <span className="text-3xl md:text-5xl lg:text-6xl text-[#707070]">Evolvable. Buildable.<br className="hidden md:block" /> Launchable. Memorable.<br className="hidden md:block" /> </span>
-            <span className="text-5xl md:text-7xl lg:text-[80px] text-[#000000] animate-gradient-sweep">Dreamable.<motion.span
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
-              className="inline-block"
-            >studio</motion.span></span>
-          </h1>
-          <p className="text-lg md:text-xl text-[#707070] max-w-[600px] mb-12 leading-relaxed">
-            A digital product and creative studio that helps take raw concepts and transform them into finished digital products and polished brands with personality.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-            <Link href="#contact" className="w-full sm:w-auto inline-flex items-center justify-center h-14 px-8 rounded-full bg-[#000000] text-white text-base font-medium hover:-translate-y-1 transition-transform">
-              Start a Project
-            </Link>
-            <a href="#principles" className="w-full sm:w-auto inline-flex items-center justify-center h-14 px-8 rounded-full bg-[#F5F5F5] text-[#000000] text-base font-medium hover:bg-[#E5E5E5] transition-colors">
-              Explore Principles
-            </a>
+      <section className="relative min-h-[calc(100vh-80px)] flex items-center px-6 py-24 overflow-hidden">
+        {/* Subtle cyan glow in center */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full bg-cyan-200/20 blur-[100px] pointer-events-none" />
+        <div className="relative z-10 max-w-[1200px] mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+          {/* Left – Text */}
+          <div className="flex flex-col items-start">
+            <h1 className="font-semibold tracking-tight leading-[1.1] mb-6 text-left">
+              <span className="text-5xl md:text-6xl lg:text-[68px] text-[#1a1a1a] animate-gradient-sweep">Dreamable.<motion.span
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
+                className="inline-block"
+              >studio</motion.span></span>
+            </h1>
+            <p className="text-base md:text-lg text-[#707070] max-w-[440px] mb-8 leading-relaxed text-left">
+              We design, engineer, and launch digital products for teams that want to move fast without sacrificing craft.
+            </p>
+            <div className="flex flex-col sm:flex-row items-start gap-3">
+              <Link href="#contact" className="inline-flex items-center justify-center h-12 px-7 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all">
+                Start a project
+              </Link>
+              <a href="#principles" className="inline-flex items-center justify-center h-12 px-7 rounded-full bg-[#F0F0F0] text-[#1a1a1a] text-sm font-medium hover:bg-[#E5E5E5] transition-colors border border-[#e0e0e0]">
+                See our work
+              </a>
+            </div>
+          </div>
+
+          {/* Right – Cascading stacked images (horizontal) */}
+          <div className="relative h-[350px] md:h-[400px] hidden md:block">
+            {[
+              { src: '/images/carousel-1.jpg', alt: 'Marketing & Branding', left: '0%', top: '25%', rotate: -3, delay: 0, z: 5, gradient: 'linear-gradient(135deg, #f472b6, #a855f7)' },
+              { src: '/images/carousel-2.jpg', alt: 'Automation', left: '14%', top: '15%', rotate: 2, delay: 0.12, z: 4, gradient: 'linear-gradient(135deg, #818cf8, #6366f1)' },
+              { src: '/images/carousel-3.jpg', alt: 'Website Development', left: '28%', top: '22%', rotate: -1, delay: 0.24, z: 3, gradient: 'linear-gradient(135deg, #fb923c, #f59e0b)' },
+              { src: '/images/carousel-4.jpg', alt: 'Logo Design', left: '42%', top: '12%', rotate: 3, delay: 0.36, z: 2, gradient: 'linear-gradient(135deg, #c084fc, #a855f7)' },
+              { src: '/images/carousel-5.jpg', alt: 'Custom Visuals', left: '56%', top: '20%', rotate: -2, delay: 0.48, z: 1, gradient: 'linear-gradient(135deg, #2dd4bf, #06b6d4)' },
+            ].map((img, i) => (
+              <motion.div
+                key={i}
+                className="absolute rounded-2xl p-[3px]"
+                style={{
+                  width: 210, height: 210,
+                  left: img.left, top: img.top,
+                  zIndex: img.z,
+                  rotate: img.rotate,
+                  background: img.gradient,
+                  boxShadow: '0 10px 35px rgba(0,0,0,0.1)',
+                }}
+                initial={{ opacity: 0, x: 40, scale: 0.9 }}
+                animate={{
+                  opacity: 1, x: 0, y: [0, -(5 + i * 2), 0], scale: 1,
+                }}
+                transition={{
+                  opacity: { duration: 0.5, delay: img.delay },
+                  x: { duration: 0.6, delay: img.delay },
+                  scale: { duration: 0.5, delay: img.delay },
+                  y: { duration: 6 + i, delay: img.delay + 0.6, repeat: Infinity, ease: 'easeInOut' },
+                }}
+              >
+                <div className="w-full h-full rounded-[13px] overflow-hidden">
+                  <img
+                    src={img.src}
+                    alt={img.alt}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </motion.div>
+            ))}
           </div>
         </div>
       </section>
