@@ -13,30 +13,14 @@ export default function Home() {
   const [formData, setFormData] = useState({
     name: '', email: '', projectType: 'App or Web Development', message: '',
   });
-  const [attachment, setAttachment] = useState<File | null>(null);
-  const [formStatus, setFormStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setFormStatus('sending');
-    try {
-      const fd = new FormData();
-      fd.append('name', formData.name);
-      fd.append('email', formData.email);
-      fd.append('projectType', formData.projectType);
-      fd.append('message', formData.message);
-      if (attachment) fd.append('attachment', attachment);
-      const res = await fetch('/api/contact', {
-        method: 'POST',
-        body: fd,
-      });
-      if (!res.ok) throw new Error('Failed');
-      setFormStatus('sent');
-      setFormData({ name: '', email: '', projectType: 'App or Web Development', message: '' });
-      setAttachment(null);
-    } catch {
-      setFormStatus('error');
-    }
+    const subject = encodeURIComponent('Dreamable: New Project Inquiry');
+    const body = encodeURIComponent(
+      `Name: ${formData.name}\nEmail: ${formData.email}\nProject Type: ${formData.projectType}\n\nMessage:\n${formData.message}`
+    );
+    window.location.href = `mailto:bkr_92_02@yahoo.com?subject=${subject}&body=${body}`;
   };
 
   return (
@@ -332,25 +316,6 @@ export default function Home() {
                       <option value="Other">Other</option>
                     </select>
                   </div>
-                  <div className="flex flex-col">
-                    <label htmlFor="contact-attachment" className="text-sm font-medium text-[#555] mb-2">Attachment <span className="text-[#aaa] font-normal">(optional)</span></label>
-                    <label
-                      htmlFor="contact-attachment"
-                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] focus-within:ring-2 focus-within:ring-cyan-200/50 border border-white/40 transition-all cursor-pointer flex items-center gap-2"
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#999] shrink-0"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66L9.41 17.41a2 2 0 01-2.83-2.83l8.49-8.49" /></svg>
-                      <span className={`text-sm truncate ${attachment ? 'text-[#1a1a1a]' : 'text-[#bbb]'}`}>
-                        {attachment ? attachment.name : 'PDF, image, or doc'}
-                      </span>
-                      <input
-                        type="file"
-                        id="contact-attachment"
-                        className="sr-only"
-                        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.svg,.sketch,.fig,.xd"
-                        onChange={(e) => setAttachment(e.target.files?.[0] || null)}
-                      />
-                    </label>
-                  </div>
                 </div>
 
                 {/* Row 3: Message */}
@@ -368,22 +333,12 @@ export default function Home() {
                 </div>
 
                 {/* Send button */}
-                {/* Status messages */}
-                {formStatus === 'sent' && (
-                  <div className="text-center text-green-600 text-sm font-medium py-2 bg-green-50/60 rounded-xl">✓ Message sent! We&apos;ll get back to you soon.</div>
-                )}
-                {formStatus === 'error' && (
-                  <div className="text-center text-red-500 text-sm font-medium py-2 bg-red-50/60 rounded-xl">Failed to send. Please try again.</div>
-                )}
-
-                {/* Send button */}
                 <div className="flex justify-center pt-2">
                   <button
                     type="submit"
-                    disabled={formStatus === 'sending'}
-                    className="px-12 py-3.5 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-12 py-3.5 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all"
                   >
-                    {formStatus === 'sending' ? 'Sending...' : 'Send'}
+                    Send
                   </button>
                 </div>
               </form>
