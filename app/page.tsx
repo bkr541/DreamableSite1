@@ -126,61 +126,61 @@ export default function Home() {
               {[
                 {
                   step: '01', prefix: 'Dream', theme: 'dreamable' as const,
-                  subtitle: 'Ideas deserve structure.',
-                  desc: 'Every great product starts as a vague ambition. We bring the rigor to define it—moving from abstract concepts to concrete strategies with clear positioning and direction.',
+                  subtitle: <>Where ideas take <i>shape.</i></>,
+                  desc: 'Every great outcome starts as something unfinished. A concept. A direction. A feeling. We help you define what it really is and what it needs to become.\n\nWe clarify the vision, refine the positioning, and turn instinct into a focused plan. This is where imagination becomes intention.',
                   gradient: 'from-cyan-400 via-purple-400 to-orange-400',
                   dotColor: 'bg-cyan-400',
                 },
                 {
                   step: '02', prefix: 'Build', theme: 'buildable' as const,
-                  subtitle: 'Designed to be executed.',
-                  desc: 'Design is only as good as its implementation. Whether it\'s a native iOS app or a complex web platform, our code is clean, our systems are logical, and our architecture is ready for the real world.',
+                  subtitle: <>Designed to become <i>real.</i></>,
+                  desc: 'Once the direction is clear, we make it tangible. Whether it’s a digital product, captivating visual elements, or building your brand identity, we translate ideas into something concrete and executable.\n\nEvery decision connects. Every component has a reason.\nThe foundation is solid long before anyone sees it.',
                   gradient: 'from-indigo-400 via-blue-400 to-cyan-400',
                   dotColor: 'bg-indigo-400',
                 },
                 {
                   step: '03', prefix: 'Launch', theme: 'launchable' as const,
-                  subtitle: 'Finished means shipped.',
-                  desc: 'We specialize in the final 10%. From rigorous QA to rollout kits, when we say it\'s done, it\'s ready for your first thousand users.',
+                  subtitle: <>Built to <i>debut.</i></>,
+                  desc: 'Going live should feel composed, not chaotic. We bring everything into alignment so what you’ve created is ready to be introduced with confidence.\n\nPolished presentation. Cohesive experience. Thoughtful execution. When it’s time to reveal it, it feels prepared and complete.',
                   gradient: 'from-amber-400 via-orange-400 to-red-400',
                   dotColor: 'bg-amber-400',
                 },
                 {
                   step: '04', prefix: 'Memor', theme: 'memorable' as const,
-                  subtitle: 'Clarity is what lasts.',
-                  desc: 'In a world of noise, clarity is the only thing that sticks. We create visual languages that feel inevitable—cohesive branding, intentional typography, and product UI that users remember.',
+                  subtitle: <>Designed to be <i>recognized.</i></>,
+                  desc: 'Clarity creates impact. We shape the personality behind the work so it’s not just functional, it’s distinct.\n\nVisual language, typography, tone, and interaction all work together to create something people remember and trust.',
                   gradient: 'from-purple-400 via-pink-400 to-rose-400',
                   dotColor: 'bg-purple-400',
                 },
                 {
                   step: '05', prefix: 'Evolv', theme: 'evolvable' as const,
-                  subtitle: 'Built to adapt.',
-                  desc: 'A product that can\'t change is already dying. We build modular systems and lightweight AI automations that grow with your team, designed for scale and long-term maintainability.',
+                  subtitle: <>Made to grow with <i>you.</i></>,
+                  desc: 'Strong ideas don’t stay static. We create foundations that allow your brand or product to expand, adapt, and mature without losing what makes it recognizable.\n\nAs your business evolves, your work evolves with it, naturally and confidently.',
                   gradient: 'from-teal-400 via-emerald-400 to-cyan-400',
                   dotColor: 'bg-teal-400',
                 },
               ].map((item, i) => {
                 const isEven = i % 2 === 0;
                 return (
-                  <div key={item.step} className="relative mb-32 last:mb-16 snap-center scroll-m-24 py-8">
+                  <div key={item.step} className="relative mb-20 last:mb-16 snap-center scroll-m-24 py-4">
                     {/* Timeline dot */}
                     <motion.div
                       className={`absolute left-6 md:left-1/2 -translate-x-1/2 w-4 h-4 rounded-full ${item.dotColor} ring-4 ring-white z-10`}
-                      style={{ top: '40px' }}
+                      style={{ top: '24px' }}
                       initial={{ scale: 0 }}
                       whileInView={{ scale: 1 }}
                       viewport={{ once: true }}
                       transition={{ duration: 0.4, delay: 0.1 }}
                     />
 
-                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-center pl-16 md:pl-0`}>
+                    <div className={`relative grid md:grid-cols-2 items-center pl-16 md:pl-0`}>
                       {/* Text content */}
                       <motion.div
                         initial={{ opacity: 0, y: 30 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true, margin: "-80px" }}
                         transition={{ duration: 0.7, ease: "easeOut" }}
-                        className={`flex flex-col ${isEven ? 'md:pr-16 md:text-right md:items-end' : 'md:pl-16 md:order-2'}`}
+                        className={`relative z-10 w-full flex flex-col py-6 md:py-0 ${isEven ? 'md:pr-16 md:text-right md:items-end' : 'md:pl-16 md:order-2'}`}
                       >
                         <div className="text-xs font-mono text-[#bbb] tracking-widest uppercase mb-3">Step {item.step}</div>
                         <h3 className="text-4xl md:text-5xl font-semibold tracking-tight mb-3">
@@ -188,7 +188,7 @@ export default function Home() {
                           <span className="font-light">able.</span>
                         </h3>
                         <p className="text-xl md:text-2xl font-medium tracking-tight text-gray-700 mb-4">{item.subtitle}</p>
-                        <p className="text-base text-gray-500 leading-relaxed max-w-[480px]">{item.desc}</p>
+                        <p className="text-base text-gray-500 leading-relaxed max-w-[480px] whitespace-pre-wrap">{item.desc}</p>
                       </motion.div>
 
                       {/* Interactive element */}
@@ -197,7 +197,7 @@ export default function Home() {
                         whileInView={{ opacity: 1, x: 0 }}
                         viewport={{ once: true, margin: "-80px" }}
                         transition={{ duration: 0.7, delay: 0.15, ease: "easeOut" }}
-                        className={`relative h-[300px] md:h-[380px] ${isEven ? '' : 'md:order-1'}`}
+                        className={`absolute inset-0 md:relative md:inset-auto z-0 h-full md:h-[320px] w-full flex items-center justify-center opacity-30 md:opacity-100 pointer-events-none md:pointer-events-auto overflow-hidden md:overflow-visible ${isEven ? '' : 'md:order-1'}`}
                       >
                         <InteractiveElement theme={item.theme} />
                       </motion.div>

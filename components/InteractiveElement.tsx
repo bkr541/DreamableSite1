@@ -13,102 +13,104 @@ export default function InteractiveElement({ theme }: { theme: Theme }) {
     }
 }
 
-/* ── DREAMABLE: Floating idea cards, thought bubbles, lightbulb concept ── */
+/* ── DREAMABLE: Glowing lightbulb with floating particles and rays ── */
 function DreamableElement() {
     return (
-        <div className="relative w-full h-full" style={{ perspective: '1200px' }}>
-            {/* Main glassmorphic idea board */}
+        <div className="relative w-full h-full flex items-center justify-center" style={{ perspective: '1200px' }}>
+            {/* Center glow behind the bulb */}
             <motion.div
-                className="absolute rounded-3xl overflow-hidden"
+                className="absolute rounded-full pointer-events-none"
                 style={{
-                    width: '75%', height: '70%', right: '5%', top: '15%',
-                    background: 'linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05))',
-                    border: '1px solid rgba(255,255,255,0.25)',
-                    backdropFilter: 'blur(20px)',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.06)',
+                    width: 250, height: 250,
+                    background: 'radial-gradient(circle, rgba(251,191,36,0.2) 0%, rgba(251,191,36,0) 70%)',
                 }}
-                animate={{ y: [0, -8, 0], rotateY: [0, 2, 0] }}
-                transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
+                animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.8, 0.5] }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+            />
+
+            {/* The Bulb Container */}
+            <motion.div
+                className="relative z-10 flex flex-col items-center"
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
             >
-                {/* Top bar */}
-                <div className="p-4 flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-pink-300/40" />
-                    <div className="w-3 h-3 rounded-full bg-purple-300/40" />
-                    <div className="w-3 h-3 rounded-full bg-blue-300/40" />
+                {/* Glass bulb shape */}
+                <div className="relative w-32 h-32 rounded-full"
+                    style={{
+                        background: 'radial-gradient(circle at 35% 35%, rgba(255,255,255,0.4), rgba(251,191,36,0.25))',
+                        border: '2px solid rgba(255,255,255,0.4)',
+                        boxShadow: '0 0 40px rgba(251,191,36,0.3), inset 0 0 20px rgba(255,255,255,0.5)',
+                        backdropFilter: 'blur(10px)',
+                    }}
+                >
+                    {/* Glowing filament */}
+                    <motion.div
+                        className="absolute w-8 h-12 left-1/2 -ml-4 bottom-4 flex justify-between items-end"
+                        animate={{ opacity: [0.7, 1, 0.7] }}
+                        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                    >
+                        <div className="w-[2px] h-full bg-amber-400/80 rounded" />
+                        <div className="w-[2px] h-full bg-amber-400/80 rounded" />
+                        <div className="absolute top-0 w-full h-[6px] rounded-full" style={{ borderTop: '2px solid rgba(251,191,36,0.9)' }} />
+                    </motion.div>
+
+                    {/* Subtle inner reflection */}
+                    <div className="absolute top-3 left-4 w-6 h-10 rounded-full bg-white/30 blur-sm transform -rotate-45" />
                 </div>
-                {/* Idea cards inside */}
-                <div className="px-4 grid grid-cols-2 gap-3">
-                    <motion.div
-                        className="rounded-xl p-3 h-24"
-                        style={{ background: 'rgba(244,114,182,0.08)', border: '1px solid rgba(244,114,182,0.15)' }}
-                        animate={{ scale: [1, 1.02, 1] }}
-                        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                    >
-                        <div className="w-8 h-8 rounded-lg bg-pink-300/20 mb-2" />
-                        <div className="w-full h-2 rounded bg-pink-200/20 mb-1" />
-                        <div className="w-2/3 h-2 rounded bg-pink-200/15" />
-                    </motion.div>
-                    <motion.div
-                        className="rounded-xl p-3 h-24"
-                        style={{ background: 'rgba(168,85,247,0.08)', border: '1px solid rgba(168,85,247,0.15)' }}
-                        animate={{ scale: [1, 1.02, 1] }}
-                        transition={{ duration: 4, delay: 0.5, repeat: Infinity, ease: 'easeInOut' }}
-                    >
-                        <div className="w-8 h-8 rounded-full bg-purple-300/20 mb-2" />
-                        <div className="w-full h-2 rounded bg-purple-200/20 mb-1" />
-                        <div className="w-3/4 h-2 rounded bg-purple-200/15" />
-                    </motion.div>
-                    <motion.div
-                        className="rounded-xl p-3 col-span-2 h-20"
-                        style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.15)' }}
-                        animate={{ scale: [1, 1.01, 1] }}
-                        transition={{ duration: 5, delay: 1, repeat: Infinity, ease: 'easeInOut' }}
-                    >
-                        <div className="flex gap-2 mb-2">
-                            <div className="w-6 h-6 rounded bg-blue-300/20" />
-                            <div className="w-6 h-6 rounded bg-blue-300/15" />
-                            <div className="w-6 h-6 rounded bg-blue-300/10" />
-                        </div>
-                        <div className="w-full h-2 rounded bg-blue-200/20 mb-1" />
-                        <div className="w-1/2 h-2 rounded bg-blue-200/15" />
-                    </motion.div>
+
+                {/* Base collar */}
+                <div className="relative w-16 h-4 bg-gray-400/30 rounded-t-sm backdrop-blur-md mt-[-8px] z-10" style={{ border: '1px solid rgba(255,255,255,0.2)' }} />
+
+                {/* Screw thread rings */}
+                <div className="flex flex-col gap-1 w-14 items-center">
+                    <div className="w-full h-2 rounded bg-gray-500/40 backdrop-blur-md" style={{ border: '1px solid rgba(255,255,255,0.1)' }} />
+                    <div className="w-[90%] h-2 rounded bg-gray-500/40 backdrop-blur-md" style={{ border: '1px solid rgba(255,255,255,0.1)' }} />
+                    <div className="w-[80%] h-2 rounded bg-gray-500/40 backdrop-blur-md" style={{ border: '1px solid rgba(255,255,255,0.1)' }} />
+                    {/* Bottom contact dot */}
+                    <div className="w-5 h-2 rounded-b-xl bg-gray-800/40 backdrop-blur-md" style={{ border: '1px solid rgba(255,255,255,0.05)' }} />
                 </div>
             </motion.div>
 
-            {/* Floating thought bubbles */}
+            {/* Glowing outer rings / aura */}
             {[
-                { x: '10%', y: '20%', s: 40, d: 0 },
-                { x: '0%', y: '50%', s: 28, d: 1.5 },
-                { x: '15%', y: '75%', s: 20, d: 0.8 },
-            ].map((b, i) => (
+                { s: 180, delay: 0 },
+                { s: 230, delay: 1.5 },
+            ].map((ring, i) => (
+                <motion.div
+                    key={i}
+                    className="absolute rounded-full pointer-events-none"
+                    style={{
+                        width: ring.s, height: ring.s,
+                        border: '1px solid rgba(251,191,36,0.15)',
+                    }}
+                    animate={{ scale: [1, 1.15, 1], opacity: [0.2, 0, 0.2] }}
+                    transition={{ duration: 4, delay: ring.delay, repeat: Infinity, ease: 'easeInOut' }}
+                />
+            ))}
+
+            {/* Floating idea sparks */}
+            {[
+                { x: '20%', y: '15%', size: 12, dur: 4, del: 0 },
+                { x: '85%', y: '25%', size: 8, dur: 3, del: 1 },
+                { x: '15%', y: '60%', size: 10, dur: 5, del: 2 },
+                { x: '75%', y: '75%', size: 14, dur: 4.5, del: 0.5 },
+            ].map((spark, i) => (
                 <motion.div
                     key={i}
                     className="absolute rounded-full"
                     style={{
-                        width: b.s, height: b.s, left: b.x, top: b.y,
-                        background: 'radial-gradient(circle at 35% 35%, rgba(255,255,255,0.4), rgba(244,114,182,0.1))',
-                        border: '1px solid rgba(255,255,255,0.2)',
+                        left: spark.x, top: spark.y, width: spark.size, height: spark.size,
+                        background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.8), rgba(251,191,36,0.4))',
+                        boxShadow: '0 0 10px rgba(251,191,36,0.5)',
                     }}
-                    animate={{ y: [0, -(8 + i * 3), 0], x: [0, (i % 2 === 0 ? 5 : -5), 0] }}
-                    transition={{ duration: 4 + i, delay: b.d, repeat: Infinity, ease: 'easeInOut' }}
+                    animate={{
+                        y: [0, -15, 0],
+                        x: [0, (i % 2 === 0 ? 8 : -8), 0],
+                        scale: [0.8, 1.2, 0.8],
+                        opacity: [0.4, 1, 0.4]
+                    }}
+                    transition={{ duration: spark.dur, delay: spark.del, repeat: Infinity, ease: 'easeInOut' }}
                 />
-            ))}
-
-            {/* Sparkle stars */}
-            {[
-                { x: '25%', y: '10%', d: 0 },
-                { x: '85%', y: '8%', d: 1 },
-                { x: '90%', y: '85%', d: 2 },
-            ].map((s, i) => (
-                <motion.div
-                    key={i}
-                    className="absolute text-pink-300/40"
-                    style={{ left: s.x, top: s.y, fontSize: 16 }}
-                    animate={{ scale: [0, 1, 0], opacity: [0, 0.6, 0], rotate: [0, 180, 360] }}
-                    transition={{ duration: 3, delay: s.d, repeat: Infinity, ease: 'easeInOut' }}
-                >
-                    ✦
-                </motion.div>
             ))}
         </div>
     );
