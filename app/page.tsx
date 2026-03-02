@@ -86,11 +86,11 @@ export default function Home() {
             <p className="text-base md:text-lg text-[#707070] max-w-[440px] mb-8 leading-relaxed text-left">
               We design, engineer, and launch digital products for teams that want to move fast without sacrificing craft.
             </p>
-            <div className="flex flex-col sm:flex-row items-start gap-3">
-              <Link href="#contact" className="inline-flex items-center justify-center h-12 px-7 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all">
+            <div className="flex flex-row flex-wrap items-center gap-3">
+              <Link href="#contact" className="inline-flex items-center justify-center h-12 px-5 sm:px-7 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all">
                 Start a project
               </Link>
-              <a href="#principles" className="inline-flex items-center justify-center h-12 px-7 rounded-full bg-[#F0F0F0] text-[#1a1a1a] text-sm font-medium hover:bg-[#E5E5E5] transition-colors border border-[#e0e0e0]">
+              <a href="#principles" className="inline-flex items-center justify-center h-12 px-5 sm:px-7 rounded-full bg-[#F0F0F0] text-[#1a1a1a] text-sm font-medium hover:bg-[#E5E5E5] transition-colors border border-[#e0e0e0]">
                 See our work
               </a>
             </div>
@@ -183,12 +183,12 @@ export default function Home() {
                         className={`relative z-10 w-full flex flex-col py-6 md:py-0 ${isEven ? 'md:pr-16 md:text-right md:items-end' : 'md:pl-16 md:order-2'}`}
                       >
                         <div className="text-xs font-mono text-[#bbb] tracking-widest uppercase mb-3">Step {item.step}</div>
-                        <h3 className="text-4xl md:text-5xl font-semibold tracking-tight mb-3">
+                        <h3 className="text-4xl md:text-5xl font-semibold tracking-tight mb-3 drop-shadow-[0_4px_8px_rgba(0,0,0,0.25)]">
                           <span className={`text-transparent bg-clip-text bg-gradient-to-r ${item.gradient}`}>{item.prefix}</span>
-                          <span className="font-light">able.</span>
+                          <span className="font-light text-gray-900">able.</span>
                         </h3>
-                        <p className="text-xl md:text-2xl font-medium tracking-tight text-gray-700 mb-4">{item.subtitle}</p>
-                        <p className="text-base text-gray-500 leading-relaxed max-w-[480px] whitespace-pre-wrap">{item.desc}</p>
+                        <p className="text-xl md:text-2xl font-medium tracking-tight text-gray-900 mb-4">{item.subtitle}</p>
+                        <p className="text-base text-gray-800 leading-relaxed max-w-[480px] whitespace-pre-wrap">{item.desc}</p>
                       </motion.div>
 
                       {/* Interactive element */}

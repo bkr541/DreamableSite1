@@ -97,7 +97,7 @@ function DreamableElement() {
             ].map((spark, i) => (
                 <motion.div
                     key={i}
-                    className="absolute rounded-full"
+                    className="absolute rounded-full z-0"
                     style={{
                         left: spark.x, top: spark.y, width: spark.size, height: spark.size,
                         background: 'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.8), rgba(251,191,36,0.4))',
@@ -112,97 +112,143 @@ function DreamableElement() {
                     transition={{ duration: spark.dur, delay: spark.del, repeat: Infinity, ease: 'easeInOut' }}
                 />
             ))}
+
+            {/* Floating building blocks representing "ideas taking shape" */}
+            {[
+                // Left block
+                { x: '10%', y: '65%', w: 45, h: 45, d: 0, r: 10, c: 'rgba(96,165,250,0.25)', bc: 'rgba(96,165,250,0.5)' },
+                // Right block (higher)
+                { x: '75%', y: '35%', w: 35, h: 35, d: 0.5, r: 8, c: 'rgba(244,114,182,0.25)', bc: 'rgba(244,114,182,0.5)' },
+                // Center-right block (lower)
+                { x: '65%', y: '70%', w: 55, h: 55, d: 1, r: 12, c: 'rgba(168,85,247,0.25)', bc: 'rgba(168,85,247,0.5)' },
+            ].map((b, i) => (
+                <motion.div
+                    key={`block-${i}`}
+                    className="absolute z-20"
+                    style={{
+                        width: b.w, height: b.h, left: b.x, top: b.y,
+                        borderRadius: b.r,
+                        background: `linear-gradient(135deg, rgba(255,255,255,0.4), ${b.c})`,
+                        border: `1px solid ${b.bc}`,
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.06)',
+                        backdropFilter: 'blur(10px)',
+                    }}
+                    animate={{
+                        y: [0, -12, 0],
+                        rotate: [0, 8, 0],
+                        rotateY: [0, 15, 0]
+                    }}
+                    transition={{ duration: 6, delay: b.d, repeat: Infinity, ease: 'easeInOut' }}
+                />
+            ))}
         </div>
     );
 }
 
-/* ── BUILDABLE: Code editor / IDE mockup with stacking blocks ── */
+/* ── BUILDABLE: 3D Mobile phone and flowchart / architecture diagram ── */
 function BuildableElement() {
     return (
-        <div className="relative w-full h-full" style={{ perspective: '1200px' }}>
-            {/* Main IDE window */}
+        <div className="relative w-full h-full flex items-center justify-center gap-4 md:gap-12" style={{ perspective: '1200px' }}>
+            {/* 3D Mobile Phone */}
             <motion.div
-                className="absolute rounded-3xl overflow-hidden"
+                className="relative z-20 rounded-[2rem] overflow-hidden shrink-0"
                 style={{
-                    width: '75%', height: '75%', right: '5%', top: '12%',
+                    width: 130, height: 260,
                     background: 'linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.05))',
-                    border: '1px solid rgba(255,255,255,0.25)',
-                    backdropFilter: 'blur(20px)',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.06)',
+                    border: '4px solid rgba(255,255,255,0.4)',
+                    backdropFilter: 'blur(16px)',
+                    boxShadow: '0 20px 40px rgba(0,0,0,0.1), inset 0 0 10px rgba(255,255,255,0.3)',
                 }}
-                animate={{ y: [0, -6, 0], rotateY: [0, -2, 0] }}
-                transition={{ duration: 9, repeat: Infinity, ease: 'easeInOut' }}
+                animate={{ y: [0, -10, 0], rotateY: [8, 16, 8], rotateX: [2, 6, 2] }}
+                transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
             >
-                {/* Window chrome */}
-                <div className="p-4 flex items-center gap-2 border-b border-white/10">
-                    <div className="w-3 h-3 rounded-full bg-red-300/40" />
-                    <div className="w-3 h-3 rounded-full bg-yellow-300/40" />
-                    <div className="w-3 h-3 rounded-full bg-green-300/40" />
-                    <div className="ml-4 w-24 h-4 rounded bg-white/10" />
-                </div>
-                <div className="flex h-[calc(100%-48px)]">
-                    {/* Sidebar - file tree */}
-                    <div className="w-1/4 border-r border-white/10 p-3 space-y-2">
-                        {[0.12, 0.08, 0.10, 0.06, 0.09, 0.07].map((op, i) => (
-                            <motion.div
-                                key={i}
-                                className="h-3 rounded"
-                                style={{ background: `rgba(99,102,241,${op})`, width: `${60 + (i % 3) * 15}%`, marginLeft: i > 2 ? 12 : 0 }}
-                                animate={{ opacity: [0.5, 1, 0.5] }}
-                                transition={{ duration: 3, delay: i * 0.3, repeat: Infinity, ease: 'easeInOut' }}
-                            />
-                        ))}
+                {/* Speaker port */}
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-10 h-1.5 rounded-full bg-black/15" />
+
+                {/* Screen content */}
+                <div className="absolute top-8 bottom-3 left-2.5 right-2.5 rounded-xl bg-white/10 border border-white/20 p-2.5 flex flex-col gap-2.5">
+                    {/* Header */}
+                    <div className="flex items-center gap-2 mb-0.5">
+                        <div className="w-5 h-5 rounded-full bg-indigo-400/40" />
+                        <div className="h-2 w-14 rounded bg-indigo-200/40" />
                     </div>
-                    {/* Code area */}
-                    <div className="flex-1 p-4 space-y-2">
-                        {/* Code lines */}
-                        {[
-                            { w: '70%', op: 0.15, c: 'indigo' },
-                            { w: '55%', op: 0.10, c: 'blue' },
-                            { w: '80%', op: 0.12, c: 'indigo' },
-                            { w: '45%', op: 0.08, c: 'purple' },
-                            { w: '65%', op: 0.14, c: 'indigo' },
-                            { w: '50%', op: 0.10, c: 'blue' },
-                            { w: '75%', op: 0.12, c: 'indigo' },
-                            { w: '40%', op: 0.08, c: 'purple' },
-                        ].map((line, i) => (
-                            <motion.div
-                                key={i}
-                                className="flex items-center gap-2"
-                                animate={{ opacity: [0.6, 1, 0.6] }}
-                                transition={{ duration: 2, delay: i * 0.2, repeat: Infinity, ease: 'easeInOut' }}
-                            >
-                                <span className="text-[10px] w-4 text-indigo-400/30 select-none">{i + 1}</span>
-                                <div className="h-2.5 rounded" style={{ width: line.w, background: `rgba(99,102,241,${line.op})`, marginLeft: i === 1 || i === 3 || i === 5 ? 12 : 0 }} />
-                            </motion.div>
-                        ))}
-                        {/* Cursor blink */}
-                        <motion.div
-                            className="w-0.5 h-4 bg-indigo-400/50 ml-6"
-                            animate={{ opacity: [1, 1, 0, 0] }}
-                            transition={{ duration: 1, repeat: Infinity, ease: 'linear', times: [0, 0.5, 0.5, 1] }}
-                        />
+                    {/* Hero image placeholder */}
+                    <div className="w-full h-16 rounded-lg bg-indigo-300/25" />
+                    {/* List items */}
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded bg-blue-300/25" />
+                            <div className="flex-1 flex flex-col gap-1">
+                                <div className="h-1 w-full rounded bg-white/30" />
+                                <div className="h-1 w-2/3 rounded bg-white/15" />
+                            </div>
+                        </div>
+                    ))}
+                    {/* Bottom nav */}
+                    <div className="mt-auto h-7 rounded-lg bg-white/10 border border-white/10 flex items-center justify-around px-2">
+                        <div className="w-3.5 h-3.5 rounded-full bg-indigo-300/50" />
+                        <div className="w-3.5 h-3.5 rounded-full bg-white/20" />
+                        <div className="w-3.5 h-3.5 rounded-full bg-white/20" />
                     </div>
                 </div>
             </motion.div>
 
-            {/* Floating building blocks */}
+            {/* Floating Flowchart */}
+            <motion.div
+                className="relative z-10 shrink-0"
+                style={{ width: 150, height: 180 }}
+                animate={{ y: [0, 8, 0], rotateY: [-10, -5, -10], rotateZ: [-2, 0, -2] }}
+                transition={{ duration: 7, delay: 0.5, repeat: Infinity, ease: 'easeInOut' }}
+            >
+                {/* Node 1 (Top) */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-10 rounded-xl bg-cyan-400/20 border border-cyan-300/40 flex items-center justify-center backdrop-blur-md shadow-lg">
+                    <div className="w-10 h-1.5 bg-cyan-200/70 rounded" />
+                </div>
+
+                {/* Line downwards */}
+                <div className="absolute top-[40px] left-1/2 -translate-x-1/2 w-px h-[24px] bg-cyan-300/50" />
+
+                {/* Node 2 (Center) */}
+                <div className="absolute top-[64px] left-1/2 -translate-x-1/2 w-24 h-10 rounded-xl bg-blue-400/20 border border-blue-300/40 flex items-center justify-center backdrop-blur-md shadow-lg">
+                    <div className="w-12 h-1.5 bg-blue-200/70 rounded" />
+                </div>
+
+                {/* Lines branching */}
+                <div className="absolute top-[104px] left-1/2 -translate-x-1/2 w-[98px] h-px bg-indigo-300/50" />
+                <div className="absolute top-[104px] left-1/2 -translate-x-[49px] w-px h-[24px] bg-indigo-300/50" />
+                <div className="absolute top-[104px] left-1/2 translate-x-[49px] w-px h-[24px] bg-indigo-300/50" />
+
+                {/* Node 3 (Bottom Left) */}
+                <div className="absolute top-[128px] -left-2 w-16 h-10 rounded-xl bg-indigo-400/20 border border-indigo-300/40 flex items-center justify-center backdrop-blur-md shadow-lg">
+                    <div className="w-6 h-1 bg-indigo-200/70 rounded" />
+                </div>
+
+                {/* Node 4 (Bottom Right) */}
+                <div className="absolute top-[128px] -right-2 w-16 h-10 rounded-xl bg-indigo-400/20 border border-indigo-300/40 flex items-center justify-center backdrop-blur-md shadow-lg">
+                    <div className="w-6 h-1 bg-indigo-200/70 rounded" />
+                </div>
+
+                {/* Floating data packets on lines */}
+                <motion.div
+                    className="absolute top-[40px] left-1/2 -ml-1 w-2 h-2 rounded-full bg-cyan-200"
+                    style={{ boxShadow: '0 0 8px rgba(167,243,208,0.8)' }}
+                    animate={{ y: [0, 24, 0], opacity: [0, 1, 0] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                />
+            </motion.div>
+
+            {/* Glowing orbs representing data/ideas */}
             {[
-                { x: '2%', y: '25%', w: 50, h: 50, r: 12, d: 0 },
-                { x: '8%', y: '55%', w: 40, h: 40, r: 10, d: 0.5 },
-                { x: '0%', y: '70%', w: 35, h: 35, r: 8, d: 1 },
-            ].map((b, i) => (
+                { x: '10%', y: '20%', d: 0, c: 'rgba(99,102,241,0.3)', s: 40 },
+                { x: '80%', y: '15%', d: 1, c: 'rgba(34,211,238,0.3)', s: 30 },
+                { x: '15%', y: '80%', d: 0.5, c: 'rgba(56,189,248,0.3)', s: 50 },
+            ].map((p, i) => (
                 <motion.div
                     key={i}
-                    className="absolute"
-                    style={{
-                        width: b.w, height: b.h, left: b.x, top: b.y,
-                        borderRadius: b.r,
-                        background: 'rgba(99,102,241,0.06)',
-                        border: '1px solid rgba(99,102,241,0.15)',
-                    }}
-                    animate={{ y: [0, -10, 0], rotate: [0, 5, 0] }}
-                    transition={{ duration: 5, delay: b.d, repeat: Infinity, ease: 'easeInOut' }}
+                    className="absolute rounded-full blur-xl pointer-events-none"
+                    style={{ left: p.x, top: p.y, width: p.s, height: p.s, backgroundColor: p.c }}
+                    animate={{ scale: [1, 1.5, 1], opacity: [0.3, 0.6, 0.3] }}
+                    transition={{ duration: 4, delay: p.d, repeat: Infinity, ease: 'easeInOut' }}
                 />
             ))}
         </div>
