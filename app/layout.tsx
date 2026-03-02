@@ -4,8 +4,8 @@ import './globals.css';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
-const quicksand = Quicksand({ subsets: ['latin'], variable: '--font-quicksand' });
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+const quicksand = Quicksand({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
   title: 'Dreamable.studio',
