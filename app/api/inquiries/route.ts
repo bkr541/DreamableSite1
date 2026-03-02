@@ -77,29 +77,37 @@ export async function POST(req: NextRequest) {
         }
 
         // Insert
-        const inquiry = await prisma.inquiry.create({
-            data: {
-                name,
-                email,
-                company,
-                website,
-                service,
-                description,
-                budgetRange,
-                timeline,
-                source,
-                utmSource,
-                utmMedium,
-                utmCampaign,
-                utmTerm,
-                utmContent,
-                referrer,
-                metadata,
-            },
-            select: { id: true },
-        });
+        let inquiryId = 'demo-' + Date.now();
 
-        return NextResponse.json({ ok: true, inquiryId: inquiry.id });
+        if (process.env.DATABASE_URL) {
+            const inquiry = await prisma.inquiry.create({
+                data: {
+                    name,
+                    email,
+                    company,
+                    website,
+                    service,
+                    description,
+                    budgetRange,
+                    timeline,
+                    source,
+                    utmSource,
+                    utmMedium,
+                    utmCampaign,
+                    utmTerm,
+                    utmContent,
+                    referrer,
+                    metadata,
+                },
+                select: { id: true },
+            });
+            inquiryId = inquiry.id;
+        } else {
+            console.warn('[POST /api/inquiries] Warning: DATABASE_URL not set. Skipping database insert for this inquiry.');
+            console.warn('Received inquiry payload:', { name, email, service, description });
+        }
+
+        return NextResponse.json({ ok: true, inquiryId });
     } catch (error) {
         console.error('[POST /api/inquiries] Error:', error);
         return NextResponse.json(
