@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+h1 {
+  font-family: var(--font-quicksand), sans-serif;
+}
+
 @layer utilities {
   .hide-scrollbar::-webkit-scrollbar {
     display: none;

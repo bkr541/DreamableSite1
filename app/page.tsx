@@ -24,8 +24,15 @@ export default function Home() {
             Explore Principles
           </a>
         </div>
-        <div className="w-full max-w-[1000px] h-[400px] md:h-[500px] mt-24 bg-[#F9F9F9] border border-[#E5E5E5] rounded-2xl flex items-center justify-center text-[#707070] text-sm">
-          Hero Visual Placeholder
+        <div className="w-full max-w-[1000px] mt-24 rounded-2xl overflow-hidden">
+          <Image
+            src="/images/hero.jpg"
+            alt="Dreamable.studio services showcase"
+            width={1000}
+            height={500}
+            className="w-full h-auto object-cover"
+            priority
+          />
         </div>
       </section>
 
@@ -41,14 +48,14 @@ export default function Home() {
           />
           <div className="absolute inset-0 bg-black/50" />
           <div className="relative z-10 max-w-[1200px] mx-auto w-full flex flex-col items-start">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-100px" }}
               transition={{ duration: 0.8, ease: "easeOut" }}
               className="w-full max-w-[800px] flex flex-col items-start text-white"
             >
-              <h2 className="text-5xl md:text-7xl font-semibold tracking-tight mb-6"><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-orange-400">Evolv</span>able.</h2>
+              <h2 className="text-5xl md:text-7xl font-semibold tracking-tight mb-6"><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-orange-400">Evolv</span><span className="font-light">able.</span></h2>
               <p className="text-2xl md:text-3xl mb-8 font-medium tracking-tight text-white/90">Built to adapt.</p>
               <div className="text-lg text-white/80 leading-relaxed space-y-6">
                 <p>
@@ -73,14 +80,14 @@ export default function Home() {
           />
           <div className="absolute inset-0 bg-black/50" />
           <div className="relative z-10 max-w-[1200px] mx-auto w-full flex flex-col items-start">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-100px" }}
               transition={{ duration: 0.8, ease: "easeOut" }}
               className="w-full max-w-[800px] flex flex-col items-start text-white"
             >
-              <h2 className="text-5xl md:text-7xl font-semibold tracking-tight mb-6"><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-orange-400">Build</span>able.</h2>
+              <h2 className="text-5xl md:text-7xl font-semibold tracking-tight mb-6"><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-orange-400">Build</span><span className="font-light">able.</span></h2>
               <p className="text-2xl md:text-3xl mb-8 font-medium tracking-tight text-white/90">Designed to be executed.</p>
               <p className="text-lg text-white/80 leading-relaxed">
                 Design is only as good as its implementation. We build with the end in mind. Whether it’s a native iOS app or a complex web platform, our code is clean, our systems are logical, and our architecture is ready for the real world.
@@ -100,14 +107,14 @@ export default function Home() {
           />
           <div className="absolute inset-0 bg-black/50" />
           <div className="relative z-10 max-w-[1200px] mx-auto w-full flex flex-col items-start">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-100px" }}
               transition={{ duration: 0.8, ease: "easeOut" }}
               className="w-full max-w-[800px] flex flex-col items-start text-white"
             >
-              <h2 className="text-5xl md:text-7xl font-semibold tracking-tight mb-6"><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-orange-400">Launch</span>able.</h2>
+              <h2 className="text-5xl md:text-7xl font-semibold tracking-tight mb-6"><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-orange-400">Launch</span><span className="font-light">able.</span></h2>
               <p className="text-2xl md:text-3xl mb-8 font-medium tracking-tight text-white/90">Finished means shipped.</p>
               <p className="text-lg text-white/80 leading-relaxed">
                 The most dangerous state for a product is "almost finished." We specialize in the final 10%. From rigorous QA to rollout kits, we ensure that when we say it’s done, it’s ready for your first thousand users.
@@ -127,14 +134,14 @@ export default function Home() {
           />
           <div className="absolute inset-0 bg-black/50" />
           <div className="relative z-10 max-w-[1200px] mx-auto w-full flex flex-col items-start">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-100px" }}
               transition={{ duration: 0.8, ease: "easeOut" }}
               className="w-full max-w-[800px] flex flex-col items-start text-white"
             >
-              <h2 className="text-5xl md:text-7xl font-semibold tracking-tight mb-6"><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-orange-400">Memor</span>able.</h2>
+              <h2 className="text-5xl md:text-7xl font-semibold tracking-tight mb-6"><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-orange-400">Memor</span><span className="font-light">able.</span></h2>
               <p className="text-2xl md:text-3xl mb-8 font-medium tracking-tight text-white/90">Clarity is what lasts.</p>
               <p className="text-lg text-white/80 leading-relaxed">
                 In a world of noise, clarity is the only thing that sticks. We create visual languages that feel inevitable. Cohesive branding, intentional typography, and product UI that users don’t just use—they remember.
@@ -154,14 +161,14 @@ export default function Home() {
           />
           <div className="absolute inset-0 bg-black/50" />
           <div className="relative z-10 max-w-[1200px] mx-auto w-full flex flex-col items-start">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-100px" }}
               transition={{ duration: 0.8, ease: "easeOut" }}
               className="w-full max-w-[800px] flex flex-col items-start text-white"
             >
-              <h2 className="text-5xl md:text-7xl font-semibold tracking-tight mb-6"><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-orange-400">Dream</span>able.</h2>
+              <h2 className="text-5xl md:text-7xl font-semibold tracking-tight mb-6"><span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-orange-400">Dream</span><span className="font-light">able.</span></h2>
               <p className="text-2xl md:text-3xl mb-8 font-medium tracking-tight text-white/90">Ideas deserve structure.</p>
               <p className="text-lg text-white/80 leading-relaxed">
                 Every great product starts as a vague ambition. We bring the rigor required to define it. We move from abstract concepts to concrete strategies, ensuring your idea has the positioning and direction needed to survive the market.

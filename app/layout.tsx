@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, Quicksand } from 'next/font/google';
 import './globals.css';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
+const quicksand = Quicksand({ subsets: ['latin'], variable: '--font-quicksand' });
 
 export const metadata: Metadata = {
   title: 'Dreamable.studio',
@@ -13,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} font-sans scroll-smooth`}>
+    <html lang="en" className={`${inter.variable} ${quicksand.variable} font-sans scroll-smooth`}>
       <body className="min-h-screen flex flex-col bg-white text-[#000000] antialiased selection:bg-black selection:text-white">
         <Navbar />
         <main className="flex-1 flex flex-col">
