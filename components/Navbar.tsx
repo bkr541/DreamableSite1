@@ -7,7 +7,7 @@ export default function Navbar() {
       <div className="max-w-[1100px] mx-auto bg-white/80 backdrop-blur-md rounded-full shadow-[0_2px_20px_rgba(0,0,0,0.08)] border border-[#E8E8E8]/60 px-8 h-16 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 text-lg font-semibold tracking-tight text-[#000000]">
           <Image src="/images/logo_transparent.png" alt="Dreamable.studio logo" width={32} height={32} className="rounded-md" />
-          <span>Dreamable<span className="text-[#999]">.</span>studio</span>
+          <span className="hidden md:block">Dreamable<span className="text-[#999]">.</span>studio</span>
         </Link>
         <div className="flex items-center gap-1 sm:gap-2">
           <div className="flex items-center gap-3 sm:gap-6 text-[12px] sm:text-sm font-medium text-[#707070] mr-2 sm:mr-4">

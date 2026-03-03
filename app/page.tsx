@@ -87,6 +87,9 @@ export default function Home() {
             <p className="text-[15px] sm:text-base md:text-lg text-[#707070] w-full max-w-[500px] mb-8 leading-relaxed text-center md:text-left px-2 sm:px-0">
               A digital product and creative studio that takes raw concepts and transforms them into complete digital products wrapped in branding that's as unforgetable as you.
             </p>
+            <div className="block md:hidden w-full mb-8 flex justify-center px-4">
+              <Image src="/images/hero_mobile.png" alt="Dreamable interface" width={600} height={400} className="w-full object-contain drop-shadow-2xl rounded-xl" priority />
+            </div>
             <div className="flex flex-row flex-wrap justify-center md:justify-start items-center gap-3">
               <Link href="#contact" className="inline-flex items-center justify-center h-12 px-5 sm:px-7 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all">
                 Start a Project
@@ -198,7 +201,7 @@ export default function Home() {
                         whileInView={{ opacity: 1, x: 0 }}
                         viewport={{ once: true, margin: "-80px" }}
                         transition={{ duration: 0.7, delay: 0.15, ease: "easeOut" }}
-                        className={`absolute inset-0 md:relative md:inset-auto z-0 h-full md:h-[320px] w-full flex items-center justify-center opacity-30 md:opacity-100 pointer-events-none md:pointer-events-auto overflow-hidden md:overflow-visible ${isEven ? '' : 'md:order-1'}`}
+                        className={`absolute inset-0 md:relative md:inset-auto z-0 h-full md:h-[320px] w-full flex items-center justify-center opacity-10 md:opacity-100 pointer-events-none md:pointer-events-auto overflow-hidden md:overflow-visible ${isEven ? '' : 'md:order-1'}`}
                       >
                         <InteractiveElement theme={item.theme} />
                       </motion.div>
