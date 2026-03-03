@@ -41,7 +41,7 @@ h1 {
   background-clip: text;
   -webkit-background-clip: text;
   animation: gradient-sweep 2.5s ease-in-out forwards;
-  animation-delay: 1.5s;
+  animation-delay: 1.8s;
 }
 
 @layer utilities {

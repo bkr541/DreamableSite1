@@ -3,7 +3,7 @@ import Link from 'next/link';
 export default function Footer() {
   return (
     <footer className="w-full border-t border-[#F5F5F5] py-12 mt-auto">
-      <div className="max-w-[1200px] mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
+      <div className="max-w-[1100px] mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="text-sm font-medium text-[#000000]">
           © {new Date().getFullYear()} Dreamable.studio
         </div>

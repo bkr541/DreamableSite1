@@ -9,6 +9,7 @@ import InteractiveElement from '@/components/InteractiveElement';
 import HeroRibbons from '@/components/HeroRibbons';
 import CubePuzzle from '@/components/CubePuzzle';
 import HeroCarousel from '@/components/HeroCarousel';
+import Image from 'next/image';
 
 export default function Home() {
   const [formData, setFormData] = useState({
@@ -70,25 +71,25 @@ export default function Home() {
   return (
     <div className="flex flex-col w-full">
       {/* SECTION 1 – HERO */}
-      <section className="relative min-h-[calc(100vh-80px)] flex items-center px-8 md:px-16 py-24 overflow-hidden snap-start scroll-mt-0">
+      <section className="relative min-h-[calc(100vh-80px)] flex items-center px-4 md:px-16 lg:px-28 xl:px-44 py-24 overflow-hidden snap-start scroll-mt-0">
         <HeroRibbons />
-        <div className="relative z-10 max-w-[1200px] mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+        <div className="relative z-10 max-w-[1000px] mx-auto w-full flex flex-col items-center md:items-start justify-center">
           {/* Left – Text */}
-          <div className="flex flex-col items-start">
-            <h1 className="font-semibold tracking-tight leading-[1.1] mb-6 text-left">
-              <span className="text-5xl md:text-6xl lg:text-[68px] text-[#1a1a1a] animate-gradient-sweep">Dreamable.<motion.span
+          <div className="flex flex-col items-center md:items-start relative z-20 w-full md:w-[70%] lg:w-[75%]">
+            <h1 className="font-semibold tracking-tight leading-[1.1] mb-6 text-center md:text-left">
+              <span className="text-[38px] sm:text-5xl md:text-6xl lg:text-[68px] text-[#1a1a1a] animate-gradient-sweep whitespace-nowrap">Dreamable.<motion.span
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
+                transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
                 className="inline-block"
               >studio</motion.span></span>
             </h1>
-            <p className="text-base md:text-lg text-[#707070] max-w-[440px] mb-8 leading-relaxed text-left">
-              We design, engineer, and launch digital products for teams that want to move fast without sacrificing craft.
+            <p className="text-[15px] sm:text-base md:text-lg text-[#707070] w-full max-w-[500px] mb-8 leading-relaxed text-center md:text-left px-2 sm:px-0">
+              A digital product and creative studio that takes raw concepts and transforms them into complete digital products wrapped in branding that's as unforgetable as you.
             </p>
-            <div className="flex flex-row flex-wrap items-center gap-3">
+            <div className="flex flex-row flex-wrap justify-center md:justify-start items-center gap-3">
               <Link href="#contact" className="inline-flex items-center justify-center h-12 px-5 sm:px-7 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all">
-                Start a project
+                Start a Project
               </Link>
               <a href="#principles" className="inline-flex items-center justify-center h-12 px-5 sm:px-7 rounded-full bg-[#F0F0F0] text-[#1a1a1a] text-sm font-medium hover:bg-[#E5E5E5] transition-colors border border-[#e0e0e0]">
                 See our work
@@ -97,15 +98,15 @@ export default function Home() {
           </div>
 
           {/* Right – 3D Cube Puzzle */}
-          <div className="hidden md:flex items-center justify-center h-[400px]">
+          <div className="hidden md:flex items-center justify-center h-[400px] w-[500px] absolute right-0 lg:-right-20 z-10 opacity-60 lg:opacity-100 pointer-events-none md:pointer-events-auto">
             <CubePuzzle />
           </div>
         </div>
       </section>
 
       <div id="principles" className="w-full snap-start scroll-mt-24 pt-4">
-        <section className="relative px-6 py-24 border-t border-[#F5F5F5] overflow-hidden">
-          <div className="max-w-[1200px] mx-auto w-full">
+        <section className="relative px-4 md:px-16 lg:px-28 xl:px-44 py-24 border-t border-[#F5F5F5] overflow-hidden">
+          <div className="max-w-[1000px] mx-auto w-full">
             {/* Section header */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
@@ -211,7 +212,7 @@ export default function Home() {
       </div>
 
       {/* SECTION 7 – CONTACT */}
-      <section id="contact" className="relative px-6 py-32 border-t border-[#F5F5F5] overflow-hidden snap-start scroll-mt-0">
+      <section id="contact" className="relative px-4 py-32 border-t border-[#F5F5F5] overflow-hidden snap-start scroll-mt-0">
         <SplineBackground theme="buildable" />
         <div className="relative z-10 max-w-[800px] mx-auto w-full">
           <motion.div
@@ -222,9 +223,9 @@ export default function Home() {
             className="flex flex-col items-center"
           >
             {/* Heading */}
-            <h2 className="text-4xl md:text-6xl font-semibold tracking-tight mb-4 text-center text-[#1a1a1a]">Start a project</h2>
+            <h2 className="text-4xl md:text-6xl font-semibold tracking-tight mb-4 text-center text-[#1a1a1a]">Start a Project</h2>
             <p className="text-base md:text-lg text-[#707070] mb-12 text-center max-w-[520px]">
-              Tell us what you&apos;re building. We&apos;ll reply with next steps and a clear plan.
+              Want to work with us? Tell us what your building.
             </p>
 
             {/* Glassmorphic form card */}
@@ -318,24 +319,44 @@ export default function Home() {
                     </select>
                   </div>
 
-                  <div className="flex flex-col">
+                  <div className="flex flex-col relative">
                     <label htmlFor="contact-attachment" className="text-sm font-medium text-[#555] mb-2">Attachment <span className="text-[#aaa] font-normal">(optional)</span></label>
-                    <label
-                      htmlFor="contact-attachment"
-                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] focus-within:ring-2 focus-within:ring-cyan-200/50 border border-white/40 transition-all cursor-pointer flex items-center gap-2"
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#999] shrink-0"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66L9.41 17.41a2 2 0 01-2.83-2.83l8.49-8.49" /></svg>
-                      <span className={`text-sm truncate ${attachment ? 'text-[#1a1a1a]' : 'text-[#bbb]'}`}>
-                        {attachment ? attachment.name : 'PDF, image, or doc'}
-                      </span>
-                      <input
-                        type="file"
-                        id="contact-attachment"
-                        className="sr-only"
-                        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.svg,.sketch,.fig,.xd"
-                        onChange={(e) => setAttachment(e.target.files?.[0] || null)}
-                      />
-                    </label>
+                    <div className="relative w-full">
+                      <label
+                        htmlFor="contact-attachment"
+                        className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] focus-within:ring-2 focus-within:ring-cyan-200/50 border border-white/40 transition-all cursor-pointer flex items-center gap-2 ${attachment ? 'pr-10' : ''}`}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#999] shrink-0"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66L9.41 17.41a2 2 0 01-2.83-2.83l8.49-8.49" /></svg>
+                        <span className={`text-sm truncate ${attachment ? 'text-[#1a1a1a]' : 'text-[#bbb]'}`}>
+                          {attachment ? attachment.name : 'PDF, image, or doc'}
+                        </span>
+                        <input
+                          type="file"
+                          id="contact-attachment"
+                          className="sr-only"
+                          accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.svg,.sketch,.fig,.xd"
+                          onChange={(e) => setAttachment(e.target.files?.[0] || null)}
+                        />
+                      </label>
+                      {attachment && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setAttachment(null);
+                            const fileInput = document.getElementById('contact-attachment') as HTMLInputElement;
+                            if (fileInput) fileInput.value = '';
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[#999] hover:text-[#333] transition-colors"
+                          aria-label="Remove attachment"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -373,9 +394,6 @@ export default function Home() {
                   >
                     {submitting ? 'Sending…' : 'Send'}
                   </button>
-                  {submitStatus === 'success' && (
-                    <p className="text-sm text-emerald-600 font-medium">Your inquiry has been submitted! We'll be in touch soon.</p>
-                  )}
                   {submitStatus === 'error' && (
                     <p className="text-sm text-red-500 font-medium">{submitError}</p>
                   )}
@@ -385,6 +403,71 @@ export default function Home() {
           </motion.div>
         </div>
       </section>
+
+      {/* Success Modal */}
+      {submitStatus === 'success' && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setSubmitStatus('idle')}
+          />
+
+          {/* Modal content */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="relative bg-[#fcfeff] rounded-[32px] w-full max-w-[420px] shadow-2xl overflow-hidden flex flex-col items-center"
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setSubmitStatus('idle')}
+              className="absolute top-5 right-5 z-20 text-[#888] hover:text-[#333] transition-colors"
+              aria-label="Close modal"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+
+            {/* Hero Image Area */}
+            <div className="w-full bg-[#f0fcf6] pt-14 pb-8 px-4 flex justify-center items-center relative overflow-hidden h-[240px]">
+              {/* Wavy/rounded background effect at bottom */}
+              <div className="absolute -bottom-8 left-0 right-0 h-20 bg-[#fcfeff] rounded-[100%] scale-[1.15]" />
+
+              <Image
+                src="/images/modal_inquiryconfirmation.png"
+                alt="Inquiry Complete"
+                width={300}
+                height={220}
+                className="object-contain relative z-10 pointer-events-none drop-shadow-sm -mt-2"
+                priority
+              />
+            </div>
+
+            <div className="px-8 pb-10 pt-2 text-center w-full">
+              <h3 className="text-[26px] font-bold text-[#111] mb-3 tracking-tight">Got it!</h3>
+              <p className="text-[15px] text-[#666] leading-relaxed mb-8">
+                Your inquiry has been successfully sent! Once our team reviews your request, you'll receive a personalized
+                code to log into our client portal so we can discuss the next steps in detail.
+              </p>
+
+              <button
+                onClick={() => {
+                  setSubmitStatus('idle');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="w-full py-4 rounded-full bg-[#1a1a1a] text-white font-medium hover:bg-[#333] hover:-translate-y-0.5 hover:shadow-lg transition-all"
+              >
+                Return Home
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
