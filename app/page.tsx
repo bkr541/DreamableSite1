@@ -85,7 +85,7 @@ export default function Home() {
               >studio</motion.span></span>
             </h1>
             <p className="text-[15px] sm:text-base md:text-lg text-[#707070] w-full max-w-[500px] mb-8 leading-relaxed text-center md:text-left px-2 sm:px-0">
-              A digital product and creative studio that takes raw concepts and transforms them into complete digital products wrapped in branding that's as unforgetable as you.
+              A digital product and creative studio that takes raw concepts and transforms them into complete digital products wrapped in branding that&apos;s as unforgetable as you.
             </p>
             <div className="block md:hidden w-full mb-8 flex justify-center px-4">
               <Image src="/images/hero_mobile.png" alt="Dreamable interface" width={600} height={400} className="w-full object-contain drop-shadow-2xl rounded-xl" priority />
@@ -93,6 +93,9 @@ export default function Home() {
             <div className="flex flex-row flex-wrap justify-center md:justify-start items-center gap-3">
               <Link href="#contact" className="inline-flex items-center justify-center h-12 px-5 sm:px-7 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all">
                 Start a Project
+              </Link>
+              <Link href="/portal" className="inline-flex items-center justify-center h-12 px-5 sm:px-7 rounded-full border border-[#1a2030] text-[#1a2030] text-sm font-medium hover:bg-[#1a2030] hover:text-white transition-all">
+                View a Project
               </Link>
               <a href="#principles" className="inline-flex items-center justify-center h-12 px-5 sm:px-7 rounded-full bg-[#F0F0F0] text-[#1a1a1a] text-sm font-medium hover:bg-[#E5E5E5] transition-colors border border-[#e0e0e0]">
                 See our work
@@ -454,7 +457,7 @@ export default function Home() {
             <div className="px-8 pb-10 pt-2 text-center w-full">
               <h3 className="text-[26px] font-bold text-[#111] mb-3 tracking-tight">Got it!</h3>
               <p className="text-[15px] text-[#666] leading-relaxed mb-8">
-                Your inquiry has been successfully sent! Once our team reviews your request, you'll receive a personalized
+                Your inquiry has been successfully sent! Once our team reviews your request, you&apos;ll receive a personalized
                 code to log into our client portal so we can discuss the next steps in detail.
               </p>
 

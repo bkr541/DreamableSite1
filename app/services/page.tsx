@@ -142,8 +142,8 @@ export default function Services() {
             </div>
 
             <div className="border-b border-[#F5F5F5] pb-8">
-              <h3 className="text-lg font-semibold mb-4">What is a "Practical AI Automation"?</h3>
-              <p className="text-[#707070]">It’s a custom tool that handles repetitive tasks using LLMs, built specifically for your team's workflow.</p>
+              <h3 className="text-lg font-semibold mb-4">What is a &quot;Practical AI Automation&quot;?</h3>
+              <p className="text-[#707070]">It&apos;s a custom tool that handles repetitive tasks using LLMs, built specifically for your team&apos;s workflow.</p>
             </div>
 
             <div className="border-b border-[#F5F5F5] pb-8">

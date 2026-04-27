@@ -1,6 +1,10 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  // nodemailer 8.x includes optional OpenTelemetry instrumentation that references
+  // @opentelemetry/api. Marking both as external prevents Next.js from bundling
+  // them — they run natively in the Node.js API route process instead.
+  serverExternalPackages: ['nodemailer', '@opentelemetry/api'],
   reactStrictMode: true,
   eslint: {
     ignoreDuringBuilds: true,

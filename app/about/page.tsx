@@ -7,7 +7,7 @@ export default function About() {
       <section className="px-8 md:px-16 pt-32 pb-24 max-w-[1200px] mx-auto w-full">
         <h1 className="text-5xl md:text-7xl font-semibold tracking-tight mb-8">About Dreamable.studio</h1>
         <p className="text-xl md:text-2xl text-[#707070] leading-relaxed max-w-[800px]">
-          We are a small, focused team of designers and engineers who believe that digital products should be as beautiful as they are functional. We don't do "digital transformation." We build software that works and brands that matter.
+          We are a small, focused team of designers and engineers who believe that digital products should be as beautiful as they are functional. We don&apos;t do &quot;digital transformation.&quot; We build software that works and brands that matter.
         </p>
       </section>
 
@@ -113,7 +113,7 @@ export default function About() {
         <div className="max-w-[800px] mx-auto w-full">
           <div className="p-10 md:p-16 bg-[#F9F9F9] rounded-[32px] border border-[#E5E5E5]">
             <p className="text-xl md:text-2xl leading-relaxed font-medium mb-8">
-              "I started Dreamable because I saw too many great ideas get lost in the gap between design and development. We exist to close that gap. We’re not here to be your 'agency.' We’re here to be the studio that finally gets your product out the door."
+              &quot;I started Dreamable because I saw too many great ideas get lost in the gap between design and development. We exist to close that gap. We&apos;re not here to be your &apos;agency.&apos; We&apos;re here to be the studio that finally gets your product out the door.&quot;
             </p>
             <div className="text-[#707070] font-medium">
               — Founder, Dreamable.studio
