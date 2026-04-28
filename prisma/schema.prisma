@@ -54,11 +54,12 @@ model User {
   inquiryId String? @unique @map("inquiry_id") @db.Uuid
   companyId String? @map("company_id") @db.Uuid
 
-  name   String
-  email  String  @unique
-  role   String  @default("CLIENT")
-  status String  @default("INVITED")
-  admin  Boolean @default(false)
+  name         String
+  email        String  @unique
+  passwordHash String? @map("password_hash")
+  role         String  @default("CLIENT")
+  status       String  @default("INVITED")
+  admin        Boolean @default(false)
 
   invitedAt   DateTime? @map("invited_at") @db.Timestamptz()
   lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz()

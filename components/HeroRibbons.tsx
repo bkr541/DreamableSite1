@@ -66,13 +66,13 @@ export default function HeroRibbons() {
             {/* Connection lines (node graph) */}
             <svg className="absolute inset-0 w-full h-full">
                 {connections.map((c, i) => (
-                    <motion.line
+                    <motion.path
                         key={`line-${i}`}
-                        x1={`${c.x1}%`} y1={`${c.y1}%`}
-                        x2={`${c.x2}%`} y2={`${c.y2}%`}
+                        d={`M ${c.x1}% ${c.y1}% L ${c.x2}% ${c.y2}%`}
                         stroke="rgba(120,160,190,0.2)"
                         strokeWidth="1"
                         strokeDasharray="6 4"
+                        fill="none"
                         initial={{ pathLength: 0, opacity: 0 }}
                         animate={{ pathLength: 1, opacity: 1 }}
                         transition={{ duration: 2, delay: i * 0.4, ease: 'easeOut' }}

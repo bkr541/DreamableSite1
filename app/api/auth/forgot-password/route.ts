@@ -65,7 +65,12 @@ export async function POST(req: NextRequest) {
       const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
       const resetUrl = `${appUrl}/portal/reset-password?token=${token}`;
 
-      await sendResetEmail(user.email, resetUrl);
+      try {
+        await sendResetEmail(user.email, resetUrl);
+      } catch (mailErr) {
+        console.error('[forgot-password] email failed:', mailErr);
+        // Don't surface SMTP errors to the client — always return ok.
+      }
     }
 
     return NextResponse.json({ ok: true });

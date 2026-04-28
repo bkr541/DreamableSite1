@@ -1,19 +1,24 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import SplineBackground from '@/components/SplineBackground';
 
-type TokenStatus = 'validating' | 'valid' | 'expired' | 'invalid';
+type TokenStatus = 'validating' | 'valid' | 'expired' | 'invalid' | 'success';
 
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const token = searchParams.get('token') ?? '';
 
   const [status, setStatus] = useState<TokenStatus>('validating');
   const [tokenEmail, setTokenEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [fieldError, setFieldError] = useState('');
 
   useEffect(() => {
     if (!token) { setStatus('invalid'); return; }
@@ -32,6 +37,40 @@ function ResetPasswordContent() {
       .catch(() => setStatus('invalid'));
   }, [token]);
 
+  async function handleSetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    setFieldError('');
+
+    if (password.length < 8) {
+      setFieldError('Password must be at least 8 characters.');
+      return;
+    }
+    if (password !== confirm) {
+      setFieldError('Passwords do not match.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/auth/set-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setFieldError(data.error || 'Something went wrong.');
+        return;
+      }
+      setStatus('success');
+      setTimeout(() => router.push('/portal'), 2000);
+    } catch {
+      setFieldError('Unable to connect. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 40 }}
@@ -44,20 +83,68 @@ function ResetPasswordContent() {
       )}
 
       {status === 'valid' && (
-        <div className="text-center">
-          <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-8">Link verified</p>
-          <p className="text-sm text-[#555] leading-relaxed">
-            Your reset link for <span className="font-medium text-[#1a1a1a]">{tokenEmail}</span> is valid.
-            Password-setting will be available once full authentication is configured.
+        <div>
+          <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-2">Set your password</p>
+          <p className="text-sm text-[#888] mb-8">
+            Setting password for <span className="font-medium text-[#1a1a1a]">{tokenEmail}</span>
           </p>
-          <div className="flex justify-center pt-6">
-            <Link
-              href="/portal"
-              className="px-12 py-3.5 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all"
-            >
-              Back to Sign In
-            </Link>
-          </div>
+
+          <form onSubmit={handleSetPassword} className="space-y-6">
+            <div className="flex flex-col">
+              <label htmlFor="new-password" className="text-sm font-medium text-[#555] mb-2">
+                New Password
+              </label>
+              <input
+                id="new-password"
+                type="password"
+                required
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+              />
+            </div>
+
+            <div className="flex flex-col">
+              <label htmlFor="confirm-password" className="text-sm font-medium text-[#555] mb-2">
+                Confirm Password
+              </label>
+              <input
+                id="confirm-password"
+                type="password"
+                required
+                autoComplete="new-password"
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="••••••••"
+                className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+              />
+            </div>
+
+            {fieldError && (
+              <p className="text-sm text-[#888] leading-relaxed">{fieldError}</p>
+            )}
+
+            <div className="flex justify-center pt-2">
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-12 py-3.5 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+              >
+                {submitting ? 'Saving…' : 'Set Password'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {status === 'success' && (
+        <div className="text-center">
+          <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-8">Password set</p>
+          <p className="text-sm text-[#555] leading-relaxed">
+            Your password has been updated. Redirecting you to sign in…
+          </p>
         </div>
       )}
 

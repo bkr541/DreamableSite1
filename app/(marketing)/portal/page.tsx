@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
 import SplineBackground from '@/components/SplineBackground';
 
 export default function Portal() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -14,6 +16,8 @@ export default function Portal() {
   // Forgot-password modal state
   const [showReset, setShowReset] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [resetSubmitting, setResetSubmitting] = useState(false);
   const [resetStatus, setResetStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [resetError, setResetError] = useState('');
@@ -22,14 +26,30 @@ export default function Portal() {
     e.preventDefault();
     setSubmitting(true);
     setError('');
-    // Placeholder — wire to your auth provider (NextAuth, Clerk, Supabase Auth, etc.)
-    await new Promise((r) => setTimeout(r, 800));
-    setError('Portal access is invitation-only. Check your email for your login link.');
-    setSubmitting(false);
+
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Something went wrong.');
+        return;
+      }
+
+      router.push(data.admin ? '/admin' : '/dashboard');
+    } catch {
+      setError('Unable to connect. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const openReset = () => {
-    setResetEmail(email); // pre-fill with whatever the user already typed
+    setResetEmail(email);
     setResetStatus('idle');
     setResetError('');
     setShowReset(true);
@@ -39,18 +59,33 @@ export default function Portal() {
     setShowReset(false);
     setResetStatus('idle');
     setResetError('');
+    setNewPassword('');
+    setConfirmPassword('');
   };
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    setResetSubmitting(true);
     setResetError('');
 
+    if (!newPassword || !confirmPassword) {
+      setResetError('Both password fields are required.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setResetError('Passwords do not match.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setResetError('Password must be at least 8 characters.');
+      return;
+    }
+
+    setResetSubmitting(true);
     try {
-      const res = await fetch('/api/auth/forgot-password', {
+      const res = await fetch('/api/auth/update-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: resetEmail }),
+        body: JSON.stringify({ email: resetEmail, password: newPassword }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Something went wrong.');
@@ -203,7 +238,7 @@ export default function Portal() {
               {resetStatus === 'success' ? (
                 <div className="space-y-6">
                   <p className="text-sm text-[#555] leading-relaxed">
-                    If an account exists for <span className="font-medium text-[#1a1a1a]">{resetEmail}</span>, a reset link has been sent. Check your inbox.
+                    Password updated successfully for <span className="font-medium text-[#1a1a1a]">{resetEmail}</span>. You can now sign in.
                   </p>
                   <div className="flex justify-center pt-2">
                     <button
@@ -233,7 +268,37 @@ export default function Portal() {
                     />
                   </div>
 
-                  {resetStatus === 'error' && (
+                  <div className="flex flex-col">
+                    <label htmlFor="new-password" className="text-sm font-medium text-[#555] mb-2">
+                      New Password
+                    </label>
+                    <input
+                      id="new-password"
+                      type="password"
+                      autoComplete="new-password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                    />
+                  </div>
+
+                  <div className="flex flex-col">
+                    <label htmlFor="confirm-password" className="text-sm font-medium text-[#555] mb-2">
+                      Confirm Password
+                    </label>
+                    <input
+                      id="confirm-password"
+                      type="password"
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                    />
+                  </div>
+
+                  {resetError && (
                     <p className="text-sm text-[#888] leading-relaxed">{resetError}</p>
                   )}
 
@@ -250,7 +315,7 @@ export default function Portal() {
                       disabled={resetSubmitting}
                       className="px-10 py-3.5 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
                     >
-                      {resetSubmitting ? 'Sending…' : 'Reset Password'}
+                      {resetSubmitting ? 'Updating…' : 'Update Password'}
                     </button>
                   </div>
                 </form>
