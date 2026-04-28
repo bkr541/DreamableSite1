@@ -55,6 +55,42 @@ npx prisma migrate resolve --applied "20250101000000_init"
 
 ---
 
+## Data Model
+
+### Tables
+
+| Table | Description |
+|---|---|
+| `inquiries` | Raw lead records created by the public contact form. Source of truth. |
+| `companies` | Client company created when an inquiry is approved. |
+| `users` | Client user (portal login) created when an inquiry is approved. |
+| `projects` | Active project created when an inquiry is approved. |
+
+Each of `companies`, `users`, and `projects` carries a unique `inquiry_id` foreign key so the same inquiry can never accidentally spawn duplicate records.
+
+### Approval flow
+
+When `POST /api/inquiries/:id/approve` is called:
+
+1. The inquiry is validated — `name`, `email`, `service`, and `description` must be present.
+2. A single Prisma `$transaction` runs:
+   - `inquiries.status` → `APPROVED`, `approved_at` → now
+   - Creates one `companies` record (name defaults to `inquiry.company ?? inquiry.name`)
+   - Creates one `users` record linked to that company, `status = INVITED`
+   - Creates one `projects` record linked to both company and user, `status = ONBOARDING`
+3. The endpoint is idempotent — if all three records already exist it returns them immediately without re-running the transaction.
+
+**Error responses**
+
+| Status | Meaning |
+|---|---|
+| 404 | Inquiry ID not found |
+| 409 | `users.email` already exists on a different record |
+| 422 | Required field missing on the inquiry |
+| 500 | Unexpected server error |
+
+---
+
 ## Environment Variables
 
 Copy `.env.example` to `.env.local` and fill in all values.

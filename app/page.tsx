@@ -69,7 +69,10 @@ export default function Home() {
   };
 
   return (
-    <div className="flex flex-col w-full">
+    <div className="flex flex-col w-full bg-white">
+      {/* Buildable gradient fills the viewport — visible in the footer zone where no section covers it */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0, background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 40%, #f0f4ff 100%)' }} />
+
       {/* SECTION 1 – HERO */}
       <section className="relative min-h-[calc(100vh-80px)] flex items-center px-4 md:px-16 lg:px-28 xl:px-44 py-24 overflow-hidden snap-start scroll-mt-0">
         <HeroRibbons />
@@ -111,7 +114,7 @@ export default function Home() {
       </section>
 
       <div id="principles" className="w-full snap-start scroll-mt-24 pt-4">
-        <section className="relative px-4 md:px-16 lg:px-28 xl:px-44 py-24 border-t border-[#F5F5F5] overflow-hidden">
+        <section className="relative bg-white px-4 md:px-16 lg:px-28 xl:px-44 py-24 border-t border-[#F5F5F5] overflow-hidden">
           <div className="max-w-[1000px] mx-auto w-full">
             {/* Section header */}
             <motion.div
@@ -229,52 +232,52 @@ export default function Home() {
             className="flex flex-col items-center"
           >
             {/* Heading */}
-            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight mb-2 text-center text-[#1a1a1a]">Start a Project</h2>
+            <h2 className="text-4xl md:text-5xl font-semibold tracking-tight mb-4 text-center text-[#1a1a1a]">Start a Project</h2>
             <p className="text-base text-[#707070] mb-10 text-center max-w-[520px]">
               Want to work with us? Tell us what your building.
             </p>
 
             {/* Form card */}
-            <div className="w-full rounded-3xl p-6 bg-white shadow-lg border border-[#F0F0F0]">
-              <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-4">Tell us about your project</p>
-              <form className="w-full space-y-4" onSubmit={handleSubmit}>
+            <div className="w-full rounded-3xl p-8 bg-white shadow-lg border border-[#F0F0F0]">
+              <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-8">Tell us about your project</p>
+              <form className="w-full space-y-6" onSubmit={handleSubmit}>
                 {/* Row 1: Name + Email */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="flex flex-col">
-                    <label htmlFor="contact-name" className="text-sm font-medium text-[#555] mb-1">Name</label>
+                    <label htmlFor="contact-name" className="text-sm font-medium text-[#555] mb-2">Name</label>
                     <input
                       type="text"
                       id="contact-name"
                       required
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full bg-white/60 rounded-xl px-4 py-2 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all"
+                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all"
                       placeholder="Jane Doe"
                     />
                   </div>
                   <div className="flex flex-col">
-                    <label htmlFor="contact-email" className="text-sm font-medium text-[#555] mb-1">Email</label>
+                    <label htmlFor="contact-email" className="text-sm font-medium text-[#555] mb-2">Email</label>
                     <input
                       type="email"
                       id="contact-email"
                       required
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full bg-white/60 rounded-xl px-4 py-2 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all"
+                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all"
                       placeholder="jane@example.com"
                     />
                   </div>
                 </div>
 
                 {/* Row 2: Project Type + Budget Range */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="flex flex-col">
-                    <label htmlFor="contact-project" className="text-sm font-medium text-[#555] mb-1">Project Type</label>
+                    <label htmlFor="contact-project" className="text-sm font-medium text-[#555] mb-2">Project Type</label>
                     <select
                       id="contact-project"
                       value={formData.projectType}
                       onChange={(e) => setFormData({ ...formData, projectType: e.target.value })}
-                      className="w-full bg-white/60 rounded-xl px-4 py-2 text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all appearance-none cursor-pointer"
+                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all appearance-none cursor-pointer"
                     >
                       <option value="App or Web Development">App or Web Development</option>
                       <option value="Branding & Identity">Branding &amp; Identity</option>
@@ -284,12 +287,12 @@ export default function Home() {
                     </select>
                   </div>
                   <div className="flex flex-col">
-                    <label htmlFor="contact-budget" className="text-sm font-medium text-[#555] mb-1">Project Budget</label>
+                    <label htmlFor="contact-budget" className="text-sm font-medium text-[#555] mb-2">Project Budget</label>
                     <select
                       id="contact-budget"
                       value={formData.budgetRange}
                       onChange={(e) => setFormData({ ...formData, budgetRange: e.target.value })}
-                      className="w-full bg-white/60 rounded-xl px-4 py-2 text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all appearance-none cursor-pointer"
+                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all appearance-none cursor-pointer"
                     >
                       <option value="< $500">&lt; $500</option>
                       <option value="$500 - $1k">$500 - $1k</option>
@@ -300,14 +303,14 @@ export default function Home() {
                 </div>
 
                 {/* Row 3: Timeline + Attachment */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="flex flex-col">
-                    <label htmlFor="contact-timeline" className="text-sm font-medium text-[#555] mb-1">Timeline</label>
+                    <label htmlFor="contact-timeline" className="text-sm font-medium text-[#555] mb-2">Timeline</label>
                     <select
                       id="contact-timeline"
                       value={formData.timeline}
                       onChange={(e) => setFormData({ ...formData, timeline: e.target.value })}
-                      className="w-full bg-white/60 rounded-xl px-4 py-2 text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all appearance-none cursor-pointer"
+                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all appearance-none cursor-pointer"
                     >
                       <option value="1 - 2 weeks">1 - 2 weeks</option>
                       <option value="1 month">1 month</option>
@@ -319,11 +322,11 @@ export default function Home() {
                   </div>
 
                   <div className="flex flex-col relative">
-                    <label htmlFor="contact-attachment" className="text-sm font-medium text-[#555] mb-1">Attachment <span className="text-[#aaa] font-normal">(optional)</span></label>
+                    <label htmlFor="contact-attachment" className="text-sm font-medium text-[#555] mb-2">Attachment <span className="text-[#aaa] font-normal">(optional)</span></label>
                     <div className="relative w-full">
                       <label
                         htmlFor="contact-attachment"
-                        className={`w-full bg-white/60 rounded-xl px-4 py-2 text-[#1a1a1a] focus-within:ring-2 focus-within:ring-cyan-200/50 border border-[#D0D0D0] transition-all cursor-pointer flex items-center gap-2 ${attachment ? 'pr-10' : ''}`}
+                        className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] focus-within:ring-2 focus-within:ring-cyan-200/50 border border-[#D0D0D0] transition-all cursor-pointer flex items-center gap-2 ${attachment ? 'pr-10' : ''}`}
                       >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#999] shrink-0"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66L9.41 17.41a2 2 0 01-2.83-2.83l8.49-8.49" /></svg>
                         <span className={`text-sm truncate ${attachment ? 'text-[#1a1a1a]' : 'text-[#bbb]'}`}>
@@ -361,14 +364,14 @@ export default function Home() {
 
                 {/* Row 4: Message */}
                 <div className="flex flex-col">
-                  <label htmlFor="contact-message" className="text-sm font-medium text-[#555] mb-1">Message</label>
+                  <label htmlFor="contact-message" className="text-sm font-medium text-[#555] mb-2">Message</label>
                   <textarea
                     id="contact-message"
-                    rows={3}
+                    rows={4}
                     required
                     value={formData.message}
                     onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                    className="w-full bg-white/60 rounded-xl px-4 py-2 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all resize-none"
+                    className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all resize-none"
                     placeholder="Tell us about your project..."
                   />
                 </div>
@@ -385,7 +388,7 @@ export default function Home() {
                 </div>
 
                 {/* Send button */}
-                <div className="flex flex-col items-center gap-2 pt-1">
+                <div className="flex flex-col items-center gap-2 pt-6">
                   <button
                     type="submit"
                     disabled={submitting}

@@ -2,12 +2,12 @@ import Link from 'next/link';
 
 export default function Footer() {
   return (
-    <footer className="w-full border-t border-[#F5F5F5] py-12 mt-auto">
-      <div className="max-w-[1100px] mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
-        <div className="text-sm font-medium text-[#000000]">
+    <footer className="w-full py-8 mt-auto flex justify-center px-4">
+      <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-8 px-6 py-3 rounded-full bg-white/70 backdrop-blur-sm border border-white/60 shadow-sm">
+        <span className="text-xs font-medium text-[#555]">
           © {new Date().getFullYear()} Dreamable.studio
-        </div>
-        <div className="flex items-center gap-6 text-sm text-[#707070]">
+        </span>
+        <div className="flex items-center gap-5 text-xs text-[#777]">
           <Link href="/" className="hover:text-[#000000] transition-colors">Home</Link>
           <Link href="/about" className="hover:text-[#000000] transition-colors">About</Link>
           <Link href="/services" className="hover:text-[#000000] transition-colors">Services</Link>

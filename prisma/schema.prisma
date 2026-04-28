@@ -10,33 +10,116 @@ datasource db {
 }
 
 model Inquiry {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  name        String
-  email       String
-  company     String?
-  website     String?
+  name    String
+  email   String
+  company String?
+  website String?
 
-  service     String   // WEBSITE, NATIVE_APP, LOGO, MARKETING_BRANDING, CUSTOM_VISUALS, NOT_SURE
-  description String   @db.Text
-  budgetRange String?  @map("budget_range")  // UNDER_5K, 5_15K, 15_50K, 50K_PLUS, NOT_SURE
-  timeline    String?  // ASAP, 1_2_MONTHS, 3_6_MONTHS, FLEXIBLE
+  service     String
+  description String  @db.Text
+  budgetRange String? @map("budget_range")
+  timeline    String?
 
-  status      String   @default("INQUIRY") // QUALIFYING, DISCOVERY, PROPOSAL, WON, LOST, ARCHIVED
+  status     String    @default("INQUIRY")
+  approvedAt DateTime? @map("approved_at") @db.Timestamptz()
 
   source      String?
-  utmSource   String?  @map("utm_source")
-  utmMedium   String?  @map("utm_medium")
-  utmCampaign String?  @map("utm_campaign")
-  utmTerm     String?  @map("utm_term")
-  utmContent  String?  @map("utm_content")
+  utmSource   String? @map("utm_source")
+  utmMedium   String? @map("utm_medium")
+  utmCampaign String? @map("utm_campaign")
+  utmTerm     String? @map("utm_term")
+  utmContent  String? @map("utm_content")
   referrer    String?
   metadata    Json?
+
+  user          User?
+  companyRecord Company?
+  project       Project?
 
   @@index([createdAt(sort: Desc)])
   @@index([status])
   @@index([email])
   @@map("inquiries")
+}
+
+model User {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  inquiryId String? @unique @map("inquiry_id") @db.Uuid
+  companyId String? @map("company_id") @db.Uuid
+
+  name   String
+  email  String @unique
+  role   String @default("CLIENT")
+  status String @default("INVITED")
+
+  invitedAt   DateTime? @map("invited_at") @db.Timestamptz()
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz()
+
+  inquiry  Inquiry?  @relation(fields: [inquiryId], references: [id])
+  company  Company?  @relation(fields: [companyId], references: [id])
+  projects Project[] @relation("ProjectPrimaryUser")
+
+  @@index([companyId])
+  @@index([email])
+  @@index([status])
+  @@map("users")
+}
+
+model Company {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  inquiryId String? @unique @map("inquiry_id") @db.Uuid
+
+  name    String
+  website String?
+  status  String  @default("ACTIVE")
+
+  inquiry  Inquiry?  @relation(fields: [inquiryId], references: [id])
+  users    User[]
+  projects Project[]
+
+  @@index([name])
+  @@index([status])
+  @@map("companies")
+}
+
+model Project {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  inquiryId     String? @unique @map("inquiry_id") @db.Uuid
+  companyId     String  @map("company_id") @db.Uuid
+  primaryUserId String? @map("primary_user_id") @db.Uuid
+
+  name        String
+  service     String
+  description String  @db.Text
+  budgetRange String? @map("budget_range")
+  timeline    String?
+
+  status String @default("ONBOARDING")
+
+  startDate     DateTime? @map("start_date") @db.Date
+  targetEndDate DateTime? @map("target_end_date") @db.Date
+  completedAt   DateTime? @map("completed_at") @db.Timestamptz()
+
+  inquiry     Inquiry? @relation(fields: [inquiryId], references: [id])
+  company     Company  @relation(fields: [companyId], references: [id])
+  primaryUser User?    @relation("ProjectPrimaryUser", fields: [primaryUserId], references: [id])
+
+  @@index([companyId])
+  @@index([primaryUserId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("projects")
 }
