@@ -55,9 +55,10 @@ model User {
   companyId String? @map("company_id") @db.Uuid
 
   name   String
-  email  String @unique
-  role   String @default("CLIENT")
-  status String @default("INVITED")
+  email  String  @unique
+  role   String  @default("CLIENT")
+  status String  @default("INVITED")
+  admin  Boolean @default(false)
 
   invitedAt   DateTime? @map("invited_at") @db.Timestamptz()
   lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz()
