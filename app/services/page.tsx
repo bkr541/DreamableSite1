@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { motion } from 'motion/react';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { ComputerPhoneSyncIcon, PaintBoardIcon, ThreeDViewIcon, AiInnovation02Icon } from '@hugeicons/core-free-icons';
 
 export default function Services() {
   return (
@@ -64,8 +66,7 @@ export default function Services() {
 
           <div className="p-10 bg-white rounded-[32px] border border-[#E5E5E5] flex flex-col h-full">
             <div className="w-12 h-12 rounded-xl bg-[#F5F5F5] mb-8 flex items-center justify-center">
-              {/* Icon Placeholder */}
-              <div className="w-6 h-6 bg-[#E5E5E5] rounded-sm" />
+              <HugeiconsIcon icon={ComputerPhoneSyncIcon} size={24} color="#4ECDC4" strokeWidth={1.5} />
             </div>
             <h2 className="text-2xl font-semibold tracking-tight mb-6">Software Development</h2>
             <ul className="space-y-4 text-[#707070] mt-auto">
@@ -78,8 +79,7 @@ export default function Services() {
 
           <div className="p-10 bg-white rounded-[32px] border border-[#E5E5E5] flex flex-col h-full">
             <div className="w-12 h-12 rounded-xl bg-[#F5F5F5] mb-8 flex items-center justify-center">
-              {/* Icon Placeholder */}
-              <div className="w-6 h-6 rounded-full bg-[#E5E5E5]" />
+              <HugeiconsIcon icon={PaintBoardIcon} size={24} color="#A855F7" strokeWidth={1.5} />
             </div>
             <h2 className="text-2xl font-semibold tracking-tight mb-6">Logo & Branding Design</h2>
             <ul className="space-y-4 text-[#707070] mt-auto">
@@ -92,8 +92,7 @@ export default function Services() {
 
           <div className="p-10 bg-white rounded-[32px] border border-[#E5E5E5] flex flex-col h-full">
             <div className="w-12 h-12 rounded-xl bg-[#F5F5F5] mb-8 flex items-center justify-center">
-              {/* Icon Placeholder */}
-              <div className="w-6 h-6 border-2 border-[#E5E5E5] rounded-md" />
+              <HugeiconsIcon icon={ThreeDViewIcon} size={24} color="#60A5FA" strokeWidth={1.5} />
             </div>
             <h2 className="text-2xl font-semibold tracking-tight mb-6">Custom Visual Systems</h2>
             <ul className="space-y-4 text-[#707070] mt-auto">
@@ -106,8 +105,7 @@ export default function Services() {
 
           <div className="p-10 bg-white rounded-[32px] border border-[#E5E5E5] flex flex-col h-full">
             <div className="w-12 h-12 rounded-xl bg-[#F5F5F5] mb-8 flex items-center justify-center">
-              {/* Icon Placeholder */}
-              <div className="w-6 h-6 bg-[#E5E5E5] rounded-lg rotate-45" />
+              <HugeiconsIcon icon={AiInnovation02Icon} size={24} color="#F472B6" strokeWidth={1.5} />
             </div>
             <h2 className="text-2xl font-semibold tracking-tight mb-6">Practical AI Automations</h2>
             <ul className="space-y-4 text-[#707070] mt-auto">
