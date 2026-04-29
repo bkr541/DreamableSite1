@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'motion/react';
 import SplineBackground from '@/components/SplineBackground';
+import PasswordInput from '@/components/PasswordInput';
 
 type TokenStatus = 'validating' | 'valid' | 'expired' | 'invalid' | 'success';
 
@@ -94,15 +95,14 @@ function ResetPasswordContent() {
               <label htmlFor="new-password" className="text-sm font-medium text-[#555] mb-2">
                 New Password
               </label>
-              <input
+              <PasswordInput
                 id="new-password"
-                type="password"
                 required
                 autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                className="bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
               />
             </div>
 
@@ -110,15 +110,14 @@ function ResetPasswordContent() {
               <label htmlFor="confirm-password" className="text-sm font-medium text-[#555] mb-2">
                 Confirm Password
               </label>
-              <input
+              <PasswordInput
                 id="confirm-password"
-                type="password"
                 required
                 autoComplete="new-password"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                className="bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
               />
             </div>
 

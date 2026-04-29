@@ -2,8 +2,19 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SessionPayload } from '@/lib/session';
+import { motion, AnimatePresence } from 'motion/react';
+import { HugeiconsIcon } from '@hugeicons/react';
+import {
+  PermanentJobIcon,
+  UserGroup02Icon,
+  Briefcase06Icon,
+  WorkflowSquare03Icon,
+  CreditCardPosIcon,
+  ComplaintIcon,
+} from '@hugeicons/core-free-icons';
 
 interface Inquiry {
   id: string;
@@ -54,8 +65,29 @@ function fmt(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+const NAV_ITEMS = [
+  { id: 'dashboard',     label: 'Dashboard',     icon: PermanentJobIcon },
+  { id: 'clients',       label: 'Clients',       icon: UserGroup02Icon },
+  { id: 'projects',      label: 'Projects',      icon: Briefcase06Icon },
+  { id: 'workspace',     label: 'Workspace',     icon: WorkflowSquare03Icon },
+  { id: 'billing',       label: 'Billing',       icon: CreditCardPosIcon },
+  { id: 'notifications', label: 'Notifications', icon: ComplaintIcon },
+] as const;
+
+type ViewId = typeof NAV_ITEMS[number]['id'];
+
+const VIEW_META: Record<ViewId, { title: string; subtitle: string }> = {
+  dashboard:     { title: 'Overview',       subtitle: 'All activity across Dreamable.studio' },
+  clients:       { title: 'Clients',        subtitle: 'Manage your client accounts and relationships' },
+  projects:      { title: 'Projects',       subtitle: 'Track and manage all active projects' },
+  workspace:     { title: 'Workspace',      subtitle: 'Tools and shared resources for your team' },
+  billing:       { title: 'Billing',        subtitle: 'Invoices, payments, and subscription details' },
+  notifications: { title: 'Notifications', subtitle: 'Stay up to date with recent activity' },
+};
+
 export default function AdminDashboardClient({ session, stats, recentInquiries, recentUsers }: Props) {
   const router = useRouter();
+  const [activeView, setActiveView] = useState<ViewId>('dashboard');
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -65,106 +97,165 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
   return (
     <div className="min-h-screen bg-[#F7F7F8]">
       {/* Top nav */}
-      <header className="sticky top-0 z-40 bg-white border-b border-[#EBEBEB]">
-        <div className="max-w-[1280px] mx-auto px-6 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Image src="/images/logo_transparent.png" alt="Dreamable.studio logo" width={28} height={28} className="rounded-md" />
-            <span className="text-sm font-semibold tracking-tight text-[#1a1a1a]">
-              Dreamable<span className="text-[#999]">.</span>studio
-            </span>
-            <span className="ml-2 px-2 py-0.5 rounded-md bg-[#1a2030] text-white text-[10px] font-bold uppercase tracking-widest">
-              Admin
-            </span>
+      <header className="sticky top-0 z-40 w-full px-4 pt-4">
+        <div className="max-w-[1280px] mx-auto bg-white/80 backdrop-blur-md rounded-full shadow-[0_2px_20px_rgba(0,0,0,0.08)] border border-[#E8E8E8]/60 px-6 h-16 grid grid-cols-3 items-center">
+
+          {/* Left: Logo + Admin badge */}
+          <Link href="/" className="flex items-center">
+            <Image src="/images/logo_transparent.png" alt="Dreamable.studio logo" width={40} height={40} className="rounded-md" />
           </Link>
-          <div className="flex items-center gap-4">
+
+          {/* Center: Navigation icons */}
+          <div className="flex items-center justify-center gap-1">
+            {NAV_ITEMS.map(({ id, label, icon }) => {
+              const isActive = activeView === id;
+              return (
+                <button
+                  key={id}
+                  onClick={() => setActiveView(id)}
+                  title={label}
+                  className={
+                    isActive
+                      ? 'flex items-center gap-1.5 pl-2 pr-3 py-2 rounded-full bg-[#F0F0F0] border border-[#E4E4E4] text-[#1a2030] text-xs font-medium transition-colors'
+                      : 'p-2 rounded-full bg-[#F5F5F5] text-[#AAAAAA] hover:bg-[#EBEBEB] hover:text-[#555] transition-colors'
+                  }
+                >
+                  <HugeiconsIcon
+                    icon={icon}
+                    size={16}
+                    color={isActive ? '#1a2030' : '#AAAAAA'}
+                    strokeWidth={1.5}
+                  />
+                  <AnimatePresence>
+                    {isActive && (
+                      <motion.span
+                        initial={{ maxWidth: 0, opacity: 0 }}
+                        animate={{ maxWidth: 200, opacity: 1 }}
+                        exit={{ maxWidth: 0, opacity: 0 }}
+                        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                        className="whitespace-nowrap overflow-hidden inline-block"
+                      >
+                        {label}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Right: Email + Sign out */}
+          <div className="flex items-center justify-end gap-4">
             <span className="text-sm text-[#707070] hidden sm:block">{session.email}</span>
             <button
               onClick={logout}
-              className="text-sm font-medium text-[#555] hover:text-[#000] transition-colors"
+              className="inline-flex items-center justify-center h-8 sm:h-9 px-3 sm:px-5 rounded-full bg-[#1a2030] text-white text-[12px] sm:text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all whitespace-nowrap"
             >
               Sign out
             </button>
           </div>
+
         </div>
       </header>
 
       <div className="max-w-[1280px] mx-auto px-6 py-10">
-        {/* Page heading */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeView}
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+          >
+        {/* Page heading — shared across all views */}
         <div className="mb-10">
-          <h1 className="text-3xl font-semibold tracking-tight text-[#1a1a1a]">Overview</h1>
-          <p className="text-sm text-[#888] mt-1">All activity across Dreamable.studio</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-[#1a1a1a]">{VIEW_META[activeView].title}</h1>
+          <p className="text-sm text-[#888] mt-1">{VIEW_META[activeView].subtitle}</p>
         </div>
 
-        {/* Stats row */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-          {[
-            { label: 'Total Clients', value: stats.totalUsers },
-            { label: 'Active Projects', value: stats.activeProjects },
-            { label: 'Total Projects', value: stats.totalProjects },
-            { label: 'Open Inquiries', value: stats.openInquiries },
-          ].map((s) => (
-            <div key={s.label} className="bg-white rounded-2xl border border-[#EBEBEB] p-6">
-              <p className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-3">{s.label}</p>
-              <p className="text-4xl font-semibold tracking-tight text-[#1a1a1a]">{s.value}</p>
-            </div>
-          ))}
-        </div>
+        {activeView === 'dashboard' && (
+          <>
 
-        {/* Two-column tables */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent Inquiries */}
-          <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
-            <div className="px-6 py-5 border-b border-[#F0F0F0] flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[#1a1a1a]">Recent Inquiries</h2>
+            {/* Stats row */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+              {[
+                { label: 'Total Clients', value: stats.totalUsers },
+                { label: 'Active Projects', value: stats.activeProjects },
+                { label: 'Total Projects', value: stats.totalProjects },
+                { label: 'Open Inquiries', value: stats.openInquiries },
+              ].map((s) => (
+                <div key={s.label} className="bg-white rounded-2xl border border-[#EBEBEB] p-6">
+                  <p className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-3">{s.label}</p>
+                  <p className="text-4xl font-semibold tracking-tight text-[#1a1a1a]">{s.value}</p>
+                </div>
+              ))}
             </div>
-            {recentInquiries.length === 0 ? (
-              <p className="px-6 py-8 text-sm text-[#AAA]">No inquiries yet.</p>
-            ) : (
-              <ul className="divide-y divide-[#F5F5F5]">
-                {recentInquiries.map((inq) => (
-                  <li key={inq.id} className="px-6 py-4 flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-[#1a1a1a] truncate">{inq.name}</p>
-                      <p className="text-xs text-[#888] truncate">{inq.email}</p>
-                      <p className="text-xs text-[#AAA] mt-0.5">{inq.service} · {fmt(inq.createdAt)}</p>
-                    </div>
-                    <Badge status={inq.status} />
-                  </li>
-                ))}
-              </ul>
-            )}
+
+            {/* Two-column tables */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Recent Inquiries */}
+              <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
+                <div className="px-6 py-5 border-b border-[#F0F0F0] flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-[#1a1a1a]">Recent Inquiries</h2>
+                </div>
+                {recentInquiries.length === 0 ? (
+                  <p className="px-6 py-8 text-sm text-[#AAA]">No inquiries yet.</p>
+                ) : (
+                  <ul className="divide-y divide-[#F5F5F5]">
+                    {recentInquiries.map((inq) => (
+                      <li key={inq.id} className="px-6 py-4 flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-[#1a1a1a] truncate">{inq.name}</p>
+                          <p className="text-xs text-[#888] truncate">{inq.email}</p>
+                          <p className="text-xs text-[#AAA] mt-0.5">{inq.service} · {fmt(inq.createdAt)}</p>
+                        </div>
+                        <Badge status={inq.status} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/* Recent Users */}
+              <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
+                <div className="px-6 py-5 border-b border-[#F0F0F0] flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-[#1a1a1a]">Recent Clients</h2>
+                </div>
+                {recentUsers.length === 0 ? (
+                  <p className="px-6 py-8 text-sm text-[#AAA]">No clients yet.</p>
+                ) : (
+                  <ul className="divide-y divide-[#F5F5F5]">
+                    {recentUsers.map((u) => (
+                      <li key={u.id} className="px-6 py-4 flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-[#1a1a1a] truncate">{u.name}</p>
+                            {u.admin && (
+                              <span className="px-1.5 py-px rounded text-[10px] font-bold bg-[#1a2030] text-white uppercase tracking-widest">
+                                Admin
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-[#888] truncate">{u.email}</p>
+                          <p className="text-xs text-[#AAA] mt-0.5">{u.role} · {fmt(u.createdAt)}</p>
+                        </div>
+                        <Badge status={u.status} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+
+        {activeView !== 'dashboard' && (
+          <div className="bg-white rounded-2xl border border-[#EBEBEB] p-10 text-center">
+            <p className="text-sm text-[#AAA]">Coming soon</p>
           </div>
-
-          {/* Recent Users */}
-          <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
-            <div className="px-6 py-5 border-b border-[#F0F0F0] flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[#1a1a1a]">Recent Clients</h2>
-            </div>
-            {recentUsers.length === 0 ? (
-              <p className="px-6 py-8 text-sm text-[#AAA]">No clients yet.</p>
-            ) : (
-              <ul className="divide-y divide-[#F5F5F5]">
-                {recentUsers.map((u) => (
-                  <li key={u.id} className="px-6 py-4 flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-medium text-[#1a1a1a] truncate">{u.name}</p>
-                        {u.admin && (
-                          <span className="px-1.5 py-px rounded text-[10px] font-bold bg-[#1a2030] text-white uppercase tracking-widest">
-                            Admin
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-[#888] truncate">{u.email}</p>
-                      <p className="text-xs text-[#AAA] mt-0.5">{u.role} · {fmt(u.createdAt)}</p>
-                    </div>
-                    <Badge status={u.status} />
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
+        )}
+          </motion.div>
+        </AnimatePresence>
       </div>
     </div>
   );

@@ -113,7 +113,7 @@ export default function Home() {
         </div>
       </section>
 
-      <div id="principles" className="w-full snap-start scroll-mt-24 pt-4">
+      <div id="principles" className="w-full snap-start pt-4">
         <section className="relative bg-white px-4 md:px-16 lg:px-28 xl:px-44 py-24 border-t border-[#F5F5F5] overflow-hidden">
           <div className="max-w-[1000px] mx-auto w-full">
             {/* Section header */}

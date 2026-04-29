@@ -91,8 +91,8 @@ export default function CustomerDashboardClient({ session, user }: Props) {
   return (
     <div className="min-h-screen bg-[#F7F7F8]">
       {/* Top nav */}
-      <header className="sticky top-0 z-40 bg-white border-b border-[#EBEBEB]">
-        <div className="max-w-[1100px] mx-auto px-6 h-16 flex items-center justify-between">
+      <header className="sticky top-0 z-40 w-full px-4 pt-4">
+        <div className="max-w-[1100px] mx-auto bg-white/80 backdrop-blur-md rounded-full shadow-[0_2px_20px_rgba(0,0,0,0.08)] border border-[#E8E8E8]/60 px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
             <Image src="/images/logo_transparent.png" alt="Dreamable.studio logo" width={28} height={28} className="rounded-md" />
             <span className="text-sm font-semibold tracking-tight text-[#1a1a1a]">
@@ -103,7 +103,7 @@ export default function CustomerDashboardClient({ session, user }: Props) {
             <span className="text-sm text-[#707070] hidden sm:block">{session.email}</span>
             <button
               onClick={logout}
-              className="text-sm font-medium text-[#555] hover:text-[#000] transition-colors"
+              className="inline-flex items-center justify-center h-8 sm:h-9 px-3 sm:px-5 rounded-full bg-[#1a2030] text-white text-[12px] sm:text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all whitespace-nowrap"
             >
               Sign out
             </button>

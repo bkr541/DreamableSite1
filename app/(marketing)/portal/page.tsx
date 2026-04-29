@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
 import SplineBackground from '@/components/SplineBackground';
+import PasswordInput from '@/components/PasswordInput';
 
 export default function Portal() {
   const router = useRouter();
@@ -155,15 +156,14 @@ export default function Portal() {
                 <label htmlFor="password" className="text-sm font-medium text-[#555] mb-2">
                   Password
                 </label>
-                <input
+                <PasswordInput
                   id="password"
-                  type="password"
                   required
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                  className="bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
                 />
                 <button
                   type="button"
@@ -272,14 +272,13 @@ export default function Portal() {
                     <label htmlFor="new-password" className="text-sm font-medium text-[#555] mb-2">
                       New Password
                     </label>
-                    <input
+                    <PasswordInput
                       id="new-password"
-                      type="password"
                       autoComplete="new-password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                      className="bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
                     />
                   </div>
 
@@ -287,14 +286,13 @@ export default function Portal() {
                     <label htmlFor="confirm-password" className="text-sm font-medium text-[#555] mb-2">
                       Confirm Password
                     </label>
-                    <input
+                    <PasswordInput
                       id="confirm-password"
-                      type="password"
                       autoComplete="new-password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                      className="bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
                     />
                   </div>
 

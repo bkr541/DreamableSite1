@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${quicksand.variable} font-sans scroll-smooth snap-y snap-mandatory`}>
+    <html lang="en" className={`${inter.variable} ${quicksand.variable} font-sans scroll-smooth snap-y snap-mandatory scroll-pt-20`}>
       <body className="min-h-screen flex flex-col bg-white text-[#000000] antialiased selection:bg-black selection:text-white">
         {children}
       </body>
