@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
+import { generateInvoicePDF, getSampleInvoiceData } from '@/lib/generateInvoice';
 import { useRouter } from 'next/navigation';
 import { SessionPayload } from '@/lib/session';
 import { motion, AnimatePresence } from 'motion/react';
@@ -253,7 +254,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
         {activeView === 'workspace' && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <button
-              onClick={() => {}}
+              onClick={() => generateInvoicePDF(getSampleInvoiceData())}
               className="bg-white rounded-2xl border border-[#EBEBEB] p-6 text-left hover:border-[#1a2030]/25 hover:shadow-md transition-all group"
             >
               <p className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">Generate Invoices</p>
