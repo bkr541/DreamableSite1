@@ -29,8 +29,7 @@ export async function POST(req: NextRequest) {
     setSessionCookie(res, token, rememberMe);
     return res;
   } catch (err) {
-    const msg = err instanceof Error ? `${err.message}\n${(err as NodeJS.ErrnoException).code ?? ''}` : String(err);
     console.error('[login] error:', err);
-    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
+    return NextResponse.json({ ok: false, error: 'Internal server error.' }, { status: 500 });
   }
 }

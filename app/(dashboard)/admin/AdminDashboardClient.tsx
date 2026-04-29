@@ -14,6 +14,7 @@ import {
   WorkflowSquare03Icon,
   CreditCardPosIcon,
   ComplaintIcon,
+  Invoice03Icon,
 } from '@hugeicons/core-free-icons';
 
 interface Inquiry {
@@ -249,7 +250,25 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
           </>
         )}
 
-        {activeView !== 'dashboard' && (
+        {activeView === 'workspace' && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <button
+              onClick={() => {}}
+              className="bg-white rounded-2xl border border-[#EBEBEB] p-6 text-left hover:border-[#1a2030]/25 hover:shadow-md transition-all group"
+            >
+              <p className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">Generate Invoices</p>
+              <HugeiconsIcon
+                icon={Invoice03Icon}
+                size={32}
+                color="#1a2030"
+                strokeWidth={1.5}
+                className="group-hover:scale-110 transition-transform"
+              />
+            </button>
+          </div>
+        )}
+
+        {activeView !== 'dashboard' && activeView !== 'workspace' && (
           <div className="bg-white rounded-2xl border border-[#EBEBEB] p-10 text-center">
             <p className="text-sm text-[#AAA]">Coming soon</p>
           </div>
