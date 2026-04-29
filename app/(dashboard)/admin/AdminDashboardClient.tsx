@@ -118,8 +118,8 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                   title={label}
                   className={
                     isActive
-                      ? 'flex items-center gap-1.5 pl-2 pr-3 py-2 rounded-full bg-[#F0F0F0] border border-[#E4E4E4] text-[#1a2030] text-xs font-medium transition-colors'
-                      : 'p-2 rounded-full bg-[#F5F5F5] text-[#AAAAAA] hover:bg-[#EBEBEB] hover:text-[#555] transition-colors'
+                      ? 'flex items-center gap-1.5 pl-[14px] pr-[18px] py-2 w-[120px] rounded-full bg-gradient-to-r from-[#3DD9C8] via-[#7BB5F5] to-[#B87AF5] text-[#1a2030] text-xs font-medium shadow-sm transition-all'
+                      : 'p-2 rounded-full text-[#AAAAAA] hover:bg-[#EBEBEB] hover:text-[#555] transition-colors'
                   }
                 >
                   <HugeiconsIcon
@@ -128,19 +128,16 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                     color={isActive ? '#1a2030' : '#AAAAAA'}
                     strokeWidth={1.5}
                   />
-                  <AnimatePresence>
-                    {isActive && (
-                      <motion.span
-                        initial={{ maxWidth: 0, opacity: 0 }}
-                        animate={{ maxWidth: 200, opacity: 1 }}
-                        exit={{ maxWidth: 0, opacity: 0 }}
-                        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                        className="whitespace-nowrap overflow-hidden inline-block"
-                      >
-                        {label}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
+                  {isActive && (
+                    <motion.span
+                      initial={{ maxWidth: 0, opacity: 0 }}
+                      animate={{ maxWidth: 200, opacity: 1 }}
+                      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                      className="whitespace-nowrap overflow-hidden inline-block"
+                    >
+                      {label}
+                    </motion.span>
+                  )}
                 </button>
               );
             })}
