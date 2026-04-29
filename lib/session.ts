@@ -3,7 +3,8 @@ import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
 const COOKIE_NAME = 'ds_session';
-const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
+const SESSION_MS  =  1 * 24 * 60 * 60 * 1000; // 1 day  (no remember-me)
+const REMEMBER_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (remember-me)
 
 export interface SessionPayload {
   userId: string;
@@ -41,8 +42,8 @@ function verify(token: string): SessionPayload | null {
   }
 }
 
-export function createSessionToken(payload: Omit<SessionPayload, 'exp'>): string {
-  return sign({ ...payload, exp: Date.now() + SESSION_MS });
+export function createSessionToken(payload: Omit<SessionPayload, 'exp'>, rememberMe = false): string {
+  return sign({ ...payload, exp: Date.now() + (rememberMe ? REMEMBER_MS : SESSION_MS) });
 }
 
 export function getSessionFromRequest(req: NextRequest): SessionPayload | null {
@@ -58,12 +59,13 @@ export async function getSession(): Promise<SessionPayload | null> {
   return verify(token);
 }
 
-export function setSessionCookie(res: NextResponse, token: string) {
+export function setSessionCookie(res: NextResponse, token: string, rememberMe = false) {
   res.cookies.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 7,
+    // No maxAge when rememberMe is false → session cookie (cleared when browser closes)
+    ...(rememberMe ? { maxAge: 60 * 60 * 24 * 30 } : {}),
     path: '/',
   });
 }

@@ -5,7 +5,7 @@ import { createSessionToken, setSessionCookie } from '@/lib/session';
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password } = await req.json();
+    const { email, password, rememberMe = false } = await req.json();
 
     if (!email || !password) {
       return NextResponse.json({ ok: false, error: 'Email and password are required.' }, { status: 400 });
@@ -24,12 +24,13 @@ export async function POST(req: NextRequest) {
 
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
-    const token = createSessionToken({ userId: user.id, email: user.email, admin: user.admin });
+    const token = createSessionToken({ userId: user.id, email: user.email, admin: user.admin }, rememberMe);
     const res = NextResponse.json({ ok: true, admin: user.admin });
-    setSessionCookie(res, token);
+    setSessionCookie(res, token, rememberMe);
     return res;
   } catch (err) {
+    const msg = err instanceof Error ? `${err.message}\n${(err as NodeJS.ErrnoException).code ?? ''}` : String(err);
     console.error('[login] error:', err);
-    return NextResponse.json({ ok: false, error: 'Internal server error.' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }

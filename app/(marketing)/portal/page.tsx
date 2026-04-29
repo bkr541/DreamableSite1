@@ -13,6 +13,7 @@ export default function Portal() {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
 
   // Forgot-password modal state
   const [showReset, setShowReset] = useState(false);
@@ -32,7 +33,7 @@ export default function Portal() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, rememberMe }),
       });
       const data = await res.json();
 
@@ -171,6 +172,22 @@ export default function Portal() {
                   onClick={openReset}
                 >
                   Forgot password?
+                </button>
+              </div>
+
+              {/* Remember me */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-[#555]">Remember me</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={rememberMe}
+                  onClick={() => setRememberMe((v) => !v)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${rememberMe ? 'bg-[#1a2030]' : 'bg-[#D0D0D0]'}`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${rememberMe ? 'translate-x-4' : 'translate-x-0'}`}
+                  />
                 </button>
               </div>
 
