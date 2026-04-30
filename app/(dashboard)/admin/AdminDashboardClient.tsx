@@ -3,6 +3,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import PasswordInput from '@/components/PasswordInput';
 import { generateInvoicePDF, getSampleInvoiceData } from '@/lib/generateInvoice';
 import { useRouter } from 'next/navigation';
 import { SessionPayload } from '@/lib/session';
@@ -16,6 +18,8 @@ import {
   CreditCardPosIcon,
   ComplaintIcon,
   Invoice03Icon,
+  UserAdd02Icon,
+  CancelCircleIcon,
 } from '@hugeicons/core-free-icons';
 
 interface Inquiry {
@@ -37,11 +41,23 @@ interface User {
   createdAt: string;
 }
 
+interface ClientRecord {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  admin: boolean;
+  createdAt: string;
+  company: { id: string; name: string; website: string | null; status: string } | null;
+}
+
 interface Props {
   session: SessionPayload;
   stats: { totalUsers: number; totalProjects: number; activeProjects: number; openInquiries: number };
   recentInquiries: Inquiry[];
   recentUsers: User[];
+  clients: ClientRecord[];
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -87,9 +103,44 @@ const VIEW_META: Record<ViewId, { title: string; subtitle: string }> = {
   notifications: { title: 'Notifications', subtitle: 'Stay up to date with recent activity' },
 };
 
-export default function AdminDashboardClient({ session, stats, recentInquiries, recentUsers }: Props) {
+export default function AdminDashboardClient({ session, stats, recentInquiries, recentUsers, clients }: Props) {
   const router = useRouter();
   const [activeView, setActiveView] = useState<ViewId>('dashboard');
+  const [clientsGroupOpen, setClientsGroupOpen] = useState(true);
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [addForm, setAddForm] = useState({
+    name: '', email: '', password: '', role: 'CLIENT', status: 'INVITED',
+    companyName: '', companyWebsite: '',
+  });
+  const [addError, setAddError] = useState('');
+  const [addSubmitting, setAddSubmitting] = useState(false);
+
+  function resetAddForm() {
+    setAddForm({ name: '', email: '', password: '', role: 'CLIENT', status: 'INVITED', companyName: '', companyWebsite: '' });
+    setAddError('');
+  }
+
+  async function handleAddClient(e: React.FormEvent) {
+    e.preventDefault();
+    setAddError('');
+    setAddSubmitting(true);
+    try {
+      const res = await fetch('/api/admin/clients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(addForm),
+      });
+      const data = await res.json();
+      if (!res.ok) { setAddError(data.error || 'Something went wrong.'); return; }
+      setShowAddClient(false);
+      resetAddForm();
+      router.refresh();
+    } catch {
+      setAddError('Unable to connect. Please try again.');
+    } finally {
+      setAddSubmitting(false);
+    }
+  }
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -118,26 +169,35 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                   title={label}
                   className={
                     isActive
-                      ? 'flex items-center gap-1.5 pl-[14px] pr-[18px] py-2 w-[120px] rounded-full bg-gradient-to-r from-[#3DD9C8] via-[#7BB5F5] to-[#B87AF5] text-[#1a2030] text-xs font-medium shadow-sm transition-all'
-                      : 'p-2 rounded-full text-[#AAAAAA] hover:bg-[#EBEBEB] hover:text-[#555] transition-colors'
+                      ? 'relative flex items-center justify-center gap-1.5 px-4 py-2 w-[120px] rounded-full text-[#1a2030] text-xs font-medium transition-[width]'
+                      : 'relative p-2 rounded-full text-[#AAAAAA] hover:bg-[#EBEBEB] hover:text-[#555] transition-colors'
                   }
                 >
-                  <HugeiconsIcon
-                    icon={icon}
-                    size={16}
-                    color={isActive ? '#1a2030' : '#AAAAAA'}
-                    strokeWidth={1.5}
-                  />
                   {isActive && (
-                    <motion.span
-                      initial={{ maxWidth: 0, opacity: 0 }}
-                      animate={{ maxWidth: 200, opacity: 1 }}
-                      transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-                      className="whitespace-nowrap overflow-hidden inline-block"
-                    >
-                      {label}
-                    </motion.span>
+                    <motion.div
+                      layoutId="nav-pill"
+                      className="absolute inset-0 rounded-full bg-gradient-to-r from-[#3DD9C8] via-[#7BB5F5] to-[#B87AF5] shadow-sm"
+                      transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                    />
                   )}
+                  <span className="relative z-10 flex items-center justify-center gap-1.5">
+                    <HugeiconsIcon
+                      icon={icon}
+                      size={16}
+                      color={isActive ? '#1a2030' : '#AAAAAA'}
+                      strokeWidth={1.5}
+                    />
+                    {isActive && (
+                      <motion.span
+                        initial={{ maxWidth: 0, opacity: 0 }}
+                        animate={{ maxWidth: 200, opacity: 1 }}
+                        transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+                        className="whitespace-nowrap overflow-hidden inline-block"
+                      >
+                        {label}
+                      </motion.span>
+                    )}
+                  </span>
                 </button>
               );
             })}
@@ -190,61 +250,6 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
               ))}
             </div>
 
-            {/* Two-column tables */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Recent Inquiries */}
-              <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
-                <div className="px-6 py-5 border-b border-[#F0F0F0] flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-[#1a1a1a]">Recent Inquiries</h2>
-                </div>
-                {recentInquiries.length === 0 ? (
-                  <p className="px-6 py-8 text-sm text-[#AAA]">No inquiries yet.</p>
-                ) : (
-                  <ul className="divide-y divide-[#F5F5F5]">
-                    {recentInquiries.map((inq) => (
-                      <li key={inq.id} className="px-6 py-4 flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-[#1a1a1a] truncate">{inq.name}</p>
-                          <p className="text-xs text-[#888] truncate">{inq.email}</p>
-                          <p className="text-xs text-[#AAA] mt-0.5">{inq.service} · {fmt(inq.createdAt)}</p>
-                        </div>
-                        <Badge status={inq.status} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* Recent Users */}
-              <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
-                <div className="px-6 py-5 border-b border-[#F0F0F0] flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-[#1a1a1a]">Recent Clients</h2>
-                </div>
-                {recentUsers.length === 0 ? (
-                  <p className="px-6 py-8 text-sm text-[#AAA]">No clients yet.</p>
-                ) : (
-                  <ul className="divide-y divide-[#F5F5F5]">
-                    {recentUsers.map((u) => (
-                      <li key={u.id} className="px-6 py-4 flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-[#1a1a1a] truncate">{u.name}</p>
-                            {u.admin && (
-                              <span className="px-1.5 py-px rounded text-[10px] font-bold bg-[#1a2030] text-white uppercase tracking-widest">
-                                Admin
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-[#888] truncate">{u.email}</p>
-                          <p className="text-xs text-[#AAA] mt-0.5">{u.role} · {fmt(u.createdAt)}</p>
-                        </div>
-                        <Badge status={u.status} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
           </>
         )}
 
@@ -266,7 +271,93 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
           </div>
         )}
 
-        {activeView !== 'dashboard' && activeView !== 'workspace' && (
+        {activeView === 'clients' && (
+          <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
+            {/* Group header */}
+            <div className="px-6 py-4 flex items-center justify-between">
+              <button
+                onClick={() => setClientsGroupOpen(v => !v)}
+                className="flex items-center gap-3 hover:opacity-70 transition-opacity"
+              >
+                <h2 className="text-sm font-semibold text-[#1a1a1a]">Clients</h2>
+                <span className="px-2 py-0.5 rounded-full bg-[#F0F0F0] text-[11px] font-semibold text-[#888]">
+                  {clients.length}
+                </span>
+                <motion.div animate={{ rotate: clientsGroupOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                  <ChevronDown size={15} strokeWidth={1.75} className="text-[#AAAAAA]" />
+                </motion.div>
+              </button>
+              <button
+                onClick={() => { resetAddForm(); setShowAddClient(true); }}
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
+              >
+                <HugeiconsIcon icon={UserAdd02Icon} size={16} color="#ffffff" strokeWidth={1.5} />
+                Add Client
+              </button>
+            </div>
+
+            {/* Collapsible content */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateRows: clientsGroupOpen ? '1fr' : '0fr',
+                transition: 'grid-template-rows 0.2s ease-in-out',
+              }}
+            >
+              <div className="overflow-hidden">
+                <div className="p-4">
+                  <div className="border border-[#EBEBEB] rounded-xl overflow-hidden">
+                  {/* Table header */}
+                  <div className="grid grid-cols-[1fr_1fr_120px_100px] gap-4 px-6 py-3 bg-[#FAFAFA] border-b border-[#F0F0F0]">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Name</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Company</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Role</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Status</p>
+                  </div>
+
+                  {clients.length === 0 ? (
+                    <p className="px-6 py-8 text-sm text-[#AAA]">No clients yet.</p>
+                  ) : (
+                    <ul className="divide-y divide-[#F5F5F5]">
+                      {clients.map((c) => (
+                        <li key={c.id} className="grid grid-cols-[1fr_1fr_120px_100px] gap-4 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-[#1a1a1a] truncate">{c.name}</p>
+                              {c.admin && (
+                                <span className="px-1.5 py-px rounded text-[10px] font-bold bg-[#1a2030] text-white uppercase tracking-widest shrink-0">
+                                  Admin
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-[#888] truncate">{c.email}</p>
+                          </div>
+                          <div className="min-w-0">
+                            {c.company ? (
+                              <>
+                                <p className="text-sm text-[#1a1a1a] truncate">{c.company.name}</p>
+                                {c.company.website && (
+                                  <p className="text-xs text-[#AAA] truncate">{c.company.website}</p>
+                                )}
+                              </>
+                            ) : (
+                              <p className="text-xs text-[#CCC]">—</p>
+                            )}
+                          </div>
+                          <p className="text-xs text-[#555] truncate">{c.role}</p>
+                          <p className="text-xs text-[#555] truncate">{c.status}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeView !== 'dashboard' && activeView !== 'workspace' && activeView !== 'clients' && (
           <div className="bg-white rounded-2xl border border-[#EBEBEB] p-10 text-center">
             <p className="text-sm text-[#AAA]">Coming soon</p>
           </div>
@@ -274,6 +365,159 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Add Client modal */}
+      <AnimatePresence>
+        {showAddClient && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+              onClick={() => { setShowAddClient(false); resetAddForm(); }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="relative w-full max-w-[720px] rounded-3xl bg-white shadow-xl border border-[#F0F0F0]"
+            >
+              <button
+                type="button"
+                onClick={() => { setShowAddClient(false); resetAddForm(); }}
+                className="absolute top-5 right-5 text-[#CCCCCC] hover:text-[#555] transition-colors"
+              >
+                <HugeiconsIcon icon={CancelCircleIcon} size={22} color="currentColor" strokeWidth={1.5} />
+              </button>
+              <form onSubmit={handleAddClient} className="p-8 space-y-5">
+                <div className="flex items-center gap-3">
+                  <HugeiconsIcon icon={UserAdd02Icon} size={28} color="#1a2030" strokeWidth={2} />
+                  <p className="text-xl font-semibold text-[#1a1a1a]">Add Client</p>
+                </div>
+
+                {/* User information */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">User Information</p>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Full Name <span className="text-red-400">*</span></label>
+                      <input
+                        required
+                        value={addForm.name}
+                        onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
+                        placeholder="Jane Smith"
+                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Email <span className="text-red-400">*</span></label>
+                      <input
+                        required
+                        type="email"
+                        value={addForm.email}
+                        onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
+                        placeholder="jane@example.com"
+                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Password <span className="text-red-400">*</span></label>
+                      <PasswordInput
+                        required
+                        value={addForm.password}
+                        onChange={e => setAddForm(f => ({ ...f, password: e.target.value }))}
+                        placeholder="••••••••"
+                        className="bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-[#555]">Role</label>
+                        <select
+                          value={addForm.role}
+                          onChange={e => setAddForm(f => ({ ...f, role: e.target.value }))}
+                          className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                        >
+                          <option value="CLIENT">Client</option>
+                          <option value="DESIGNER">Designer</option>
+                          <option value="DEVELOPER">Developer</option>
+                          <option value="MANAGER">Manager</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-[#555]">Status</label>
+                        <select
+                          value={addForm.status}
+                          onChange={e => setAddForm(f => ({ ...f, status: e.target.value }))}
+                          className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                        >
+                          <option value="INVITED">Invited</option>
+                          <option value="ACTIVE">Active</option>
+                          <option value="ONBOARDING">Onboarding</option>
+                          <option value="COMPLETED">Completed</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Company information */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Company Information <span className="normal-case text-[#CCC] font-normal">— optional</span></p>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Company Name</label>
+                      <input
+                        value={addForm.companyName}
+                        onChange={e => setAddForm(f => ({ ...f, companyName: e.target.value }))}
+                        placeholder="Acme Inc."
+                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Website</label>
+                      <input
+                        type="url"
+                        value={addForm.companyWebsite}
+                        onChange={e => setAddForm(f => ({ ...f, companyWebsite: e.target.value }))}
+                        placeholder="https://acme.com"
+                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {addError && <p className="text-sm text-[#888]">{addError}</p>}
+
+                <div className="flex items-center justify-between pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowAddClient(false); resetAddForm(); }}
+                    className="text-sm text-[#AAAAAA] hover:text-[#000] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={addSubmitting}
+                    className="px-8 py-3 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  >
+                    {addSubmitting ? 'Creating…' : 'Confirm Client'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

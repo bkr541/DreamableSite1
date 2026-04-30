@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'motion/react';
 import SplineBackground from '@/components/SplineBackground';
 import PasswordInput from '@/components/PasswordInput';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { Mail01Icon, LockPasswordIcon } from '@hugeicons/core-free-icons';
 
 export default function Portal() {
   const router = useRouter();
@@ -14,6 +16,8 @@ export default function Portal() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
 
   // Forgot-password modal state
   const [showReset, setShowReset] = useState(false);
@@ -141,16 +145,28 @@ export default function Portal() {
                 <label htmlFor="email" className="text-sm font-medium text-[#555] mb-2">
                   Email
                 </label>
-                <input
-                  id="email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="jane@example.com"
-                  className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
-                />
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none transition-colors">
+                    <HugeiconsIcon
+                      icon={Mail01Icon}
+                      size={18}
+                      color={!emailFocused && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? '#B87AF5' : '#BBBBBB'}
+                      strokeWidth={1.5}
+                    />
+                  </div>
+                  <input
+                    id="email"
+                    type="email"
+                    required
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onFocus={() => setEmailFocused(true)}
+                    onBlur={() => setEmailFocused(false)}
+                    placeholder="jane@example.com"
+                    className="w-full bg-white/60 rounded-xl pl-10 pr-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                  />
+                </div>
               </div>
 
               <div className="flex flex-col">
@@ -164,31 +180,34 @@ export default function Portal() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                  leftIcon={<HugeiconsIcon icon={LockPasswordIcon} size={18} color={!passwordFocused && password.length > 0 ? '#B87AF5' : '#BBBBBB'} strokeWidth={1.5} />}
+                  onFocus={() => setPasswordFocused(true)}
+                  onBlur={() => setPasswordFocused(false)}
+                  className="bg-white/60 rounded-xl py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
                 />
-                <button
-                  type="button"
-                  className="text-xs text-[#AAAAAA] hover:text-[#000000] transition-colors text-right mt-3"
-                  onClick={openReset}
-                >
-                  Forgot password?
-                </button>
-              </div>
-
-              {/* Remember me */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-[#555]">Remember me</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={rememberMe}
-                  onClick={() => setRememberMe((v) => !v)}
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${rememberMe ? 'bg-[#1a2030]' : 'bg-[#D0D0D0]'}`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${rememberMe ? 'translate-x-4' : 'translate-x-0'}`}
-                  />
-                </button>
+                <div className="flex items-center justify-between mt-6">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={rememberMe}
+                      onClick={() => setRememberMe((v) => !v)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${rememberMe ? 'bg-[#1a2030]' : 'bg-[#D0D0D0]'}`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${rememberMe ? 'translate-x-4' : 'translate-x-0'}`}
+                      />
+                    </button>
+                    <span className="text-sm text-[#555]">Remember me</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-sm text-[#AAAAAA] hover:text-[#1a2030] underline underline-offset-2 transition-colors"
+                    onClick={openReset}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
               </div>
 
               {error && (
