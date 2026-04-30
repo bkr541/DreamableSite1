@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { randomBytes } from 'crypto';
 import { getSessionFromRequest } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
+
+function generateSecurePassword(): string {
+  // 24-char random password — strong enough that the client should reset via forgot-password
+  return randomBytes(18).toString('base64url');
+}
 
 export async function POST(req: NextRequest) {
   const session = getSessionFromRequest(req);
@@ -9,18 +15,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Unauthorized.' }, { status: 401 });
   }
 
-  const { name, email, password, role = 'CLIENT', status = 'INVITED', companyName, companyWebsite } =
+  const { name, email, role = 'CLIENT', status = 'INVITED', companyName, companyWebsite } =
     await req.json();
 
-  if (!name?.trim() || !email?.trim() || !password) {
+  if (!name?.trim() || !email?.trim()) {
     return NextResponse.json(
-      { ok: false, error: 'Name, email, and password are required.' },
+      { ok: false, error: 'Name and email are required.' },
       { status: 400 },
     );
   }
 
   try {
-    const passwordHash = await hashPassword(password);
+    const passwordHash = await hashPassword(generateSecurePassword());
 
     let companyId: string | null = null;
     if (companyName?.trim()) {

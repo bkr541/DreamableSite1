@@ -109,20 +109,27 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
   const [clientsGroupOpen, setClientsGroupOpen] = useState(true);
   const [showAddClient, setShowAddClient] = useState(false);
   const [addForm, setAddForm] = useState({
-    name: '', email: '', password: '', role: 'CLIENT', status: 'INVITED',
+    name: '', email: '', role: 'CLIENT', status: 'INVITED',
     companyName: '', companyWebsite: '',
   });
   const [addError, setAddError] = useState('');
+  const [addFieldError, setAddFieldError] = useState<{ field: string; message: string } | null>(null);
   const [addSubmitting, setAddSubmitting] = useState(false);
 
   function resetAddForm() {
-    setAddForm({ name: '', email: '', password: '', role: 'CLIENT', status: 'INVITED', companyName: '', companyWebsite: '' });
+    setAddForm({ name: '', email: '', role: 'CLIENT', status: 'INVITED', companyName: '', companyWebsite: '' });
     setAddError('');
+    setAddFieldError(null);
   }
 
   async function handleAddClient(e: React.FormEvent) {
     e.preventDefault();
+    setAddFieldError(null);
     setAddError('');
+
+    if (!addForm.name.trim()) { setAddFieldError({ field: 'name', message: 'Full name is required.' }); return; }
+    if (!addForm.email.trim()) { setAddFieldError({ field: 'email', message: 'Email is required.' }); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addForm.email)) { setAddFieldError({ field: 'email', message: 'Please enter a valid email address.' }); return; }
     setAddSubmitting(true);
     try {
       const res = await fetch('/api/admin/clients', {
@@ -392,7 +399,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
               >
                 <HugeiconsIcon icon={CancelCircleIcon} size={22} color="currentColor" strokeWidth={1.5} />
               </button>
-              <form onSubmit={handleAddClient} className="p-8 space-y-5">
+              <form onSubmit={handleAddClient} className="p-8 space-y-5" noValidate>
                 <div className="flex items-center gap-3">
                   <HugeiconsIcon icon={UserAdd02Icon} size={28} color="#1a2030" strokeWidth={2} />
                   <p className="text-xl font-semibold text-[#1a1a1a]">Add Client</p>
@@ -406,38 +413,28 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Full Name <span className="text-red-400">*</span></label>
                       <input
-                        required
                         value={addForm.name}
-                        onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
+                        onChange={e => { setAddForm(f => ({ ...f, name: e.target.value })); setAddFieldError(null); }}
                         placeholder="Jane Smith"
-                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${addFieldError?.field === 'name' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                       />
+                      {addFieldError?.field === 'name' && <p className="text-xs text-[#e05252]">{addFieldError.message}</p>}
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Email <span className="text-red-400">*</span></label>
                       <input
-                        required
-                        type="email"
+                        type="text"
+                        autoComplete="email"
                         value={addForm.email}
-                        onChange={e => setAddForm(f => ({ ...f, email: e.target.value }))}
+                        onChange={e => { setAddForm(f => ({ ...f, email: e.target.value })); setAddFieldError(null); }}
                         placeholder="jane@example.com"
-                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${addFieldError?.field === 'email' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                       />
+                      {addFieldError?.field === 'email' && <p className="text-xs text-[#e05252]">{addFieldError.message}</p>}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Password <span className="text-red-400">*</span></label>
-                      <PasswordInput
-                        required
-                        value={addForm.password}
-                        onChange={e => setAddForm(f => ({ ...f, password: e.target.value }))}
-                        placeholder="••••••••"
-                        className="bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium text-[#555]">Role</label>
                         <select
@@ -464,7 +461,6 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                           <option value="COMPLETED">Completed</option>
                         </select>
                       </div>
-                    </div>
                   </div>
                 </div>
 
@@ -485,7 +481,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Website</label>
                       <input
-                        type="url"
+                        type="text"
                         value={addForm.companyWebsite}
                         onChange={e => setAddForm(f => ({ ...f, companyWebsite: e.target.value }))}
                         placeholder="https://acme.com"
@@ -495,7 +491,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                   </div>
                 </div>
 
-                {addError && <p className="text-sm text-[#888]">{addError}</p>}
+                {addError && <p className="text-sm text-[#e05252]">{addError}</p>}
 
                 <div className="flex items-center justify-between pt-2">
                   <button

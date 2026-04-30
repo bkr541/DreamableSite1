@@ -90,19 +90,18 @@ function ResetPasswordContent() {
             Setting password for <span className="font-medium text-[#1a1a1a]">{tokenEmail}</span>
           </p>
 
-          <form onSubmit={handleSetPassword} className="space-y-6">
+          <form onSubmit={handleSetPassword} className="space-y-6" noValidate>
             <div className="flex flex-col">
               <label htmlFor="new-password" className="text-sm font-medium text-[#555] mb-2">
                 New Password
               </label>
               <PasswordInput
                 id="new-password"
-                required
                 autoComplete="new-password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => { setPassword(e.target.value); setFieldError(''); }}
                 placeholder="••••••••"
-                className="bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                className={`bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border transition-all ${fieldError ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
               />
             </div>
 
@@ -112,18 +111,16 @@ function ResetPasswordContent() {
               </label>
               <PasswordInput
                 id="confirm-password"
-                required
                 autoComplete="new-password"
                 value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
+                onChange={(e) => { setConfirm(e.target.value); setFieldError(''); }}
                 placeholder="••••••••"
-                className="bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                className={`bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border transition-all ${fieldError ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
               />
+              {fieldError && (
+                <p className="text-sm text-[#e05252] mt-1.5 leading-relaxed">{fieldError}</p>
+              )}
             </div>
-
-            {fieldError && (
-              <p className="text-sm text-[#888] leading-relaxed">{fieldError}</p>
-            )}
 
             <div className="flex justify-center pt-2">
               <button

@@ -15,23 +15,31 @@ export default function Portal() {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [loginFieldError, setLoginFieldError] = useState<{ field: 'email' | 'password'; message: string } | null>(null);
   const [rememberMe, setRememberMe] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
   // Forgot-password modal state
   const [showReset, setShowReset] = useState(false);
+  const [resetStep, setResetStep] = useState<'email' | 'code' | 'password' | 'success'>('email');
   const [resetEmail, setResetEmail] = useState('');
+  const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetSubmitting, setResetSubmitting] = useState(false);
-  const [resetStatus, setResetStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [resetError, setResetError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
+    setLoginFieldError(null);
     setError('');
+
+    if (!email.trim()) { setLoginFieldError({ field: 'email', message: 'Email is required.' }); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setLoginFieldError({ field: 'email', message: 'Please enter a valid email address.' }); return; }
+    if (!password) { setLoginFieldError({ field: 'password', message: 'Password is required.' }); return; }
+
+    setSubmitting(true);
 
     try {
       const res = await fetch('/api/auth/login', {
@@ -56,20 +64,87 @@ export default function Portal() {
 
   const openReset = () => {
     setResetEmail(email);
-    setResetStatus('idle');
+    setResetStep('email');
+    setResetCode('');
     setResetError('');
+    setNewPassword('');
+    setConfirmPassword('');
     setShowReset(true);
   };
 
   const closeReset = () => {
     setShowReset(false);
-    setResetStatus('idle');
+    setResetStep('email');
+    setResetEmail('');
+    setResetCode('');
     setResetError('');
     setNewPassword('');
     setConfirmPassword('');
   };
 
-  const handleReset = async (e: React.FormEvent) => {
+  const handleRequestCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError('');
+
+    if (!resetEmail.trim()) {
+      setResetError('Email is required.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resetEmail)) {
+      setResetError('Please enter a valid email address.');
+      return;
+    }
+
+    setResetSubmitting(true);
+    try {
+      const res = await fetch('/api/auth/request-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setResetError(data.error || 'Something went wrong.');
+      } else {
+        setResetStep('code');
+      }
+    } catch {
+      setResetError('Unable to connect. Please try again.');
+    } finally {
+      setResetSubmitting(false);
+    }
+  };
+
+  const handleVerifyCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetCode.trim()) {
+      setResetError('Please enter the confirmation code.');
+      return;
+    }
+
+    setResetError('');
+    setResetSubmitting(true);
+
+    try {
+      const res = await fetch('/api/auth/verify-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail, code: resetCode }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setResetError(data.error || 'Invalid code.');
+      } else {
+        setResetStep('password');
+      }
+    } catch {
+      setResetError('Unable to connect. Please try again.');
+    } finally {
+      setResetSubmitting(false);
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setResetError('');
 
@@ -94,11 +169,13 @@ export default function Portal() {
         body: JSON.stringify({ email: resetEmail, password: newPassword }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Something went wrong.');
-      setResetStatus('success');
-    } catch (err: unknown) {
-      setResetError(err instanceof Error ? err.message : 'Something went wrong.');
-      setResetStatus('error');
+      if (!res.ok) {
+        setResetError(data.error || 'Something went wrong.');
+      } else {
+        setResetStep('success');
+      }
+    } catch {
+      setResetError('Unable to connect. Please try again.');
     } finally {
       setResetSubmitting(false);
     }
@@ -140,7 +217,7 @@ export default function Portal() {
               Sign in to your account
             </p>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6" noValidate>
               <div className="flex flex-col">
                 <label htmlFor="email" className="text-sm font-medium text-[#555] mb-2">
                   Email
@@ -156,17 +233,17 @@ export default function Portal() {
                   </div>
                   <input
                     id="email"
-                    type="email"
-                    required
+                    type="text"
                     autoComplete="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => { setEmail(e.target.value); setLoginFieldError(null); }}
                     onFocus={() => setEmailFocused(true)}
                     onBlur={() => setEmailFocused(false)}
                     placeholder="jane@example.com"
-                    className="w-full bg-white/60 rounded-xl pl-10 pr-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                    className={`w-full bg-white/60 rounded-xl pl-10 pr-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border transition-all ${loginFieldError?.field === 'email' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                   />
                 </div>
+                {loginFieldError?.field === 'email' && <p className="text-sm text-[#e05252] mt-1.5">{loginFieldError.message}</p>}
               </div>
 
               <div className="flex flex-col">
@@ -175,16 +252,16 @@ export default function Portal() {
                 </label>
                 <PasswordInput
                   id="password"
-                  required
                   autoComplete="current-password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => { setPassword(e.target.value); setLoginFieldError(null); }}
                   placeholder="••••••••"
                   leftIcon={<HugeiconsIcon icon={LockPasswordIcon} size={18} color={!passwordFocused && password.length > 0 ? '#B87AF5' : '#BBBBBB'} strokeWidth={1.5} />}
                   onFocus={() => setPasswordFocused(true)}
                   onBlur={() => setPasswordFocused(false)}
-                  className="bg-white/60 rounded-xl py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                  className={`bg-white/60 rounded-xl py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border transition-all ${loginFieldError?.field === 'password' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                 />
+                {loginFieldError?.field === 'password' && <p className="text-sm text-[#e05252] mt-1.5">{loginFieldError.message}</p>}
                 <div className="flex items-center justify-between mt-6">
                   <div className="flex items-center gap-3">
                     <button
@@ -256,7 +333,7 @@ export default function Portal() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               className="absolute inset-0 bg-black/30 backdrop-blur-sm"
-              onClick={closeReset}
+              onClick={resetStep !== 'success' ? closeReset : undefined}
             />
 
             {/* Modal card */}
@@ -268,42 +345,94 @@ export default function Portal() {
               className="relative w-full max-w-[440px] rounded-3xl p-8 bg-white shadow-xl border border-[#F0F0F0]"
             >
               <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-8">
-                Reset your password
+                {resetStep === 'success' ? 'Password Updated' : 'Reset your password'}
               </p>
 
-              {resetStatus === 'success' ? (
-                <div className="space-y-6">
-                  <p className="text-sm text-[#555] leading-relaxed">
-                    Password updated successfully for <span className="font-medium text-[#1a1a1a]">{resetEmail}</span>. You can now sign in.
-                  </p>
-                  <div className="flex justify-center pt-2">
-                    <button
-                      type="button"
-                      onClick={closeReset}
-                      className="px-12 py-3.5 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all"
-                    >
-                      Done
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <form onSubmit={handleReset} className="space-y-6">
+              {/* Step 1: Email */}
+              {resetStep === 'email' && (
+                <form onSubmit={handleRequestCode} className="space-y-6" noValidate>
                   <div className="flex flex-col">
                     <label htmlFor="reset-email" className="text-sm font-medium text-[#555] mb-2">
                       Email
                     </label>
                     <input
                       id="reset-email"
-                      type="email"
-                      required
+                      type="text"
                       autoComplete="email"
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
                       placeholder="jane@example.com"
-                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                      className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border transition-all ${resetError ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                     />
+                    {resetError && (
+                      <p className="text-sm text-[#e05252] mt-2 leading-relaxed">{resetError}</p>
+                    )}
                   </div>
+                  <div className="flex items-center justify-between pt-2">
+                    <button
+                      type="button"
+                      onClick={closeReset}
+                      className="text-sm text-[#AAAAAA] hover:text-[#000000] transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={resetSubmitting}
+                      className="px-10 py-3.5 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                    >
+                      {resetSubmitting ? 'Sending…' : 'Submit'}
+                    </button>
+                  </div>
+                </form>
+              )}
 
+              {/* Step 2: Confirmation code */}
+              {resetStep === 'code' && (
+                <form onSubmit={handleVerifyCode} className="space-y-6" noValidate>
+                  <p className="text-sm text-[#555] leading-relaxed -mt-2">
+                    A confirmation code was sent to <span className="font-medium text-[#1a1a1a]">{resetEmail}</span>. Enter it below.
+                  </p>
+                  <div className="flex flex-col">
+                    <label htmlFor="reset-code" className="text-sm font-medium text-[#555] mb-2">
+                      Confirmation Code
+                    </label>
+                    <input
+                      id="reset-code"
+                      type="text"
+                      autoComplete="one-time-code"
+                      maxLength={8}
+                      value={resetCode}
+                      onChange={(e) => setResetCode(e.target.value.toUpperCase())}
+                      placeholder="A1B2C3D4"
+                      className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border transition-all tracking-widest font-mono ${resetError ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                    />
+                    {resetError && (
+                      <p className="text-sm text-[#e05252] mt-2 leading-relaxed">{resetError}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between pt-2">
+                    <button
+                      type="button"
+                      onClick={closeReset}
+                      className="text-sm text-[#AAAAAA] hover:text-[#000000] transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={resetSubmitting}
+                      className="px-10 py-3.5 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                    >
+                      {resetSubmitting ? 'Verifying…' : 'Verify Code'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Step 3: New password */}
+              {resetStep === 'password' && (
+                <form onSubmit={handleUpdatePassword} className="space-y-6" noValidate>
                   <div className="flex flex-col">
                     <label htmlFor="new-password" className="text-sm font-medium text-[#555] mb-2">
                       New Password
@@ -314,10 +443,9 @@ export default function Portal() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                      className={`bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border transition-all ${resetError ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                     />
                   </div>
-
                   <div className="flex flex-col">
                     <label htmlFor="confirm-password" className="text-sm font-medium text-[#555] mb-2">
                       Confirm Password
@@ -328,14 +456,12 @@ export default function Portal() {
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border border-[#D0D0D0] transition-all"
+                      className={`bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50 border transition-all ${resetError ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                     />
+                    {resetError && (
+                      <p className="text-sm text-[#e05252] mt-2 leading-relaxed">{resetError}</p>
+                    )}
                   </div>
-
-                  {resetError && (
-                    <p className="text-sm text-[#888] leading-relaxed">{resetError}</p>
-                  )}
-
                   <div className="flex items-center justify-between pt-2">
                     <button
                       type="button"
@@ -353,6 +479,24 @@ export default function Portal() {
                     </button>
                   </div>
                 </form>
+              )}
+
+              {/* Step 4: Success */}
+              {resetStep === 'success' && (
+                <div className="space-y-6">
+                  <p className="text-sm text-[#555] leading-relaxed">
+                    Password successfully changed for <span className="font-medium text-[#1a1a1a]">{resetEmail}</span>. You can now sign in with your new password.
+                  </p>
+                  <div className="flex justify-center pt-2">
+                    <button
+                      type="button"
+                      onClick={closeReset}
+                      className="px-12 py-3.5 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
               )}
             </motion.div>
           </div>

@@ -28,15 +28,25 @@ export default function Contact() {
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [fieldError, setFieldError] = useState<{ field: string; message: string } | null>(null);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFieldError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFieldError(null);
+
+    if (!formData.name.trim()) { setFieldError({ field: 'name', message: 'Name is required.' }); return; }
+    if (!formData.email.trim()) { setFieldError({ field: 'email', message: 'Email is required.' }); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) { setFieldError({ field: 'email', message: 'Please enter a valid email address.' }); return; }
+    if (!formData.service) { setFieldError({ field: 'service', message: 'Please select a project type.' }); return; }
+    if (!formData.description.trim()) { setFieldError({ field: 'description', message: 'Please describe your project.' }); return; }
+
     setSubmitting(true);
     setStatus('idle');
     setErrorMessage('');
@@ -110,6 +120,7 @@ export default function Contact() {
             <form
               className="w-full max-w-[480px] mx-auto lg:mx-0 space-y-10"
               onSubmit={handleSubmit}
+              noValidate
             >
               {/* Honeypot — hidden from real users, catches bots */}
               <input
@@ -129,26 +140,27 @@ export default function Contact() {
                   type="text"
                   id="name"
                   name="name"
-                  required
                   value={formData.name}
                   onChange={handleChange}
-                  className="w-full bg-transparent border-b border-[#E5E5E5] py-3 text-[#000000] placeholder:text-[#CCCCCC] focus:outline-none focus:border-[#000000] transition-colors"
+                  className={`w-full bg-transparent border-b py-3 text-[#000000] placeholder:text-[#CCCCCC] focus:outline-none transition-colors ${fieldError?.field === 'name' ? 'border-[#e05252] focus:border-[#e05252]' : 'border-[#E5E5E5] focus:border-[#000000]'}`}
                   placeholder="Jane Doe"
                 />
+                {fieldError?.field === 'name' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
               </div>
 
               <div className="flex flex-col">
                 <label htmlFor="email" className="text-sm font-medium text-[#707070] mb-2">Email</label>
                 <input
-                  type="email"
+                  type="text"
                   id="email"
                   name="email"
-                  required
+                  autoComplete="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full bg-transparent border-b border-[#E5E5E5] py-3 text-[#000000] placeholder:text-[#CCCCCC] focus:outline-none focus:border-[#000000] transition-colors"
+                  className={`w-full bg-transparent border-b py-3 text-[#000000] placeholder:text-[#CCCCCC] focus:outline-none transition-colors ${fieldError?.field === 'email' ? 'border-[#e05252] focus:border-[#e05252]' : 'border-[#E5E5E5] focus:border-[#000000]'}`}
                   placeholder="jane@example.com"
                 />
+                {fieldError?.field === 'email' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
               </div>
 
               <div className="flex flex-col">
@@ -169,10 +181,9 @@ export default function Contact() {
                 <select
                   id="service"
                   name="service"
-                  required
                   value={formData.service}
                   onChange={handleChange}
-                  className="w-full bg-transparent border-b border-[#E5E5E5] py-3 text-[#000000] focus:outline-none focus:border-[#000000] transition-colors appearance-none cursor-pointer"
+                  className={`w-full bg-transparent border-b py-3 text-[#000000] focus:outline-none transition-colors appearance-none cursor-pointer ${fieldError?.field === 'service' ? 'border-[#e05252] focus:border-[#e05252]' : 'border-[#E5E5E5] focus:border-[#000000]'}`}
                 >
                   <option value="" disabled>Select a project type</option>
                   <option value="App or Web Development">App or Web Development</option>
@@ -182,6 +193,7 @@ export default function Contact() {
                   <option value="Consulting">Consulting</option>
                   <option value="Other">Other</option>
                 </select>
+                {fieldError?.field === 'service' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
               </div>
 
               <div className="flex flex-col">
@@ -189,14 +201,14 @@ export default function Contact() {
                 <textarea
                   id="description"
                   name="description"
-                  required
                   rows={3}
                   maxLength={5000}
                   value={formData.description}
                   onChange={handleChange}
-                  className="w-full bg-transparent border-b border-[#E5E5E5] py-3 text-[#000000] placeholder:text-[#CCCCCC] focus:outline-none focus:border-[#000000] transition-colors resize-none"
+                  className={`w-full bg-transparent border-b py-3 text-[#000000] placeholder:text-[#CCCCCC] focus:outline-none transition-colors resize-none ${fieldError?.field === 'description' ? 'border-[#e05252] focus:border-[#e05252]' : 'border-[#E5E5E5] focus:border-[#000000]'}`}
                   placeholder="Tell us about your project..."
                 />
+                {fieldError?.field === 'description' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
               </div>
 
               <div className="flex flex-col">

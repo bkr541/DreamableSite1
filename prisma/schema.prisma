@@ -61,6 +61,8 @@ model User {
   status       String  @default("INVITED")
   admin        Boolean @default(false)
 
+  templogincode String? @map("templogincode")
+
   invitedAt   DateTime? @map("invited_at") @db.Timestamptz()
   lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz()
 

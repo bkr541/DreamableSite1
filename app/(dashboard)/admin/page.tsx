@@ -24,6 +24,7 @@ export default async function AdminPage() {
         select: { id: true, name: true, email: true, role: true, status: true, admin: true, createdAt: true },
       }),
       prisma.user.findMany({
+        where: { admin: false },
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,

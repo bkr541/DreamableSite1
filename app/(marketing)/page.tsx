@@ -10,6 +10,8 @@ import HeroRibbons from '@/components/HeroRibbons';
 import CubePuzzle from '@/components/CubePuzzle';
 import HeroCarousel from '@/components/HeroCarousel';
 import Image from 'next/image';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { ToolCaseIcon } from '@hugeicons/core-free-icons';
 
 export default function Home() {
   const [formData, setFormData] = useState({
@@ -20,9 +22,17 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [submitError, setSubmitError] = useState('');
+  const [fieldError, setFieldError] = useState<{ field: string; message: string } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFieldError(null);
+
+    if (!formData.name.trim()) { setFieldError({ field: 'name', message: 'Name is required.' }); return; }
+    if (!formData.email.trim()) { setFieldError({ field: 'email', message: 'Email is required.' }); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) { setFieldError({ field: 'email', message: 'Please enter a valid email address.' }); return; }
+    if (!formData.message.trim()) { setFieldError({ field: 'message', message: 'Message is required.' }); return; }
+
     setSubmitting(true);
     setSubmitStatus('idle');
     setSubmitError('');
@@ -97,17 +107,14 @@ export default function Home() {
               <Link href="#contact" className="inline-flex items-center justify-center h-12 px-5 sm:px-7 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all">
                 Start a Project
               </Link>
-              <Link href="/portal" className="inline-flex items-center justify-center h-12 px-5 sm:px-7 rounded-full border border-[#1a2030] text-[#1a2030] text-sm font-medium hover:bg-[#1a2030] hover:text-white transition-all">
-                View a Project
-              </Link>
-              <a href="#principles" className="inline-flex items-center justify-center h-12 px-5 sm:px-7 rounded-full bg-[#F0F0F0] text-[#1a1a1a] text-sm font-medium hover:bg-[#E5E5E5] transition-colors border border-[#e0e0e0]">
+              <a href="#principles" className="inline-flex items-center justify-center h-12 px-5 sm:px-7 rounded-full border border-[#1a2030] text-[#1a2030] text-sm font-medium hover:bg-[#1a2030] hover:text-white transition-all">
                 See our work
               </a>
             </div>
           </div>
 
           {/* Right – 3D Cube Puzzle */}
-          <div className="hidden md:flex items-center justify-center h-[400px] w-[500px] absolute right-0 lg:-right-20 z-10 opacity-60 lg:opacity-100 pointer-events-none md:pointer-events-auto">
+          <div className="hidden md:flex items-center justify-center h-[520px] w-[620px] absolute right-0 lg:-right-28 z-10 opacity-60 lg:opacity-100 pointer-events-none md:pointer-events-auto">
             <CubePuzzle />
           </div>
         </div>
@@ -239,8 +246,11 @@ export default function Home() {
 
             {/* Form card */}
             <div className="w-full rounded-3xl p-8 bg-white shadow-lg border border-[#F0F0F0]">
-              <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-8">Tell us about your project</p>
-              <form className="w-full space-y-6" onSubmit={handleSubmit}>
+              <div className="flex items-center gap-3 mb-8">
+                <HugeiconsIcon icon={ToolCaseIcon} size={28} color="#1a2030" strokeWidth={2} />
+                <p className="text-xl font-semibold text-[#1a1a1a]">Tell us about your project</p>
+              </div>
+              <form className="w-full space-y-6" onSubmit={handleSubmit} noValidate>
                 {/* Row 1: Name + Email */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="flex flex-col">
@@ -248,29 +258,30 @@ export default function Home() {
                     <input
                       type="text"
                       id="contact-name"
-                      required
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all"
+                      onChange={(e) => { setFormData({ ...formData, name: e.target.value }); setFieldError(null); }}
+                      className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all ${fieldError?.field === 'name' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                       placeholder="Jane Doe"
                     />
+                    {fieldError?.field === 'name' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
                   </div>
                   <div className="flex flex-col">
                     <label htmlFor="contact-email" className="text-sm font-medium text-[#555] mb-2">Email</label>
                     <input
-                      type="email"
+                      type="text"
                       id="contact-email"
-                      required
+                      autoComplete="email"
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all"
+                      onChange={(e) => { setFormData({ ...formData, email: e.target.value }); setFieldError(null); }}
+                      className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all ${fieldError?.field === 'email' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                       placeholder="jane@example.com"
                     />
+                    {fieldError?.field === 'email' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
                   </div>
                 </div>
 
-                {/* Row 2: Project Type + Budget Range */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {/* Row 2: Project Type + Budget + Timeline */}
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_160px_1fr] gap-6">
                   <div className="flex flex-col">
                     <label htmlFor="contact-project" className="text-sm font-medium text-[#555] mb-2">Project Type</label>
                     <select
@@ -287,7 +298,7 @@ export default function Home() {
                     </select>
                   </div>
                   <div className="flex flex-col">
-                    <label htmlFor="contact-budget" className="text-sm font-medium text-[#555] mb-2">Project Budget</label>
+                    <label htmlFor="contact-budget" className="text-sm font-medium text-[#555] mb-2">Budget</label>
                     <select
                       id="contact-budget"
                       value={formData.budgetRange}
@@ -300,10 +311,6 @@ export default function Home() {
                       <option value="$5k+">$5k+</option>
                     </select>
                   </div>
-                </div>
-
-                {/* Row 3: Timeline + Attachment */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="flex flex-col">
                     <label htmlFor="contact-timeline" className="text-sm font-medium text-[#555] mb-2">Timeline</label>
                     <select
@@ -320,46 +327,6 @@ export default function Home() {
                       <option value="Not sure">Not sure</option>
                     </select>
                   </div>
-
-                  <div className="flex flex-col relative">
-                    <label htmlFor="contact-attachment" className="text-sm font-medium text-[#555] mb-2">Attachment <span className="text-[#aaa] font-normal">(optional)</span></label>
-                    <div className="relative w-full">
-                      <label
-                        htmlFor="contact-attachment"
-                        className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] focus-within:ring-2 focus-within:ring-cyan-200/50 border border-[#D0D0D0] transition-all cursor-pointer flex items-center gap-2 ${attachment ? 'pr-10' : ''}`}
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#999] shrink-0"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66L9.41 17.41a2 2 0 01-2.83-2.83l8.49-8.49" /></svg>
-                        <span className={`text-sm truncate ${attachment ? 'text-[#1a1a1a]' : 'text-[#bbb]'}`}>
-                          {attachment ? attachment.name : 'PDF, image, or doc'}
-                        </span>
-                        <input
-                          type="file"
-                          id="contact-attachment"
-                          className="sr-only"
-                          accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.svg,.sketch,.fig,.xd"
-                          onChange={(e) => setAttachment(e.target.files?.[0] || null)}
-                        />
-                      </label>
-                      {attachment && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            setAttachment(null);
-                            const fileInput = document.getElementById('contact-attachment') as HTMLInputElement;
-                            if (fileInput) fileInput.value = '';
-                          }}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[#999] hover:text-[#333] transition-colors"
-                          aria-label="Remove attachment"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  </div>
                 </div>
 
                 {/* Row 4: Message */}
@@ -368,12 +335,12 @@ export default function Home() {
                   <textarea
                     id="contact-message"
                     rows={4}
-                    required
                     value={formData.message}
-                    onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                    className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all resize-none"
+                    onChange={(e) => { setFormData({ ...formData, message: e.target.value }); setFieldError(null); }}
+                    className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all resize-none ${fieldError?.field === 'message' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                     placeholder="Tell us about your project..."
                   />
+                  {fieldError?.field === 'message' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
                 </div>
 
                 {/* Honeypot – hidden from real users */}
@@ -387,8 +354,9 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Send button */}
-                <div className="flex flex-col items-center gap-2 pt-6">
+                {/* Send button + attachment */}
+                <div className="flex items-center justify-between pt-6">
+                  <div className="w-10" />
                   <button
                     type="submit"
                     disabled={submitting}
@@ -396,10 +364,46 @@ export default function Home() {
                   >
                     {submitting ? 'Sending…' : 'Send'}
                   </button>
-                  {submitStatus === 'error' && (
-                    <p className="text-sm text-red-500 font-medium">{submitError}</p>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {attachment && (
+                      <>
+                        <span className="text-xs text-[#777] max-w-[90px] truncate">{attachment.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAttachment(null);
+                            const fileInput = document.getElementById('contact-attachment') as HTMLInputElement;
+                            if (fileInput) fileInput.value = '';
+                          }}
+                          className="p-0.5 text-[#aaa] hover:text-[#333] transition-colors"
+                          aria-label="Remove attachment"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                          </svg>
+                        </button>
+                      </>
+                    )}
+                    <label
+                      htmlFor="contact-attachment"
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-full cursor-pointer transition-colors ${attachment ? 'text-[#B87AF5] hover:bg-purple-50' : 'text-[#999] hover:text-[#1a2030] hover:bg-[#f5f5f5]'}`}
+                      title="Attach a file"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66L9.41 17.41a2 2 0 01-2.83-2.83l8.49-8.49" /></svg>
+                      <span className="text-sm font-medium">Add Attachment</span>
+                      <input
+                        type="file"
+                        id="contact-attachment"
+                        className="sr-only"
+                        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.svg,.sketch,.fig,.xd"
+                        onChange={(e) => setAttachment(e.target.files?.[0] || null)}
+                      />
+                    </label>
+                  </div>
                 </div>
+                {submitStatus === 'error' && (
+                  <p className="text-sm text-red-500 font-medium text-center">{submitError}</p>
+                )}
               </form>
             </div>
           </motion.div>
