@@ -46,8 +46,7 @@ async function fetchAsBase64(url: string): Promise<string> {
   return btoa(binary);
 }
 
-export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
-  // Load assets in parallel
+async function buildInvoiceDoc(data: InvoiceData): Promise<jsPDF> {
   const [fontRegular, fontBold, logoBase64] = await Promise.all([
     fetchAsBase64('/fonts/Quicksand-Regular.ttf'),
     fetchAsBase64('/fonts/Quicksand-Bold.ttf'),
@@ -56,7 +55,6 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  // Register Quicksand
   doc.addFileToVFS('Quicksand-Regular.ttf', fontRegular);
   doc.addFont('Quicksand-Regular.ttf', 'Quicksand', 'normal');
   doc.addFileToVFS('Quicksand-Bold.ttf', fontBold);
@@ -69,6 +67,10 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
   doc.addImage(logoBase64, 'PNG', MARGIN, y, LOGO_SIZE, LOGO_SIZE);
 
   doc.setFont('Quicksand', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(...DARK);
+  doc.text('Dreamable.studio', MARGIN + LOGO_SIZE + 4, y + LOGO_SIZE / 2 + 0.5, { baseline: 'middle' });
+
   doc.setFontSize(34);
   doc.setTextColor(...PURPLE);
   doc.text('INVOICE', PAGE_W - MARGIN, y + 10, { align: 'right' });
@@ -247,5 +249,16 @@ export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
     PAGE_W / 2, footerY + 5, { align: 'center' }
   );
 
+  return doc;
+}
+
+export async function generateInvoicePDF(data: InvoiceData): Promise<void> {
+  const doc = await buildInvoiceDoc(data);
   doc.save(`Dreamable-Studio-Invoice-${data.invoiceNumber}.pdf`);
+}
+
+export async function previewInvoicePDF(data: InvoiceData): Promise<string> {
+  const doc = await buildInvoiceDoc(data);
+  const blob = doc.output('blob');
+  return URL.createObjectURL(blob);
 }

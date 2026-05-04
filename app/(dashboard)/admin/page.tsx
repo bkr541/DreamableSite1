@@ -7,7 +7,7 @@ export default async function AdminPage() {
   const session = await getSession();
   if (!session || !session.admin) redirect('/portal');
 
-  const [totalUsers, totalProjects, activeProjects, openInquiries, recentInquiries, recentUsers, clients, companies, services, projects] =
+  const [totalUsers, totalProjects, activeProjects, openInquiries, recentInquiries, recentUsers, clients, companies, services, projects, invoices] =
     await Promise.all([
       prisma.user.count(),
       prisma.project.count(),
@@ -51,6 +51,15 @@ export default async function AdminPage() {
           primaryUser: { select: { id: true, name: true, email: true } },
         },
       }),
+      prisma.invoice.findMany({
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, invoiceNumber: true, clientName: true, clientEmail: true,
+          clientCompany: true, projectName: true, issueDate: true, dueDate: true,
+          taxRate: true, createdAt: true,
+          lineItems: { select: { description: true, qty: true, rate: true } },
+        },
+      }),
     ]);
 
   return (
@@ -63,6 +72,7 @@ export default async function AdminPage() {
       companies={companies}
       services={services}
       projects={projects.map((p) => ({ ...p, createdAt: p.createdAt.toISOString() }))}
+      invoices={invoices.map((inv) => ({ ...inv, createdAt: inv.createdAt.toISOString() }))}
     />
   );
 }

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import PasswordInput from '@/components/PasswordInput';
-import { generateInvoicePDF } from '@/lib/generateInvoice';
+import { generateInvoicePDF, previewInvoicePDF } from '@/lib/generateInvoice';
 import { useRouter } from 'next/navigation';
 import { SessionPayload } from '@/lib/session';
 import { motion, AnimatePresence } from 'motion/react';
@@ -21,6 +21,8 @@ import {
   UserAdd02Icon,
   CancelCircleIcon,
   Delete04Icon,
+  TaskEdit01Icon,
+  FileViewIcon,
 } from '@hugeicons/core-free-icons';
 
 interface Inquiry {
@@ -59,6 +61,20 @@ interface Company {
   status: string;
 }
 
+interface InvoiceRecord {
+  id: string;
+  invoiceNumber: string;
+  clientName: string;
+  clientEmail: string;
+  clientCompany: string | null;
+  projectName: string;
+  issueDate: string;
+  dueDate: string;
+  taxRate: number;
+  createdAt: string;
+  lineItems: { description: string; qty: number; rate: number }[];
+}
+
 interface Service {
   id: string;
   name: string;
@@ -84,6 +100,7 @@ interface Props {
   companies: Company[];
   services: Service[];
   projects: ProjectRecord[];
+  invoices: InvoiceRecord[];
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -146,10 +163,20 @@ function getDefaultInvoiceForm() {
   };
 }
 
-export default function AdminDashboardClient({ session, stats, recentInquiries, recentUsers, clients, companies, services, projects }: Props) {
+export default function AdminDashboardClient({ session, stats, recentInquiries, recentUsers, clients, companies, services, projects, invoices }: Props) {
   const router = useRouter();
   const [activeView, setActiveView] = useState<ViewId>('dashboard');
+  const [billingSubView, setBillingSubView] = useState<'invoices' | null>(null);
   const [clientsGroupOpen, setClientsGroupOpen] = useState(true);
+  const [expandedClientIds, setExpandedClientIds] = useState<Set<string>>(new Set());
+
+  function toggleClientExpand(id: string) {
+    setExpandedClientIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
   const [showAddClient, setShowAddClient] = useState(false);
   const [addForm, setAddForm] = useState({
     name: '', email: '', role: 'CLIENT', status: 'INVITED',
@@ -165,10 +192,134 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
   const [invoiceError, setInvoiceError] = useState('');
   const [invoiceSubmitting, setInvoiceSubmitting] = useState(false);
 
+  const [showEditInvoice, setShowEditInvoice] = useState(false);
+  const [editInvoiceId, setEditInvoiceId] = useState('');
+  const [editInvForm, setEditInvForm] = useState(getDefaultInvoiceForm());
+  const [editInvFieldError, setEditInvFieldError] = useState<{ field: string; message: string } | null>(null);
+  const [editInvError, setEditInvError] = useState('');
+  const [editInvSubmitting, setEditInvSubmitting] = useState(false);
+
+  const [showPreviewInvoice, setShowPreviewInvoice] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewInvoiceNumber, setPreviewInvoiceNumber] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+
   function resetInvoiceForm() {
     setInvoiceForm(getDefaultInvoiceForm());
     setInvoiceFieldError(null);
     setInvoiceError('');
+  }
+
+  function openEditInvoice(inv: InvoiceRecord) {
+    setEditInvoiceId(inv.id);
+    setEditInvForm({
+      invoiceNumber: inv.invoiceNumber,
+      issueDate: inv.issueDate,
+      dueDate: inv.dueDate,
+      clientName: inv.clientName,
+      clientEmail: inv.clientEmail,
+      clientCompany: inv.clientCompany ?? '',
+      projectName: inv.projectName,
+      taxRate: String(inv.taxRate * 100),
+      lineItems: inv.lineItems.map(li => ({
+        description: li.description,
+        qty: String(li.qty),
+        rate: String(li.rate),
+      })),
+    });
+    setEditInvFieldError(null);
+    setEditInvError('');
+    setShowEditInvoice(true);
+  }
+
+  async function handleUpdateInvoice(e: React.FormEvent) {
+    e.preventDefault();
+    setEditInvFieldError(null);
+    setEditInvError('');
+
+    if (!editInvForm.invoiceNumber.trim()) { setEditInvFieldError({ field: 'invoiceNumber', message: 'Invoice number is required.' }); return; }
+    if (!editInvForm.clientName.trim()) { setEditInvFieldError({ field: 'clientName', message: 'Client name is required.' }); return; }
+    if (!editInvForm.clientEmail.trim()) { setEditInvFieldError({ field: 'clientEmail', message: 'Email is required.' }); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editInvForm.clientEmail)) { setEditInvFieldError({ field: 'clientEmail', message: 'Please enter a valid email address.' }); return; }
+    if (!editInvForm.projectName.trim()) { setEditInvFieldError({ field: 'projectName', message: 'Project name is required.' }); return; }
+    if (!editInvForm.issueDate) { setEditInvFieldError({ field: 'issueDate', message: 'Issue date is required.' }); return; }
+    if (!editInvForm.dueDate) { setEditInvFieldError({ field: 'dueDate', message: 'Due date is required.' }); return; }
+
+    for (let i = 0; i < editInvForm.lineItems.length; i++) {
+      const item = editInvForm.lineItems[i];
+      if (!item.description.trim()) { setEditInvError(`Line item ${i + 1}: description is required.`); return; }
+      const qty = parseFloat(item.qty);
+      if (isNaN(qty) || qty <= 0) { setEditInvError(`Line item ${i + 1}: quantity must be a positive number.`); return; }
+      const rate = parseFloat(item.rate);
+      if (isNaN(rate) || rate < 0) { setEditInvError(`Line item ${i + 1}: rate must be a valid amount.`); return; }
+    }
+
+    const payload = {
+      invoiceNumber: editInvForm.invoiceNumber.trim(),
+      issueDate: editInvForm.issueDate,
+      dueDate: editInvForm.dueDate,
+      clientName: editInvForm.clientName.trim(),
+      clientEmail: editInvForm.clientEmail.trim(),
+      clientCompany: editInvForm.clientCompany.trim(),
+      projectName: editInvForm.projectName.trim(),
+      taxRate: parseFloat(editInvForm.taxRate) / 100 || 0,
+      lineItems: editInvForm.lineItems.map(item => ({
+        description: item.description.trim(),
+        qty: parseFloat(item.qty),
+        rate: parseFloat(item.rate),
+      })),
+    };
+
+    setEditInvSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/invoices/${editInvoiceId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) { setEditInvError(data.error || 'Failed to update invoice.'); return; }
+      setShowEditInvoice(false);
+      router.refresh();
+    } catch {
+      setEditInvError('Unable to connect. Please try again.');
+    } finally {
+      setEditInvSubmitting(false);
+    }
+  }
+
+  async function openPreviewInvoice(inv: InvoiceRecord) {
+    setPreviewInvoiceNumber(inv.invoiceNumber);
+    setPreviewUrl(null);
+    setShowPreviewInvoice(true);
+    setPreviewLoading(true);
+    try {
+      const formatDate = (s: string) => {
+        const [year, month, day] = s.split('-').map(Number);
+        if (!year) return s;
+        return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+      };
+      const url = await previewInvoicePDF({
+        invoiceNumber: inv.invoiceNumber,
+        issueDate: formatDate(inv.issueDate),
+        dueDate: formatDate(inv.dueDate),
+        clientName: inv.clientName,
+        clientEmail: inv.clientEmail,
+        clientCompany: inv.clientCompany ?? '',
+        projectName: inv.projectName,
+        taxRate: inv.taxRate,
+        lineItems: inv.lineItems,
+      });
+      setPreviewUrl(url);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  function closePreview() {
+    setShowPreviewInvoice(false);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
   }
 
   function openInvoiceForProject(p: ProjectRecord) {
@@ -358,7 +509,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
               return (
                 <button
                   key={id}
-                  onClick={() => setActiveView(id)}
+                  onClick={() => { setActiveView(id); setBillingSubView(null); }}
                   title={label}
                   className={
                     isActive
@@ -501,46 +652,98 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 <div className="p-4">
                   <div className="border border-[#EBEBEB] rounded-xl overflow-hidden">
                   {/* Table header */}
-                  <div className="grid grid-cols-[1fr_1fr_120px_100px] gap-4 px-6 py-3 bg-[#FAFAFA] border-b border-[#F0F0F0]">
+                  <div className="grid grid-cols-[1fr_1fr_120px_36px] gap-4 px-6 py-3 bg-[#FAFAFA] border-b border-[#F0F0F0]">
                     <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Name</p>
                     <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Company</p>
                     <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Role</p>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Status</p>
+                    <div />
                   </div>
 
                   {clients.length === 0 ? (
                     <p className="px-6 py-8 text-sm text-[#AAA]">No clients yet.</p>
                   ) : (
                     <ul className="divide-y divide-[#F5F5F5]">
-                      {clients.map((c) => (
-                        <li key={c.id} className="grid grid-cols-[1fr_1fr_120px_100px] gap-4 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium text-[#1a1a1a] truncate">{c.name}</p>
-                              {c.admin && (
-                                <span className="px-1.5 py-px rounded text-[10px] font-bold bg-[#1a2030] text-white uppercase tracking-widest shrink-0">
-                                  Admin
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-[#888] truncate">{c.email}</p>
-                          </div>
-                          <div className="min-w-0">
-                            {c.company ? (
-                              <>
-                                <p className="text-sm text-[#1a1a1a] truncate">{c.company.name}</p>
-                                {c.company.website && (
-                                  <p className="text-xs text-[#AAA] truncate">{c.company.website}</p>
+                      {clients.map((c) => {
+                        const clientProjects = projects.filter(p => p.primaryUser?.id === c.id);
+                        const isExpanded = expandedClientIds.has(c.id);
+                        return (
+                          <li key={c.id} className="flex flex-col">
+                            {/* Main row */}
+                            <div
+                              className="grid grid-cols-[1fr_1fr_120px_36px] gap-4 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors cursor-pointer"
+                              onClick={() => toggleClientExpand(c.id)}
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-medium text-[#1a1a1a] truncate">{c.name}</p>
+                                  <Badge status={c.status} />
+                                  {c.admin && (
+                                    <span className="px-1.5 py-px rounded text-[10px] font-bold bg-[#1a2030] text-white uppercase tracking-widest shrink-0">
+                                      Admin
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-[#888] truncate">{c.email}</p>
+                              </div>
+                              <div className="min-w-0">
+                                {c.company ? (
+                                  <>
+                                    <p className="text-sm text-[#1a1a1a] truncate">{c.company.name}</p>
+                                    {c.company.website && (
+                                      <p className="text-xs text-[#AAA] truncate">{c.company.website}</p>
+                                    )}
+                                  </>
+                                ) : (
+                                  <p className="text-xs text-[#CCC]">—</p>
                                 )}
-                              </>
-                            ) : (
-                              <p className="text-xs text-[#CCC]">—</p>
-                            )}
-                          </div>
-                          <p className="text-xs text-[#555] truncate">{c.role}</p>
-                          <p className="text-xs text-[#555] truncate">{c.status}</p>
-                        </li>
-                      ))}
+                              </div>
+                              <p className="text-xs text-[#555] truncate">{c.role}</p>
+                              <motion.div
+                                animate={{ rotate: isExpanded ? 180 : 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="flex items-center justify-center"
+                              >
+                                <ChevronDown size={15} strokeWidth={1.75} className={`transition-colors ${clientProjects.length === 0 ? 'text-[#E0E0E0]' : 'text-[#AAAAAA]'}`} />
+                              </motion.div>
+                            </div>
+
+                            {/* Expandable projects sub-section */}
+                            <div
+                              style={{
+                                display: 'grid',
+                                gridTemplateRows: isExpanded ? '1fr' : '0fr',
+                                transition: 'grid-template-rows 0.2s ease-in-out',
+                              }}
+                            >
+                              <div className="overflow-hidden">
+                                <div className="px-6 pb-4">
+                                  {clientProjects.length === 0 ? (
+                                    <p className="text-xs text-[#CCC] py-1">No projects assigned to this client.</p>
+                                  ) : (
+                                    <div className="rounded-xl border border-[#F0F0F0] overflow-hidden">
+                                      <div className="grid grid-cols-[1fr_160px] gap-4 px-4 py-2 bg-[#FAFAFA] border-b border-[#F0F0F0]">
+                                        <p className="text-[9px] font-semibold uppercase tracking-widest text-[#CCC]">Project</p>
+                                        <p className="text-[9px] font-semibold uppercase tracking-widest text-[#CCC]">Service</p>
+                                      </div>
+                                      <ul className="divide-y divide-[#F8F8F8]">
+                                        {clientProjects.map(p => (
+                                          <li key={p.id} className="grid grid-cols-[1fr_160px] gap-4 px-4 py-2.5 items-center">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                              <p className="text-xs font-medium text-[#1a1a1a] truncate">{p.name}</p>
+                                              <Badge status={p.status} />
+                                            </div>
+                                            <p className="text-xs text-[#888] truncate">{p.service}</p>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                   </div>
@@ -620,7 +823,109 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
           </div>
         )}
 
-        {activeView !== 'dashboard' && activeView !== 'workspace' && activeView !== 'clients' && activeView !== 'projects' && (
+        {activeView === 'billing' && billingSubView === null && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <button
+              onClick={() => setBillingSubView('invoices')}
+              className="bg-white rounded-2xl border border-[#EBEBEB] p-6 text-left hover:border-[#1a2030]/25 hover:shadow-md transition-all group"
+            >
+              <p className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">Invoices</p>
+              <HugeiconsIcon
+                icon={Invoice03Icon}
+                size={32}
+                color="#1a2030"
+                strokeWidth={1.5}
+                className="group-hover:scale-110 transition-transform"
+              />
+            </button>
+          </div>
+        )}
+
+        {activeView === 'billing' && billingSubView === 'invoices' && (
+          <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
+            <div className="px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setBillingSubView(null)}
+                  className="text-xs text-[#AAAAAA] hover:text-[#1a2030] transition-colors"
+                >
+                  Billing
+                </button>
+                <span className="text-[#DDDDDD] text-xs">/</span>
+                <h2 className="text-sm font-semibold text-[#1a1a1a]">Invoices</h2>
+                <span className="px-2 py-0.5 rounded-full bg-[#F0F0F0] text-[11px] font-semibold text-[#888]">
+                  {invoices.length}
+                </span>
+              </div>
+              <button
+                onClick={() => { resetInvoiceForm(); setShowInvoice(true); }}
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
+              >
+                <HugeiconsIcon icon={Invoice03Icon} size={16} color="#ffffff" strokeWidth={1.5} />
+                New Invoice
+              </button>
+            </div>
+
+            <div className="p-4 pt-0">
+              <div className="border border-[#EBEBEB] rounded-xl overflow-hidden">
+                <div className="grid grid-cols-[1fr_1fr_140px_120px_100px_72px] gap-4 px-6 py-3 bg-[#FAFAFA] border-b border-[#F0F0F0]">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Invoice #</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Client</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Project</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Issue Date</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] text-right">Total</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Actions</p>
+                </div>
+
+                {invoices.length === 0 ? (
+                  <p className="px-6 py-8 text-sm text-[#AAA]">No invoices yet.</p>
+                ) : (
+                  <ul className="divide-y divide-[#F5F5F5]">
+                    {invoices.map((inv) => {
+                      const subtotal = inv.lineItems.reduce((sum, item) => sum + item.qty * item.rate, 0);
+                      const total = subtotal + subtotal * inv.taxRate;
+                      return (
+                        <li key={inv.id} className="grid grid-cols-[1fr_1fr_140px_120px_100px_72px] gap-4 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-[#1a1a1a] truncate">{inv.invoiceNumber}</p>
+                            <p className="text-xs text-[#AAA] truncate">Due {inv.dueDate}</p>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm text-[#1a1a1a] truncate">{inv.clientName}</p>
+                            {inv.clientCompany && <p className="text-xs text-[#AAA] truncate">{inv.clientCompany}</p>}
+                          </div>
+                          <p className="text-xs text-[#555] truncate">{inv.projectName}</p>
+                          <p className="text-xs text-[#555]">{inv.issueDate}</p>
+                          <p className="text-sm font-semibold text-[#1a1a1a] text-right">
+                            ${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => openEditInvoice(inv)}
+                              className="text-[#AAAAAA] hover:text-[#1a2030] transition-colors"
+                              title="Edit invoice"
+                            >
+                              <HugeiconsIcon icon={TaskEdit01Icon} size={18} color="currentColor" strokeWidth={1.5} />
+                            </button>
+                            <button
+                              onClick={() => openPreviewInvoice(inv)}
+                              className="text-[#AAAAAA] hover:text-[#1a2030] transition-colors"
+                              title="Preview invoice"
+                            >
+                              <HugeiconsIcon icon={FileViewIcon} size={18} color="currentColor" strokeWidth={1.5} />
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeView !== 'dashboard' && activeView !== 'workspace' && activeView !== 'clients' && activeView !== 'projects' && activeView !== 'billing' && (
           <div className="bg-white rounded-2xl border border-[#EBEBEB] p-10 text-center">
             <p className="text-sm text-[#AAA]">Coming soon</p>
           </div>
@@ -1214,6 +1519,280 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Invoice modal */}
+      <AnimatePresence>
+        {showEditInvoice && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+              onClick={() => setShowEditInvoice(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="relative w-full max-w-[720px] rounded-3xl bg-white shadow-xl border border-[#F0F0F0] max-h-[90vh] overflow-y-auto"
+            >
+              <button
+                type="button"
+                onClick={() => setShowEditInvoice(false)}
+                className="absolute top-5 right-5 text-[#CCCCCC] hover:text-[#555] transition-colors z-10"
+              >
+                <HugeiconsIcon icon={CancelCircleIcon} size={22} color="currentColor" strokeWidth={1.5} />
+              </button>
+              <form onSubmit={handleUpdateInvoice} className="p-8 space-y-5" noValidate>
+                <div className="flex items-center gap-3">
+                  <HugeiconsIcon icon={TaskEdit01Icon} size={28} color="#1a2030" strokeWidth={2} />
+                  <p className="text-xl font-semibold text-[#1a1a1a]">Edit Invoice</p>
+                </div>
+
+                {/* Invoice Details */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Invoice Details</p>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Invoice # <span className="text-red-400">*</span></label>
+                      <input
+                        value={editInvForm.invoiceNumber}
+                        onChange={e => { setEditInvForm(f => ({ ...f, invoiceNumber: e.target.value })); setEditInvFieldError(null); }}
+                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${editInvFieldError?.field === 'invoiceNumber' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                      />
+                      {editInvFieldError?.field === 'invoiceNumber' && <p className="text-xs text-[#e05252]">{editInvFieldError.message}</p>}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Issue Date <span className="text-red-400">*</span></label>
+                      <input
+                        type="date"
+                        value={editInvForm.issueDate}
+                        onChange={e => { setEditInvForm(f => ({ ...f, issueDate: e.target.value })); setEditInvFieldError(null); }}
+                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${editInvFieldError?.field === 'issueDate' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                      />
+                      {editInvFieldError?.field === 'issueDate' && <p className="text-xs text-[#e05252]">{editInvFieldError.message}</p>}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Due Date <span className="text-red-400">*</span></label>
+                      <input
+                        type="date"
+                        value={editInvForm.dueDate}
+                        onChange={e => { setEditInvForm(f => ({ ...f, dueDate: e.target.value })); setEditInvFieldError(null); }}
+                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${editInvFieldError?.field === 'dueDate' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                      />
+                      {editInvFieldError?.field === 'dueDate' && <p className="text-xs text-[#e05252]">{editInvFieldError.message}</p>}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Client Information */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Client Information</p>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Client Name <span className="text-red-400">*</span></label>
+                      <input
+                        value={editInvForm.clientName}
+                        onChange={e => { setEditInvForm(f => ({ ...f, clientName: e.target.value })); setEditInvFieldError(null); }}
+                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${editInvFieldError?.field === 'clientName' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                      />
+                      {editInvFieldError?.field === 'clientName' && <p className="text-xs text-[#e05252]">{editInvFieldError.message}</p>}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Client Email <span className="text-red-400">*</span></label>
+                      <input
+                        type="text"
+                        value={editInvForm.clientEmail}
+                        onChange={e => { setEditInvForm(f => ({ ...f, clientEmail: e.target.value })); setEditInvFieldError(null); }}
+                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${editInvFieldError?.field === 'clientEmail' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                      />
+                      {editInvFieldError?.field === 'clientEmail' && <p className="text-xs text-[#e05252]">{editInvFieldError.message}</p>}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Company</label>
+                      <input
+                        value={editInvForm.clientCompany}
+                        onChange={e => setEditInvForm(f => ({ ...f, clientCompany: e.target.value }))}
+                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Project */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Project</p>
+                  <div className="grid grid-cols-[1fr_120px] gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Project Name <span className="text-red-400">*</span></label>
+                      <input
+                        value={editInvForm.projectName}
+                        onChange={e => { setEditInvForm(f => ({ ...f, projectName: e.target.value })); setEditInvFieldError(null); }}
+                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${editInvFieldError?.field === 'projectName' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                      />
+                      {editInvFieldError?.field === 'projectName' && <p className="text-xs text-[#e05252]">{editInvFieldError.message}</p>}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Tax Rate (%)</label>
+                      <input
+                        type="number" min="0" max="100" step="0.1"
+                        value={editInvForm.taxRate}
+                        onChange={e => setEditInvForm(f => ({ ...f, taxRate: e.target.value }))}
+                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Line Items */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Line Items</p>
+                  <div className="grid grid-cols-[1fr_72px_96px_36px] gap-3 px-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#CCC]">Description</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#CCC] text-center">Qty</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#CCC] text-right">Rate ($)</p>
+                    <div />
+                  </div>
+                  <div className="space-y-2">
+                    {editInvForm.lineItems.map((item, i) => (
+                      <div key={i} className="grid grid-cols-[1fr_72px_96px_36px] gap-3 items-center">
+                        <input
+                          value={item.description}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setEditInvForm(f => { const items = [...f.lineItems]; items[i] = { ...items[i], description: val }; return { ...f, lineItems: items }; });
+                            setEditInvError('');
+                          }}
+                          placeholder="Service description"
+                          className="w-full bg-white rounded-xl px-3 py-2 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                        />
+                        <input
+                          type="number" min="1" step="1"
+                          value={item.qty}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setEditInvForm(f => { const items = [...f.lineItems]; items[i] = { ...items[i], qty: val }; return { ...f, lineItems: items }; });
+                            setEditInvError('');
+                          }}
+                          className="w-full bg-white rounded-xl px-3 py-2 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all text-center"
+                        />
+                        <input
+                          type="number" min="0" step="0.01"
+                          value={item.rate}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setEditInvForm(f => { const items = [...f.lineItems]; items[i] = { ...items[i], rate: val }; return { ...f, lineItems: items }; });
+                            setEditInvError('');
+                          }}
+                          placeholder="0.00"
+                          className="w-full bg-white rounded-xl px-3 py-2 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all text-right"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setEditInvForm(f => ({ ...f, lineItems: f.lineItems.filter((_, idx) => idx !== i) }))}
+                          disabled={editInvForm.lineItems.length === 1}
+                          className="flex items-center justify-center text-[#CCCCCC] hover:text-[#e05252] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <HugeiconsIcon icon={CancelCircleIcon} size={18} color="currentColor" strokeWidth={1.5} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditInvForm(f => ({ ...f, lineItems: [...f.lineItems, { description: '', qty: '1', rate: '' }] }))}
+                    className="text-sm text-[#AAAAAA] hover:text-[#1a2030] transition-colors"
+                  >
+                    + Add Line Item
+                  </button>
+                </div>
+
+                {editInvError && <p className="text-sm text-[#e05252]">{editInvError}</p>}
+
+                <div className="flex items-center justify-between pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditInvoice(false)}
+                    className="text-sm text-[#AAAAAA] hover:text-[#000] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={editInvSubmitting}
+                    className="px-8 py-3 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  >
+                    {editInvSubmitting ? 'Saving…' : 'Update Invoice'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Preview Invoice modal */}
+      <AnimatePresence>
+        {showPreviewInvoice && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+              onClick={closePreview}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="relative w-full max-w-[860px] h-[90vh] rounded-3xl bg-white shadow-xl border border-[#F0F0F0] flex flex-col overflow-hidden"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-[#F0F0F0] shrink-0">
+                <div className="flex items-center gap-3">
+                  <HugeiconsIcon icon={FileViewIcon} size={22} color="#1a2030" strokeWidth={1.5} />
+                  <p className="text-sm font-semibold text-[#1a1a1a]">Invoice {previewInvoiceNumber}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {previewUrl && (
+                    <a
+                      href={previewUrl}
+                      download={`Dreamable-Studio-Invoice-${previewInvoiceNumber}.pdf`}
+                      className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
+                    >
+                      Download
+                    </a>
+                  )}
+                  <button
+                    onClick={closePreview}
+                    className="text-[#CCCCCC] hover:text-[#555] transition-colors"
+                  >
+                    <HugeiconsIcon icon={CancelCircleIcon} size={22} color="currentColor" strokeWidth={1.5} />
+                  </button>
+                </div>
+              </div>
+
+              {/* PDF viewer */}
+              <div className="flex-1 bg-[#F7F7F8]">
+                {previewLoading && (
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-sm text-[#AAAAAA]">Generating preview…</p>
+                  </div>
+                )}
+                {!previewLoading && previewUrl && (
+                  <iframe
+                    src={previewUrl}
+                    className="w-full h-full border-0"
+                    title={`Invoice ${previewInvoiceNumber}`}
+                  />
+                )}
+              </div>
             </motion.div>
           </div>
         )}
