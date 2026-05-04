@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import PasswordInput from '@/components/PasswordInput';
-import { generateInvoicePDF, getSampleInvoiceData } from '@/lib/generateInvoice';
+import { generateInvoicePDF } from '@/lib/generateInvoice';
 import { useRouter } from 'next/navigation';
 import { SessionPayload } from '@/lib/session';
 import { motion, AnimatePresence } from 'motion/react';
@@ -103,6 +103,23 @@ const VIEW_META: Record<ViewId, { title: string; subtitle: string }> = {
   notifications: { title: 'Notifications', subtitle: 'Stay up to date with recent activity' },
 };
 
+function getDefaultInvoiceForm() {
+  const now = new Date();
+  const due = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const toInput = (d: Date) => d.toISOString().split('T')[0];
+  return {
+    invoiceNumber: `DS-${now.getFullYear()}-001`,
+    issueDate: toInput(now),
+    dueDate: toInput(due),
+    clientName: '',
+    clientEmail: '',
+    clientCompany: '',
+    projectName: '',
+    taxRate: '0',
+    lineItems: [{ description: '', qty: '1', rate: '' }],
+  };
+}
+
 export default function AdminDashboardClient({ session, stats, recentInquiries, recentUsers, clients }: Props) {
   const router = useRouter();
   const [activeView, setActiveView] = useState<ViewId>('dashboard');
@@ -115,6 +132,86 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
   const [addError, setAddError] = useState('');
   const [addFieldError, setAddFieldError] = useState<{ field: string; message: string } | null>(null);
   const [addSubmitting, setAddSubmitting] = useState(false);
+
+  const [showInvoice, setShowInvoice] = useState(false);
+  const [invoiceForm, setInvoiceForm] = useState(getDefaultInvoiceForm());
+  const [invoiceFieldError, setInvoiceFieldError] = useState<{ field: string; message: string } | null>(null);
+  const [invoiceError, setInvoiceError] = useState('');
+  const [invoiceSubmitting, setInvoiceSubmitting] = useState(false);
+
+  function resetInvoiceForm() {
+    setInvoiceForm(getDefaultInvoiceForm());
+    setInvoiceFieldError(null);
+    setInvoiceError('');
+  }
+
+  async function handleGenerateInvoice(e: React.FormEvent) {
+    e.preventDefault();
+    setInvoiceFieldError(null);
+    setInvoiceError('');
+
+    if (!invoiceForm.invoiceNumber.trim()) { setInvoiceFieldError({ field: 'invoiceNumber', message: 'Invoice number is required.' }); return; }
+    if (!invoiceForm.clientName.trim()) { setInvoiceFieldError({ field: 'clientName', message: 'Client name is required.' }); return; }
+    if (!invoiceForm.clientEmail.trim()) { setInvoiceFieldError({ field: 'clientEmail', message: 'Email is required.' }); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invoiceForm.clientEmail)) { setInvoiceFieldError({ field: 'clientEmail', message: 'Please enter a valid email address.' }); return; }
+    if (!invoiceForm.projectName.trim()) { setInvoiceFieldError({ field: 'projectName', message: 'Project name is required.' }); return; }
+    if (!invoiceForm.issueDate) { setInvoiceFieldError({ field: 'issueDate', message: 'Issue date is required.' }); return; }
+    if (!invoiceForm.dueDate) { setInvoiceFieldError({ field: 'dueDate', message: 'Due date is required.' }); return; }
+
+    for (let i = 0; i < invoiceForm.lineItems.length; i++) {
+      const item = invoiceForm.lineItems[i];
+      if (!item.description.trim()) { setInvoiceError(`Line item ${i + 1}: description is required.`); return; }
+      const qty = parseFloat(item.qty);
+      if (isNaN(qty) || qty <= 0) { setInvoiceError(`Line item ${i + 1}: quantity must be a positive number.`); return; }
+      const rate = parseFloat(item.rate);
+      if (isNaN(rate) || rate < 0) { setInvoiceError(`Line item ${i + 1}: rate must be a valid amount.`); return; }
+    }
+
+    const formatDate = (iso: string) => {
+      const [year, month, day] = iso.split('-').map(Number);
+      return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    };
+
+    const payload = {
+      invoiceNumber: invoiceForm.invoiceNumber.trim(),
+      issueDate: invoiceForm.issueDate,
+      dueDate: invoiceForm.dueDate,
+      clientName: invoiceForm.clientName.trim(),
+      clientEmail: invoiceForm.clientEmail.trim(),
+      clientCompany: invoiceForm.clientCompany.trim(),
+      projectName: invoiceForm.projectName.trim(),
+      taxRate: parseFloat(invoiceForm.taxRate) / 100 || 0,
+      lineItems: invoiceForm.lineItems.map(item => ({
+        description: item.description.trim(),
+        qty: parseFloat(item.qty),
+        rate: parseFloat(item.rate),
+      })),
+    };
+
+    setInvoiceSubmitting(true);
+    try {
+      const res = await fetch('/api/admin/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) { setInvoiceError(data.error || 'Failed to save invoice.'); return; }
+
+      generateInvoicePDF({
+        ...payload,
+        issueDate: formatDate(payload.issueDate),
+        dueDate: formatDate(payload.dueDate),
+      });
+
+      setShowInvoice(false);
+      resetInvoiceForm();
+    } catch {
+      setInvoiceError('Unable to connect. Please try again.');
+    } finally {
+      setInvoiceSubmitting(false);
+    }
+  }
 
   function resetAddForm() {
     setAddForm({ name: '', email: '', role: 'CLIENT', status: 'INVITED', companyName: '', companyWebsite: '' });
@@ -263,7 +360,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
         {activeView === 'workspace' && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <button
-              onClick={() => generateInvoicePDF(getSampleInvoiceData())}
+              onClick={() => { resetInvoiceForm(); setShowInvoice(true); }}
               className="bg-white rounded-2xl border border-[#EBEBEB] p-6 text-left hover:border-[#1a2030]/25 hover:shadow-md transition-all group"
             >
               <p className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">Generate Invoices</p>
@@ -372,6 +469,233 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Generate Invoice modal */}
+      <AnimatePresence>
+        {showInvoice && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+              onClick={() => { setShowInvoice(false); resetInvoiceForm(); }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="relative w-full max-w-[720px] rounded-3xl bg-white shadow-xl border border-[#F0F0F0] max-h-[90vh] overflow-y-auto"
+            >
+              <button
+                type="button"
+                onClick={() => { setShowInvoice(false); resetInvoiceForm(); }}
+                className="absolute top-5 right-5 text-[#CCCCCC] hover:text-[#555] transition-colors z-10"
+              >
+                <HugeiconsIcon icon={CancelCircleIcon} size={22} color="currentColor" strokeWidth={1.5} />
+              </button>
+              <form onSubmit={handleGenerateInvoice} className="p-8 space-y-5" noValidate>
+                <div className="flex items-center gap-3">
+                  <HugeiconsIcon icon={Invoice03Icon} size={28} color="#1a2030" strokeWidth={2} />
+                  <p className="text-xl font-semibold text-[#1a1a1a]">Generate Invoice</p>
+                </div>
+
+                {/* Invoice Details */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Invoice Details</p>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Invoice # <span className="text-red-400">*</span></label>
+                      <input
+                        value={invoiceForm.invoiceNumber}
+                        onChange={e => { setInvoiceForm(f => ({ ...f, invoiceNumber: e.target.value })); setInvoiceFieldError(null); }}
+                        placeholder="DS-2026-001"
+                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${invoiceFieldError?.field === 'invoiceNumber' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                      />
+                      {invoiceFieldError?.field === 'invoiceNumber' && <p className="text-xs text-[#e05252]">{invoiceFieldError.message}</p>}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Issue Date <span className="text-red-400">*</span></label>
+                      <input
+                        type="date"
+                        value={invoiceForm.issueDate}
+                        onChange={e => { setInvoiceForm(f => ({ ...f, issueDate: e.target.value })); setInvoiceFieldError(null); }}
+                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${invoiceFieldError?.field === 'issueDate' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                      />
+                      {invoiceFieldError?.field === 'issueDate' && <p className="text-xs text-[#e05252]">{invoiceFieldError.message}</p>}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Due Date <span className="text-red-400">*</span></label>
+                      <input
+                        type="date"
+                        value={invoiceForm.dueDate}
+                        onChange={e => { setInvoiceForm(f => ({ ...f, dueDate: e.target.value })); setInvoiceFieldError(null); }}
+                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${invoiceFieldError?.field === 'dueDate' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                      />
+                      {invoiceFieldError?.field === 'dueDate' && <p className="text-xs text-[#e05252]">{invoiceFieldError.message}</p>}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Client Information */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Client Information</p>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Client Name <span className="text-red-400">*</span></label>
+                      <input
+                        value={invoiceForm.clientName}
+                        onChange={e => { setInvoiceForm(f => ({ ...f, clientName: e.target.value })); setInvoiceFieldError(null); }}
+                        placeholder="Jane Smith"
+                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${invoiceFieldError?.field === 'clientName' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                      />
+                      {invoiceFieldError?.field === 'clientName' && <p className="text-xs text-[#e05252]">{invoiceFieldError.message}</p>}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Client Email <span className="text-red-400">*</span></label>
+                      <input
+                        type="text"
+                        value={invoiceForm.clientEmail}
+                        onChange={e => { setInvoiceForm(f => ({ ...f, clientEmail: e.target.value })); setInvoiceFieldError(null); }}
+                        placeholder="jane@example.com"
+                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${invoiceFieldError?.field === 'clientEmail' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                      />
+                      {invoiceFieldError?.field === 'clientEmail' && <p className="text-xs text-[#e05252]">{invoiceFieldError.message}</p>}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Company</label>
+                      <input
+                        value={invoiceForm.clientCompany}
+                        onChange={e => setInvoiceForm(f => ({ ...f, clientCompany: e.target.value }))}
+                        placeholder="Acme Inc."
+                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Project */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Project</p>
+                  <div className="grid grid-cols-[1fr_120px] gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Project Name <span className="text-red-400">*</span></label>
+                      <input
+                        value={invoiceForm.projectName}
+                        onChange={e => { setInvoiceForm(f => ({ ...f, projectName: e.target.value })); setInvoiceFieldError(null); }}
+                        placeholder="Brand Identity & Website"
+                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${invoiceFieldError?.field === 'projectName' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                      />
+                      {invoiceFieldError?.field === 'projectName' && <p className="text-xs text-[#e05252]">{invoiceFieldError.message}</p>}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Tax Rate (%)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={invoiceForm.taxRate}
+                        onChange={e => setInvoiceForm(f => ({ ...f, taxRate: e.target.value }))}
+                        placeholder="0"
+                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Line Items */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Line Items</p>
+                  <div className="grid grid-cols-[1fr_72px_96px_36px] gap-3 px-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#CCC]">Description</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#CCC] text-center">Qty</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#CCC] text-right">Rate ($)</p>
+                    <div />
+                  </div>
+                  <div className="space-y-2">
+                    {invoiceForm.lineItems.map((item, i) => (
+                      <div key={i} className="grid grid-cols-[1fr_72px_96px_36px] gap-3 items-center">
+                        <input
+                          value={item.description}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setInvoiceForm(f => { const items = [...f.lineItems]; items[i] = { ...items[i], description: val }; return { ...f, lineItems: items }; });
+                            setInvoiceError('');
+                          }}
+                          placeholder="Service description"
+                          className="w-full bg-white rounded-xl px-3 py-2 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                        />
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={item.qty}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setInvoiceForm(f => { const items = [...f.lineItems]; items[i] = { ...items[i], qty: val }; return { ...f, lineItems: items }; });
+                            setInvoiceError('');
+                          }}
+                          className="w-full bg-white rounded-xl px-3 py-2 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all text-center"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={item.rate}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setInvoiceForm(f => { const items = [...f.lineItems]; items[i] = { ...items[i], rate: val }; return { ...f, lineItems: items }; });
+                            setInvoiceError('');
+                          }}
+                          placeholder="0.00"
+                          className="w-full bg-white rounded-xl px-3 py-2 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all text-right"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setInvoiceForm(f => ({ ...f, lineItems: f.lineItems.filter((_, idx) => idx !== i) }))}
+                          disabled={invoiceForm.lineItems.length === 1}
+                          className="flex items-center justify-center text-[#CCCCCC] hover:text-[#e05252] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                          <HugeiconsIcon icon={CancelCircleIcon} size={18} color="currentColor" strokeWidth={1.5} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setInvoiceForm(f => ({ ...f, lineItems: [...f.lineItems, { description: '', qty: '1', rate: '' }] }))}
+                    className="text-sm text-[#AAAAAA] hover:text-[#1a2030] transition-colors"
+                  >
+                    + Add Line Item
+                  </button>
+                </div>
+
+                {invoiceError && <p className="text-sm text-[#e05252]">{invoiceError}</p>}
+
+                <div className="flex items-center justify-between pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowInvoice(false); resetInvoiceForm(); }}
+                    className="text-sm text-[#AAAAAA] hover:text-[#000] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={invoiceSubmitting}
+                    className="px-8 py-3 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  >
+                    {invoiceSubmitting ? 'Saving…' : 'Generate Invoice'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Add Client modal */}
       <AnimatePresence>

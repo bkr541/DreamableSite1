@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
     return res;
   } catch (err) {
     console.error('[login] error:', err);
-    return NextResponse.json({ ok: false, error: 'Internal server error.' }, { status: 500 });
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ ok: false, error: process.env.NODE_ENV === 'development' ? msg : 'Internal server error.' }, { status: 500 });
   }
 }
