@@ -170,6 +170,7 @@ model Project {
 
   name        String
   service     String
+  subCategory String? @map("sub_category")
   description String  @db.Text
   budgetRange String? @map("budget_range")
   timeline    String?

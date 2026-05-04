@@ -7,7 +7,7 @@ export default async function AdminPage() {
   const session = await getSession();
   if (!session || !session.admin) redirect('/portal');
 
-  const [totalUsers, totalProjects, activeProjects, openInquiries, recentInquiries, recentUsers, clients] =
+  const [totalUsers, totalProjects, activeProjects, openInquiries, recentInquiries, recentUsers, clients, companies, services, projects] =
     await Promise.all([
       prisma.user.count(),
       prisma.project.count(),
@@ -27,14 +27,28 @@ export default async function AdminPage() {
         where: { admin: false },
         orderBy: { createdAt: 'desc' },
         select: {
+          id: true, name: true, email: true, role: true, status: true, admin: true, createdAt: true,
+          company: { select: { id: true, name: true, website: true, status: true } },
+        },
+      }),
+      prisma.company.findMany({
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, status: true },
+      }),
+      prisma.service.findMany({
+        orderBy: { order: 'asc' },
+        select: {
           id: true,
           name: true,
-          email: true,
-          role: true,
-          status: true,
-          admin: true,
-          createdAt: true,
-          company: { select: { id: true, name: true, website: true, status: true } },
+          subCategories: { orderBy: { order: 'asc' }, select: { id: true, name: true } },
+        },
+      }),
+      prisma.project.findMany({
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, name: true, service: true, status: true, createdAt: true,
+          company: { select: { id: true, name: true } },
+          primaryUser: { select: { id: true, name: true, email: true } },
         },
       }),
     ]);
@@ -46,6 +60,9 @@ export default async function AdminPage() {
       recentInquiries={recentInquiries.map((i) => ({ ...i, createdAt: i.createdAt.toISOString() }))}
       recentUsers={recentUsers.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}
       clients={clients.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() }))}
+      companies={companies}
+      services={services}
+      projects={projects.map((p) => ({ ...p, createdAt: p.createdAt.toISOString() }))}
     />
   );
 }

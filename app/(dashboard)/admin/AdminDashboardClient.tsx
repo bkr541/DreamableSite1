@@ -20,6 +20,7 @@ import {
   Invoice03Icon,
   UserAdd02Icon,
   CancelCircleIcon,
+  Delete04Icon,
 } from '@hugeicons/core-free-icons';
 
 interface Inquiry {
@@ -52,12 +53,37 @@ interface ClientRecord {
   company: { id: string; name: string; website: string | null; status: string } | null;
 }
 
+interface Company {
+  id: string;
+  name: string;
+  status: string;
+}
+
+interface Service {
+  id: string;
+  name: string;
+  subCategories: { id: string; name: string }[];
+}
+
+interface ProjectRecord {
+  id: string;
+  name: string;
+  service: string;
+  status: string;
+  createdAt: string;
+  company: { id: string; name: string } | null;
+  primaryUser: { id: string; name: string; email: string } | null;
+}
+
 interface Props {
   session: SessionPayload;
   stats: { totalUsers: number; totalProjects: number; activeProjects: number; openInquiries: number };
   recentInquiries: Inquiry[];
   recentUsers: User[];
   clients: ClientRecord[];
+  companies: Company[];
+  services: Service[];
+  projects: ProjectRecord[];
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -120,7 +146,7 @@ function getDefaultInvoiceForm() {
   };
 }
 
-export default function AdminDashboardClient({ session, stats, recentInquiries, recentUsers, clients }: Props) {
+export default function AdminDashboardClient({ session, stats, recentInquiries, recentUsers, clients, companies, services, projects }: Props) {
   const router = useRouter();
   const [activeView, setActiveView] = useState<ViewId>('dashboard');
   const [clientsGroupOpen, setClientsGroupOpen] = useState(true);
@@ -143,6 +169,20 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
     setInvoiceForm(getDefaultInvoiceForm());
     setInvoiceFieldError(null);
     setInvoiceError('');
+  }
+
+  function openInvoiceForProject(p: ProjectRecord) {
+    const defaults = getDefaultInvoiceForm();
+    setInvoiceForm({
+      ...defaults,
+      clientName: p.primaryUser?.name ?? '',
+      clientEmail: p.primaryUser?.email ?? '',
+      clientCompany: p.company?.name ?? '',
+      projectName: p.name,
+    });
+    setInvoiceFieldError(null);
+    setInvoiceError('');
+    setShowInvoice(true);
   }
 
   async function handleGenerateInvoice(e: React.FormEvent) {
@@ -198,7 +238,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
       const data = await res.json();
       if (!res.ok) { setInvoiceError(data.error || 'Failed to save invoice.'); return; }
 
-      generateInvoicePDF({
+      await generateInvoicePDF({
         ...payload,
         issueDate: formatDate(payload.issueDate),
         dueDate: formatDate(payload.dueDate),
@@ -210,6 +250,55 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
       setInvoiceError('Unable to connect. Please try again.');
     } finally {
       setInvoiceSubmitting(false);
+    }
+  }
+
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [projectForm, setProjectForm] = useState({
+    name: '', companyId: '', primaryUserId: '', service: '', subCategory: '',
+    description: '', budgetRange: '', timeline: '',
+    status: 'ONBOARDING', startDate: '', targetEndDate: '',
+  });
+  const [projectFieldError, setProjectFieldError] = useState<{ field: string; message: string } | null>(null);
+  const [projectError, setProjectError] = useState('');
+  const [projectSubmitting, setProjectSubmitting] = useState(false);
+
+  function resetProjectForm() {
+    setProjectForm({
+      name: '', companyId: '', primaryUserId: '', service: '', subCategory: '',
+      description: '', budgetRange: '', timeline: '',
+      status: 'ONBOARDING', startDate: '', targetEndDate: '',
+    });
+    setProjectFieldError(null);
+    setProjectError('');
+  }
+
+  async function handleCreateProject(e: React.FormEvent) {
+    e.preventDefault();
+    setProjectFieldError(null);
+    setProjectError('');
+
+    if (!projectForm.name.trim()) { setProjectFieldError({ field: 'name', message: 'Project name is required.' }); return; }
+    if (!projectForm.companyId) { setProjectFieldError({ field: 'companyId', message: 'Company is required.' }); return; }
+    if (!projectForm.service) { setProjectFieldError({ field: 'service', message: 'Service is required.' }); return; }
+    if (!projectForm.description.trim()) { setProjectFieldError({ field: 'description', message: 'Description is required.' }); return; }
+
+    setProjectSubmitting(true);
+    try {
+      const res = await fetch('/api/admin/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(projectForm),
+      });
+      const data = await res.json();
+      if (!res.ok) { setProjectError(data.error || 'Something went wrong.'); return; }
+      setShowCreateProject(false);
+      resetProjectForm();
+      router.refresh();
+    } catch {
+      setProjectError('Unable to connect. Please try again.');
+    } finally {
+      setProjectSubmitting(false);
     }
   }
 
@@ -461,7 +550,77 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
           </div>
         )}
 
-        {activeView !== 'dashboard' && activeView !== 'workspace' && activeView !== 'clients' && (
+        {activeView === 'projects' && (
+          <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
+            <div className="px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-semibold text-[#1a1a1a]">Projects</h2>
+                <span className="px-2 py-0.5 rounded-full bg-[#F0F0F0] text-[11px] font-semibold text-[#888]">
+                  {projects.length}
+                </span>
+              </div>
+              <button
+                onClick={() => { resetProjectForm(); setShowCreateProject(true); }}
+                className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
+              >
+                <HugeiconsIcon icon={Briefcase06Icon} size={16} color="#ffffff" strokeWidth={1.5} />
+                Create Project
+              </button>
+            </div>
+
+            <div className="p-4 pt-0">
+              <div className="border border-[#EBEBEB] rounded-xl overflow-hidden">
+                <div className="grid grid-cols-[1fr_1fr_160px_80px] gap-4 px-6 py-3 bg-[#FAFAFA] border-b border-[#F0F0F0]">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Project</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Company</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Service</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Actions</p>
+                </div>
+
+                {projects.length === 0 ? (
+                  <p className="px-6 py-8 text-sm text-[#AAA]">No projects yet.</p>
+                ) : (
+                  <ul className="divide-y divide-[#F5F5F5]">
+                    {projects.map((p) => (
+                      <li key={p.id} className="grid grid-cols-[1fr_1fr_160px_80px] gap-4 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-[#1a1a1a] truncate">{p.name}</p>
+                            <Badge status={p.status} />
+                          </div>
+                          {p.primaryUser && <p className="text-xs text-[#888] truncate">{p.primaryUser.name}</p>}
+                        </div>
+                        <p className="text-sm text-[#555] truncate">{p.company?.name ?? '—'}</p>
+                        <p className="text-xs text-[#555] truncate">{p.service}</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => openInvoiceForProject(p)}
+                            className="text-[#AAAAAA] hover:text-[#1a2030] transition-colors"
+                            title="Generate invoice"
+                          >
+                            <HugeiconsIcon icon={Invoice03Icon} size={18} color="currentColor" strokeWidth={1.5} />
+                          </button>
+                          <button
+                            onClick={async () => {
+                              await fetch(`/api/admin/projects/${p.id}`, { method: 'DELETE' });
+                              router.refresh();
+                            }}
+                            className="text-[#e05252] hover:text-[#c03a3a] transition-colors"
+                            title="Delete project"
+                          >
+                            <HugeiconsIcon icon={Delete04Icon} size={18} color="currentColor" strokeWidth={1.5} />
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeView !== 'dashboard' && activeView !== 'workspace' && activeView !== 'clients' && activeView !== 'projects' && (
           <div className="bg-white rounded-2xl border border-[#EBEBEB] p-10 text-center">
             <p className="text-sm text-[#AAA]">Coming soon</p>
           </div>
@@ -469,6 +628,227 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
           </motion.div>
         </AnimatePresence>
       </div>
+
+      {/* Create Project modal */}
+      <AnimatePresence>
+        {showCreateProject && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+              onClick={() => { setShowCreateProject(false); resetProjectForm(); }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 16 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="relative w-full max-w-[720px] rounded-3xl bg-white shadow-xl border border-[#F0F0F0] max-h-[90vh] overflow-y-auto"
+            >
+              <button
+                type="button"
+                onClick={() => { setShowCreateProject(false); resetProjectForm(); }}
+                className="absolute top-5 right-5 text-[#CCCCCC] hover:text-[#555] transition-colors z-10"
+              >
+                <HugeiconsIcon icon={CancelCircleIcon} size={22} color="currentColor" strokeWidth={1.5} />
+              </button>
+              <form onSubmit={handleCreateProject} className="p-8 space-y-5" noValidate>
+                <div className="flex items-center gap-3">
+                  <HugeiconsIcon icon={Briefcase06Icon} size={28} color="#1a2030" strokeWidth={2} />
+                  <p className="text-xl font-semibold text-[#1a1a1a]">Create Project</p>
+                </div>
+
+                {/* Project Details */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Project Details</p>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-[#555]">Project Name <span className="text-red-400">*</span></label>
+                    <input
+                      value={projectForm.name}
+                      onChange={e => { setProjectForm(f => ({ ...f, name: e.target.value })); setProjectFieldError(null); }}
+                      placeholder="Brand Identity & Website Redesign"
+                      className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${projectFieldError?.field === 'name' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                    />
+                    {projectFieldError?.field === 'name' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Company <span className="text-red-400">*</span></label>
+                      <select
+                        value={projectForm.companyId}
+                        onChange={e => { setProjectForm(f => ({ ...f, companyId: e.target.value, primaryUserId: '' })); setProjectFieldError(null); }}
+                        className={`w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${projectFieldError?.field === 'companyId' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                      >
+                        <option value="">Select a company…</option>
+                        {companies.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                      {projectFieldError?.field === 'companyId' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Primary Contact <span className="text-[#CCC] font-normal normal-case">— optional</span></label>
+                      <select
+                        value={projectForm.primaryUserId}
+                        onChange={e => setProjectForm(f => ({ ...f, primaryUserId: e.target.value }))}
+                        className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      >
+                        <option value="">None</option>
+                        {clients
+                          .filter(c => !projectForm.companyId || c.company?.id === projectForm.companyId)
+                          .map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Service <span className="text-red-400">*</span></label>
+                      <select
+                        value={projectForm.service}
+                        onChange={e => { setProjectForm(f => ({ ...f, service: e.target.value, subCategory: '' })); setProjectFieldError(null); }}
+                        className={`w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${projectFieldError?.field === 'service' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                      >
+                        <option value="">Select a service…</option>
+                        {services.map(s => (
+                          <option key={s.id} value={s.name}>{s.name}</option>
+                        ))}
+                      </select>
+                      {projectFieldError?.field === 'service' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Sub-Category <span className="text-[#CCC] font-normal normal-case">— optional</span></label>
+                      <select
+                        value={projectForm.subCategory}
+                        onChange={e => setProjectForm(f => ({ ...f, subCategory: e.target.value }))}
+                        disabled={!projectForm.service}
+                        className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <option value="">{projectForm.service ? 'Select a sub-category…' : 'Select a service first'}</option>
+                        {services
+                          .find(s => s.name === projectForm.service)
+                          ?.subCategories.map(sc => (
+                            <option key={sc.id} value={sc.name}>{sc.name}</option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-[#555]">Description <span className="text-red-400">*</span></label>
+                    <textarea
+                      value={projectForm.description}
+                      onChange={e => { setProjectForm(f => ({ ...f, description: e.target.value })); setProjectFieldError(null); }}
+                      placeholder="Brief description of the project scope and goals…"
+                      rows={3}
+                      className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all resize-none ${projectFieldError?.field === 'description' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                    />
+                    {projectFieldError?.field === 'description' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
+                  </div>
+                </div>
+
+                {/* Scope & Timeline */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Scope & Timeline <span className="normal-case text-[#CCC] font-normal">— optional</span></p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Budget Range</label>
+                      <select
+                        value={projectForm.budgetRange}
+                        onChange={e => setProjectForm(f => ({ ...f, budgetRange: e.target.value }))}
+                        className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      >
+                        <option value="">Select…</option>
+                        <option>Under $5K</option>
+                        <option>$5K – $15K</option>
+                        <option>$15K – $30K</option>
+                        <option>$30K – $60K</option>
+                        <option>$60K+</option>
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Timeline</label>
+                      <select
+                        value={projectForm.timeline}
+                        onChange={e => setProjectForm(f => ({ ...f, timeline: e.target.value }))}
+                        className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      >
+                        <option value="">Select…</option>
+                        <option>ASAP</option>
+                        <option>1 – 2 months</option>
+                        <option>2 – 4 months</option>
+                        <option>4 – 6 months</option>
+                        <option>6+ months</option>
+                        <option>Ongoing</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Start Date</label>
+                      <input
+                        type="date"
+                        value={projectForm.startDate}
+                        onChange={e => setProjectForm(f => ({ ...f, startDate: e.target.value }))}
+                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Target End Date</label>
+                      <input
+                        type="date"
+                        value={projectForm.targetEndDate}
+                        onChange={e => setProjectForm(f => ({ ...f, targetEndDate: e.target.value }))}
+                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status */}
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Status</p>
+                  <div className="flex flex-col gap-1.5">
+                    <select
+                      value={projectForm.status}
+                      onChange={e => setProjectForm(f => ({ ...f, status: e.target.value }))}
+                      className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                    >
+                      <option value="ONBOARDING">Onboarding</option>
+                      <option value="ACTIVE">Active</option>
+                      <option value="COMPLETED">Completed</option>
+                      <option value="CANCELLED">Cancelled</option>
+                    </select>
+                  </div>
+                </div>
+
+                {projectError && <p className="text-sm text-[#e05252]">{projectError}</p>}
+
+                <div className="flex items-center justify-between pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowCreateProject(false); resetProjectForm(); }}
+                    className="text-sm text-[#AAAAAA] hover:text-[#000] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={projectSubmitting}
+                    className="px-8 py-3 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                  >
+                    {projectSubmitting ? 'Creating…' : 'Create Project'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Generate Invoice modal */}
       <AnimatePresence>

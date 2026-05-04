@@ -64,6 +64,12 @@ const SERVICES = [
     ],
   },
   {
+    name: 'Support',
+    subCategories: [
+      'Technical Support',
+    ],
+  },
+  {
     name: 'Other',
     subCategories: [
       'AI Integrations',
