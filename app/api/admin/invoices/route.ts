@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Unauthorized.' }, { status: 401 });
   }
 
-  const { invoiceNumber, issueDate, dueDate, clientName, clientEmail, clientCompany, projectName, taxRate, lineItems } =
+  const { invoiceNumber, issueDate, dueDate, clientName, clientEmail, clientCompany, projectName, taxRate, status, lineItems } =
     await req.json();
 
   if (!invoiceNumber?.trim() || !clientName?.trim() || !clientEmail?.trim() || !projectName?.trim() || !issueDate || !dueDate) {
@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
         clientCompany: clientCompany?.trim() || null,
         projectName: projectName.trim(),
         taxRate: Number(taxRate) || 0,
+        status: status || 'Unsent',
         lineItems: {
           create: lineItems.map((item: { description: string; qty: number; rate: number }) => ({
             description: item.description,

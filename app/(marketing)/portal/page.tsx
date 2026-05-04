@@ -166,7 +166,7 @@ export default function Portal() {
       const res = await fetch('/api/auth/update-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: resetEmail, password: newPassword }),
+        body: JSON.stringify({ email: resetEmail, code: resetCode, password: newPassword }),
       });
       const data = await res.json();
       if (!res.ok) {

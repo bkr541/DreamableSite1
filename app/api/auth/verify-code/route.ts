@@ -11,11 +11,16 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },
-      select: { templogincode: true },
+      select: { templogincode: true, tempLoginCodeExpiresAt: true },
     });
 
-    if (!user?.templogincode || user.templogincode.toUpperCase() !== code.toUpperCase().trim()) {
-      return NextResponse.json({ ok: false, error: 'Invalid code.' }, { status: 400 });
+    if (
+      !user?.templogincode ||
+      user.templogincode.toUpperCase() !== code.toUpperCase().trim() ||
+      !user.tempLoginCodeExpiresAt ||
+      user.tempLoginCodeExpiresAt < new Date()
+    ) {
+      return NextResponse.json({ ok: false, error: 'Invalid or expired code.' }, { status: 400 });
     }
 
     return NextResponse.json({ ok: true });

@@ -61,7 +61,8 @@ model User {
   status       String  @default("INVITED")
   admin        Boolean @default(false)
 
-  templogincode String? @map("templogincode")
+  templogincode          String?   @map("templogincode")
+  tempLoginCodeExpiresAt DateTime? @map("temp_login_code_expires_at") @db.Timestamptz()
 
   invitedAt   DateTime? @map("invited_at") @db.Timestamptz()
   lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz()
@@ -137,6 +138,7 @@ model Invoice {
   clientCompany String? @map("client_company")
   projectName   String  @map("project_name")
   taxRate       Float   @default(0) @map("tax_rate")
+  status        String  @default("Unsent")
 
   lineItems InvoiceLineItem[]
 

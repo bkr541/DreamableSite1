@@ -12,7 +12,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const {
     invoiceNumber, issueDate, dueDate,
     clientName, clientEmail, clientCompany,
-    projectName, taxRate, lineItems,
+    projectName, taxRate, status, lineItems,
   } = await req.json();
 
   if (!invoiceNumber?.trim()) return NextResponse.json({ ok: false, error: 'Invoice number is required.' }, { status: 400 });
@@ -39,6 +39,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           clientCompany: clientCompany?.trim() || null,
           projectName: projectName.trim(),
           taxRate: taxRate ?? 0,
+          status: status || 'Unsent',
           lineItems: {
             create: lineItems.map((item: { description: string; qty: number; rate: number }) => ({
               description: item.description,

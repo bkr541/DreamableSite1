@@ -57,7 +57,11 @@ export async function POST(req: NextRequest) {
 
     if (user) {
       const code = generateCode();
-      await prisma.user.update({ where: { id: user.id }, data: { templogincode: code } });
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { templogincode: code, tempLoginCodeExpiresAt: expiresAt },
+      });
 
       try {
         await sendCodeEmail(user.email, code);

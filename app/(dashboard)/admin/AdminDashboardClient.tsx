@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ChevronDown } from 'lucide-react';
 import PasswordInput from '@/components/PasswordInput';
 import { generateInvoicePDF, previewInvoicePDF } from '@/lib/generateInvoice';
@@ -11,7 +11,7 @@ import { SessionPayload } from '@/lib/session';
 import { motion, AnimatePresence } from 'motion/react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
-  PermanentJobIcon,
+  ChartRoseIcon,
   UserGroup02Icon,
   Briefcase06Icon,
   WorkflowSquare03Icon,
@@ -23,6 +23,13 @@ import {
   Delete04Icon,
   TaskEdit01Icon,
   FileViewIcon,
+  Logout02Icon,
+  UserCircleIcon,
+  User03Icon,
+  Mail01Icon,
+  Shield01Icon,
+  Building01Icon,
+  Link01Icon,
 } from '@hugeicons/core-free-icons';
 
 interface Inquiry {
@@ -72,6 +79,7 @@ interface InvoiceRecord {
   dueDate: string;
   taxRate: number;
   createdAt: string;
+  status: string;
   lineItems: { description: string; qty: number; rate: number }[];
 }
 
@@ -101,6 +109,7 @@ interface Props {
   services: Service[];
   projects: ProjectRecord[];
   invoices: InvoiceRecord[];
+  adminCompany: { id: string; name: string; website: string | null } | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -111,6 +120,9 @@ const STATUS_COLORS: Record<string, string> = {
   INVITED: 'bg-purple-100 text-purple-700',
   ONBOARDING: 'bg-sky-100 text-sky-700',
   COMPLETED: 'bg-gray-100 text-gray-600',
+  Unsent: 'bg-gray-100 text-gray-500',
+  'Not Paid': 'bg-amber-100 text-amber-700',
+  Paid: 'bg-green-100 text-green-700',
 };
 
 function Badge({ status }: { status: string }) {
@@ -127,7 +139,7 @@ function fmt(iso: string) {
 }
 
 const NAV_ITEMS = [
-  { id: 'dashboard',     label: 'Dashboard',     icon: PermanentJobIcon },
+  { id: 'dashboard',     label: 'Dashboard',     icon: ChartRoseIcon },
   { id: 'clients',       label: 'Clients',       icon: UserGroup02Icon },
   { id: 'projects',      label: 'Projects',      icon: Briefcase06Icon },
   { id: 'workspace',     label: 'Workspace',     icon: WorkflowSquare03Icon },
@@ -135,15 +147,16 @@ const NAV_ITEMS = [
   { id: 'notifications', label: 'Notifications', icon: ComplaintIcon },
 ] as const;
 
-type ViewId = typeof NAV_ITEMS[number]['id'];
+type ViewId = typeof NAV_ITEMS[number]['id'] | 'profile';
 
 const VIEW_META: Record<ViewId, { title: string; subtitle: string }> = {
-  dashboard:     { title: 'Overview',       subtitle: 'All activity across Dreamable.studio' },
-  clients:       { title: 'Clients',        subtitle: 'Manage your client accounts and relationships' },
-  projects:      { title: 'Projects',       subtitle: 'Track and manage all active projects' },
-  workspace:     { title: 'Workspace',      subtitle: 'Tools and shared resources for your team' },
-  billing:       { title: 'Billing',        subtitle: 'Invoices, payments, and subscription details' },
-  notifications: { title: 'Notifications', subtitle: 'Stay up to date with recent activity' },
+  dashboard:     { title: 'Overview',         subtitle: 'All activity across Dreamable.studio' },
+  clients:       { title: 'Clients',          subtitle: 'Manage your client accounts and relationships' },
+  projects:      { title: 'Projects',         subtitle: 'Track and manage all active projects' },
+  workspace:     { title: 'Workspace',        subtitle: 'Tools and shared resources for your team' },
+  billing:       { title: 'Billing',          subtitle: 'Invoices, payments, and subscription details' },
+  notifications: { title: 'Notifications',   subtitle: 'Stay up to date with recent activity' },
+  profile:       { title: 'User Information', subtitle: 'Your account details' },
 };
 
 function getDefaultInvoiceForm() {
@@ -159,16 +172,20 @@ function getDefaultInvoiceForm() {
     clientCompany: '',
     projectName: '',
     taxRate: '0',
+    status: 'Unsent',
     lineItems: [{ description: '', qty: '1', rate: '' }],
   };
 }
 
-export default function AdminDashboardClient({ session, stats, recentInquiries, recentUsers, clients, companies, services, projects, invoices }: Props) {
+export default function AdminDashboardClient({ session, stats, recentInquiries, recentUsers, clients, companies, services, projects, invoices, adminCompany }: Props) {
   const router = useRouter();
   const [activeView, setActiveView] = useState<ViewId>('dashboard');
   const [billingSubView, setBillingSubView] = useState<'invoices' | null>(null);
   const [clientsGroupOpen, setClientsGroupOpen] = useState(true);
   const [expandedClientIds, setExpandedClientIds] = useState<Set<string>>(new Set());
+  const [clientFilter, setClientFilter] = useState({ search: '', status: '' });
+  const [projectFilter, setProjectFilter] = useState({ search: '', status: '', service: '' });
+  const [invoiceFilter, setInvoiceFilter] = useState({ search: '', status: '' });
 
   function toggleClientExpand(id: string) {
     setExpandedClientIds(prev => {
@@ -204,6 +221,28 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
   const [previewInvoiceNumber, setPreviewInvoiceNumber] = useState('');
   const [previewLoading, setPreviewLoading] = useState(false);
 
+  const initialProfile = useRef({
+    name: session.name,
+    email: session.email,
+    companyName: adminCompany?.name ?? '',
+    companyWebsite: adminCompany?.website ?? '',
+  });
+  const [profileForm, setProfileForm] = useState({ ...initialProfile.current });
+  const [profileFieldError, setProfileFieldError] = useState<{ field: string; message: string } | null>(null);
+  const [profileError, setProfileError] = useState('');
+  const [profileSubmitting, setProfileSubmitting] = useState(false);
+
+  const [toast, setToast] = useState('');
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showToast(message: string) {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast(message);
+    toastTimer.current = setTimeout(() => setToast(''), 3000);
+  }
+
+  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+
   function resetInvoiceForm() {
     setInvoiceForm(getDefaultInvoiceForm());
     setInvoiceFieldError(null);
@@ -221,6 +260,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
       clientCompany: inv.clientCompany ?? '',
       projectName: inv.projectName,
       taxRate: String(inv.taxRate * 100),
+      status: inv.status,
       lineItems: inv.lineItems.map(li => ({
         description: li.description,
         qty: String(li.qty),
@@ -263,6 +303,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
       clientCompany: editInvForm.clientCompany.trim(),
       projectName: editInvForm.projectName.trim(),
       taxRate: parseFloat(editInvForm.taxRate) / 100 || 0,
+      status: editInvForm.status,
       lineItems: editInvForm.lineItems.map(item => ({
         description: item.description.trim(),
         qty: parseFloat(item.qty),
@@ -372,6 +413,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
       clientCompany: invoiceForm.clientCompany.trim(),
       projectName: invoiceForm.projectName.trim(),
       taxRate: parseFloat(invoiceForm.taxRate) / 100 || 0,
+      status: invoiceForm.status,
       lineItems: invoiceForm.lineItems.map(item => ({
         description: item.description.trim(),
         qty: parseFloat(item.qty),
@@ -491,6 +533,47 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
     router.push('/portal');
   }
 
+  async function handleSaveProfile(e: React.FormEvent) {
+    e.preventDefault();
+    setProfileFieldError(null);
+    setProfileError('');
+
+    if (!profileForm.name.trim()) {
+      setProfileFieldError({ field: 'name', message: 'Name is required.' });
+      return;
+    }
+    if (!profileForm.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileForm.email)) {
+      setProfileFieldError({ field: 'email', message: 'A valid email is required.' });
+      return;
+    }
+
+    setProfileSubmitting(true);
+    try {
+      const res = await fetch('/api/admin/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: profileForm.name,
+          email: profileForm.email,
+          companyName: profileForm.companyName,
+          companyWebsite: profileForm.companyWebsite,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setProfileError(data.error || 'Failed to update profile.');
+        return;
+      }
+      initialProfile.current = { ...profileForm };
+      showToast('Profile updated successfully.');
+      router.refresh();
+    } catch {
+      setProfileError('Unable to connect. Please try again.');
+    } finally {
+      setProfileSubmitting(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#F7F7F8]">
       {/* Top nav */}
@@ -513,7 +596,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                   title={label}
                   className={
                     isActive
-                      ? 'relative flex items-center justify-center gap-1.5 px-4 py-2 w-[120px] rounded-full text-[#1a2030] text-xs font-medium transition-[width]'
+                      ? 'relative flex items-center justify-center gap-1.5 px-5 py-2 rounded-full text-[#1a2030] text-sm font-medium'
                       : 'relative p-2 rounded-full text-[#AAAAAA] hover:bg-[#EBEBEB] hover:text-[#555] transition-colors'
                   }
                 >
@@ -527,7 +610,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                   <span className="relative z-10 flex items-center justify-center gap-1.5">
                     <HugeiconsIcon
                       icon={icon}
-                      size={16}
+                      size={isActive ? 24 : 16}
                       color={isActive ? '#1a2030' : '#AAAAAA'}
                       strokeWidth={1.5}
                     />
@@ -547,14 +630,24 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
             })}
           </div>
 
-          {/* Right: Email + Sign out */}
-          <div className="flex items-center justify-end gap-4">
-            <span className="text-sm text-[#707070] hidden sm:block">{session.email}</span>
+          {/* Right: Profile icon + Name + Sign out */}
+          <div className="flex items-center justify-end gap-3">
+            <button
+              onClick={() => { setActiveView('profile'); setBillingSubView(null); }}
+              title="User information"
+              className="inline-flex items-center gap-2 h-8 sm:h-9 pl-1 pr-3 sm:pr-4 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all"
+            >
+              <span className="inline-flex items-center justify-center h-6 w-6 sm:h-7 sm:w-7 rounded-full shrink-0 bg-white">
+                <HugeiconsIcon icon={UserCircleIcon} size={20} color="#1a2030" strokeWidth={1.75} />
+              </span>
+              <span className="hidden sm:block">{session.name}</span>
+            </button>
             <button
               onClick={logout}
-              className="inline-flex items-center justify-center h-8 sm:h-9 px-3 sm:px-5 rounded-full bg-[#1a2030] text-white text-[12px] sm:text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all whitespace-nowrap"
+              title="Sign out"
+              className="inline-flex items-center justify-center h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-[#1a2030] text-white hover:-translate-y-0.5 hover:shadow-lg transition-all"
             >
-              Sign out
+              <HugeiconsIcon icon={Logout02Icon} size={16} color="#ffffff" strokeWidth={1.5} />
             </button>
           </div>
 
@@ -625,7 +718,11 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
               >
                 <h2 className="text-sm font-semibold text-[#1a1a1a]">Clients</h2>
                 <span className="px-2 py-0.5 rounded-full bg-[#F0F0F0] text-[11px] font-semibold text-[#888]">
-                  {clients.length}
+                  {clients.filter(c => {
+                    if (clientFilter.search) { const q = clientFilter.search.toLowerCase(); if (!c.name.toLowerCase().includes(q) && !c.email.toLowerCase().includes(q)) return false; }
+                    if (clientFilter.status && c.status !== clientFilter.status) return false;
+                    return true;
+                  }).length}
                 </span>
                 <motion.div animate={{ rotate: clientsGroupOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
                   <ChevronDown size={15} strokeWidth={1.75} className="text-[#AAAAAA]" />
@@ -649,6 +746,32 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
               }}
             >
               <div className="overflow-hidden">
+                {/* Filter bar */}
+                <div className="px-6 pt-4 pb-3 flex items-center gap-3 border-b border-[#F0F0F0]">
+                  <input
+                    type="text"
+                    placeholder="Search by name or email…"
+                    value={clientFilter.search}
+                    onChange={e => setClientFilter(f => ({ ...f, search: e.target.value }))}
+                    className="flex-1 bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                  />
+                  <select
+                    value={clientFilter.status}
+                    onChange={e => setClientFilter(f => ({ ...f, status: e.target.value }))}
+                    className="bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                  >
+                    <option value="">All statuses</option>
+                    <option value="INVITED">Invited</option>
+                    <option value="ACTIVE">Active</option>
+                    <option value="ONBOARDING">Onboarding</option>
+                    <option value="COMPLETED">Completed</option>
+                  </select>
+                  {(clientFilter.search || clientFilter.status) && (
+                    <button onClick={() => setClientFilter({ search: '', status: '' })} className="text-xs text-[#AAAAAA] hover:text-[#1a2030] transition-colors whitespace-nowrap">
+                      Clear
+                    </button>
+                  )}
+                </div>
                 <div className="p-4">
                   <div className="border border-[#EBEBEB] rounded-xl overflow-hidden">
                   {/* Table header */}
@@ -663,7 +786,11 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                     <p className="px-6 py-8 text-sm text-[#AAA]">No clients yet.</p>
                   ) : (
                     <ul className="divide-y divide-[#F5F5F5]">
-                      {clients.map((c) => {
+                      {clients.filter(c => {
+                        if (clientFilter.search) { const q = clientFilter.search.toLowerCase(); if (!c.name.toLowerCase().includes(q) && !c.email.toLowerCase().includes(q)) return false; }
+                        if (clientFilter.status && c.status !== clientFilter.status) return false;
+                        return true;
+                      }).map((c) => {
                         const clientProjects = projects.filter(p => p.primaryUser?.id === c.id);
                         const isExpanded = expandedClientIds.has(c.id);
                         return (
@@ -703,7 +830,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                                 transition={{ duration: 0.2 }}
                                 className="flex items-center justify-center"
                               >
-                                <ChevronDown size={15} strokeWidth={1.75} className={`transition-colors ${clientProjects.length === 0 ? 'text-[#E0E0E0]' : 'text-[#AAAAAA]'}`} />
+                                <ChevronDown size={15} strokeWidth={1.75} className={`transition-colors ${clientProjects.length === 0 ? 'text-[#E0E0E0]' : 'text-[#7c3aed]'}`} />
                               </motion.div>
                             </div>
 
@@ -759,7 +886,12 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
               <div className="flex items-center gap-3">
                 <h2 className="text-sm font-semibold text-[#1a1a1a]">Projects</h2>
                 <span className="px-2 py-0.5 rounded-full bg-[#F0F0F0] text-[11px] font-semibold text-[#888]">
-                  {projects.length}
+                  {projects.filter(p => {
+                    if (projectFilter.search && !p.name.toLowerCase().includes(projectFilter.search.toLowerCase())) return false;
+                    if (projectFilter.status && p.status !== projectFilter.status) return false;
+                    if (projectFilter.service && p.service !== projectFilter.service) return false;
+                    return true;
+                  }).length}
                 </span>
               </div>
               <button
@@ -771,20 +903,60 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
               </button>
             </div>
 
+            {/* Filter bar */}
+            <div className="px-6 pb-4 flex items-center gap-3 border-b border-[#F0F0F0]">
+              <input
+                type="text"
+                placeholder="Search by project name…"
+                value={projectFilter.search}
+                onChange={e => setProjectFilter(f => ({ ...f, search: e.target.value }))}
+                className="flex-1 bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+              />
+              <select
+                value={projectFilter.status}
+                onChange={e => setProjectFilter(f => ({ ...f, status: e.target.value }))}
+                className="bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+              >
+                <option value="">All statuses</option>
+                <option value="ONBOARDING">Onboarding</option>
+                <option value="ACTIVE">Active</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+              <select
+                value={projectFilter.service}
+                onChange={e => setProjectFilter(f => ({ ...f, service: e.target.value }))}
+                className="bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+              >
+                <option value="">All services</option>
+                {services.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+              </select>
+              {(projectFilter.search || projectFilter.status || projectFilter.service) && (
+                <button onClick={() => setProjectFilter({ search: '', status: '', service: '' })} className="text-xs text-[#AAAAAA] hover:text-[#1a2030] transition-colors whitespace-nowrap">
+                  Clear
+                </button>
+              )}
+            </div>
+
             <div className="p-4 pt-0">
               <div className="border border-[#EBEBEB] rounded-xl overflow-hidden">
                 <div className="grid grid-cols-[1fr_1fr_160px_80px] gap-4 px-6 py-3 bg-[#FAFAFA] border-b border-[#F0F0F0]">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Project</p>
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Company</p>
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Service</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Actions</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] text-center">Actions</p>
                 </div>
 
                 {projects.length === 0 ? (
                   <p className="px-6 py-8 text-sm text-[#AAA]">No projects yet.</p>
                 ) : (
                   <ul className="divide-y divide-[#F5F5F5]">
-                    {projects.map((p) => (
+                    {projects.filter(p => {
+                      if (projectFilter.search && !p.name.toLowerCase().includes(projectFilter.search.toLowerCase())) return false;
+                      if (projectFilter.status && p.status !== projectFilter.status) return false;
+                      if (projectFilter.service && p.service !== projectFilter.service) return false;
+                      return true;
+                    }).map((p) => (
                       <li key={p.id} className="grid grid-cols-[1fr_1fr_160px_80px] gap-4 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
@@ -795,10 +967,10 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                         </div>
                         <p className="text-sm text-[#555] truncate">{p.company?.name ?? '—'}</p>
                         <p className="text-xs text-[#555] truncate">{p.service}</p>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-center gap-2">
                           <button
                             onClick={() => openInvoiceForProject(p)}
-                            className="text-[#AAAAAA] hover:text-[#1a2030] transition-colors"
+                            className="text-[#7c3aed] hover:text-[#5b21b6] transition-colors"
                             title="Generate invoice"
                           >
                             <HugeiconsIcon icon={Invoice03Icon} size={18} color="currentColor" strokeWidth={1.5} />
@@ -854,7 +1026,11 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 <span className="text-[#DDDDDD] text-xs">/</span>
                 <h2 className="text-sm font-semibold text-[#1a1a1a]">Invoices</h2>
                 <span className="px-2 py-0.5 rounded-full bg-[#F0F0F0] text-[11px] font-semibold text-[#888]">
-                  {invoices.length}
+                  {invoices.filter(inv => {
+                    if (invoiceFilter.search) { const q = invoiceFilter.search.toLowerCase(); if (!inv.invoiceNumber.toLowerCase().includes(q) && !inv.clientName.toLowerCase().includes(q)) return false; }
+                    if (invoiceFilter.status && inv.status !== invoiceFilter.status) return false;
+                    return true;
+                  }).length}
                 </span>
               </div>
               <button
@@ -866,26 +1042,57 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
               </button>
             </div>
 
+            {/* Filter bar */}
+            <div className="px-6 pb-4 flex items-center gap-3 border-b border-[#F0F0F0]">
+              <input
+                type="text"
+                placeholder="Search by invoice # or client…"
+                value={invoiceFilter.search}
+                onChange={e => setInvoiceFilter(f => ({ ...f, search: e.target.value }))}
+                className="flex-1 bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+              />
+              <select
+                value={invoiceFilter.status}
+                onChange={e => setInvoiceFilter(f => ({ ...f, status: e.target.value }))}
+                className="bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+              >
+                <option value="">All statuses</option>
+                <option value="Unsent">Unsent</option>
+                <option value="Not Paid">Not Paid</option>
+                <option value="Paid">Paid</option>
+              </select>
+              {(invoiceFilter.search || invoiceFilter.status) && (
+                <button onClick={() => setInvoiceFilter({ search: '', status: '' })} className="text-xs text-[#AAAAAA] hover:text-[#1a2030] transition-colors whitespace-nowrap">
+                  Clear
+                </button>
+              )}
+            </div>
+
             <div className="p-4 pt-0">
               <div className="border border-[#EBEBEB] rounded-xl overflow-hidden">
-                <div className="grid grid-cols-[1fr_1fr_140px_120px_100px_72px] gap-4 px-6 py-3 bg-[#FAFAFA] border-b border-[#F0F0F0]">
+                <div className="grid grid-cols-[1fr_1fr_140px_120px_100px_100px_72px] gap-4 px-6 py-3 bg-[#FAFAFA] border-b border-[#F0F0F0]">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Invoice #</p>
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Client</p>
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Project</p>
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Issue Date</p>
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] text-right">Total</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Actions</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Status</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] text-center">Actions</p>
                 </div>
 
                 {invoices.length === 0 ? (
                   <p className="px-6 py-8 text-sm text-[#AAA]">No invoices yet.</p>
                 ) : (
                   <ul className="divide-y divide-[#F5F5F5]">
-                    {invoices.map((inv) => {
+                    {invoices.filter(inv => {
+                      if (invoiceFilter.search) { const q = invoiceFilter.search.toLowerCase(); if (!inv.invoiceNumber.toLowerCase().includes(q) && !inv.clientName.toLowerCase().includes(q)) return false; }
+                      if (invoiceFilter.status && inv.status !== invoiceFilter.status) return false;
+                      return true;
+                    }).map((inv) => {
                       const subtotal = inv.lineItems.reduce((sum, item) => sum + item.qty * item.rate, 0);
                       const total = subtotal + subtotal * inv.taxRate;
                       return (
-                        <li key={inv.id} className="grid grid-cols-[1fr_1fr_140px_120px_100px_72px] gap-4 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors">
+                        <li key={inv.id} className="grid grid-cols-[1fr_1fr_140px_120px_100px_100px_72px] gap-4 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors">
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-[#1a1a1a] truncate">{inv.invoiceNumber}</p>
                             <p className="text-xs text-[#AAA] truncate">Due {inv.dueDate}</p>
@@ -899,17 +1106,18 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                           <p className="text-sm font-semibold text-[#1a1a1a] text-right">
                             ${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
-                          <div className="flex items-center gap-2">
+                          <Badge status={inv.status} />
+                          <div className="flex items-center justify-center gap-2">
                             <button
                               onClick={() => openEditInvoice(inv)}
-                              className="text-[#AAAAAA] hover:text-[#1a2030] transition-colors"
+                              className="text-[#2563eb] hover:text-[#1d4ed8] transition-colors"
                               title="Edit invoice"
                             >
                               <HugeiconsIcon icon={TaskEdit01Icon} size={18} color="currentColor" strokeWidth={1.5} />
                             </button>
                             <button
                               onClick={() => openPreviewInvoice(inv)}
-                              className="text-[#AAAAAA] hover:text-[#1a2030] transition-colors"
+                              className="text-[#0891b2] hover:text-[#0e7490] transition-colors"
                               title="Preview invoice"
                             >
                               <HugeiconsIcon icon={FileViewIcon} size={18} color="currentColor" strokeWidth={1.5} />
@@ -925,7 +1133,133 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
           </div>
         )}
 
-        {activeView !== 'dashboard' && activeView !== 'workspace' && activeView !== 'clients' && activeView !== 'projects' && activeView !== 'billing' && (
+        {activeView === 'profile' && (
+          <div className="max-w-4xl">
+            <form onSubmit={handleSaveProfile} noValidate className="flex flex-col gap-6">
+              <div className="grid grid-cols-2 gap-6 items-stretch">
+
+              {/* User Information */}
+              <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
+                <div className="flex items-center gap-3 px-8 py-6 border-b border-[#F0F0F0]">
+                  <HugeiconsIcon icon={UserCircleIcon} size={28} color="#1a2030" strokeWidth={2} />
+                  <div>
+                    <p className="text-xl font-semibold text-[#1a1a1a]">User Information</p>
+                    <p className="text-sm text-[#888]">Your personal account details</p>
+                  </div>
+                </div>
+                <div className="divide-y divide-[#F0F0F0]">
+                  <div className="grid grid-cols-[140px_1fr] gap-4 px-8 py-5 items-center">
+                    <label htmlFor="profile-name" className="flex items-center gap-3 text-xs font-semibold text-[#999] uppercase tracking-widest">
+                      <HugeiconsIcon icon={User03Icon} size={20} color="#BBBBBB" strokeWidth={1.5} />
+                      Name
+                    </label>
+                    <div>
+                      <input
+                        id="profile-name"
+                        type="text"
+                        value={profileForm.name}
+                        onChange={(e) => { setProfileForm(f => ({ ...f, name: e.target.value })); setProfileFieldError(null); }}
+                        className={`w-full bg-[#FAFAFA] border rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${profileFieldError?.field === 'name' ? 'border-[#e05252]' : 'border-[#EBEBEB]'}`}
+                        placeholder="Your name"
+                      />
+                      {profileFieldError?.field === 'name' && <p className="text-xs text-[#e05252] mt-1.5">{profileFieldError.message}</p>}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[140px_1fr] gap-4 px-8 py-5 items-center">
+                    <label htmlFor="profile-email" className="flex items-center gap-3 text-xs font-semibold text-[#999] uppercase tracking-widest">
+                      <HugeiconsIcon icon={Mail01Icon} size={20} color="#BBBBBB" strokeWidth={1.5} />
+                      Email
+                    </label>
+                    <div>
+                      <input
+                        id="profile-email"
+                        type="text"
+                        value={profileForm.email}
+                        onChange={(e) => { setProfileForm(f => ({ ...f, email: e.target.value })); setProfileFieldError(null); }}
+                        className={`w-full bg-[#FAFAFA] border rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${profileFieldError?.field === 'email' ? 'border-[#e05252]' : 'border-[#EBEBEB]'}`}
+                        placeholder="you@example.com"
+                      />
+                      {profileFieldError?.field === 'email' && <p className="text-xs text-[#e05252] mt-1.5">{profileFieldError.message}</p>}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[140px_1fr] gap-4 px-8 py-5 items-center">
+                    <p className="flex items-center gap-3 text-xs font-semibold text-[#999] uppercase tracking-widest">
+                      <HugeiconsIcon icon={Shield01Icon} size={20} color="#BBBBBB" strokeWidth={1.5} />
+                      Role
+                    </p>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide bg-purple-100 text-purple-700 w-fit">
+                      {session.admin ? 'Administrator' : 'User'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Company Information */}
+              <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
+                <div className="flex items-center gap-3 px-8 py-6 border-b border-[#F0F0F0]">
+                  <HugeiconsIcon icon={Briefcase06Icon} size={28} color="#1a2030" strokeWidth={2} />
+                  <div>
+                    <p className="text-xl font-semibold text-[#1a1a1a]">Company Information</p>
+                    <p className="text-sm text-[#888]">Your business details</p>
+                  </div>
+                </div>
+                <div className="divide-y divide-[#F0F0F0]">
+                  <div className="grid grid-cols-[140px_1fr] gap-4 px-8 py-5 items-center">
+                    <label htmlFor="profile-company-name" className="flex items-center gap-3 text-xs font-semibold text-[#999] uppercase tracking-widest">
+                      <HugeiconsIcon icon={Building01Icon} size={20} color="#BBBBBB" strokeWidth={1.5} />
+                      Company
+                    </label>
+                    <input
+                      id="profile-company-name"
+                      type="text"
+                      value={profileForm.companyName}
+                      onChange={(e) => setProfileForm(f => ({ ...f, companyName: e.target.value }))}
+                      className="w-full bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      placeholder="Company name"
+                    />
+                  </div>
+                  <div className="grid grid-cols-[140px_1fr] gap-4 px-8 py-5 items-center">
+                    <label htmlFor="profile-company-website" className="flex items-center gap-3 text-xs font-semibold text-[#999] uppercase tracking-widest">
+                      <HugeiconsIcon icon={Link01Icon} size={20} color="#BBBBBB" strokeWidth={1.5} />
+                      Website
+                    </label>
+                    <input
+                      id="profile-company-website"
+                      type="text"
+                      value={profileForm.companyWebsite}
+                      onChange={(e) => setProfileForm(f => ({ ...f, companyWebsite: e.target.value }))}
+                      className="w-full bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      placeholder="https://example.com"
+                    />
+                  </div>
+                </div>
+              </div>
+              </div>{/* end grid row */}
+
+              {/* Save footer — only shown when a field has changed */}
+              {(() => {
+                const p = initialProfile.current;
+                const isDirty = profileForm.name !== p.name || profileForm.email !== p.email || profileForm.companyName !== p.companyName || profileForm.companyWebsite !== p.companyWebsite;
+                if (!isDirty) return null;
+                return (
+                  <div className="flex flex-col items-center gap-2">
+                    {profileError && <p className="text-sm text-[#e05252]">{profileError}</p>}
+                    <button
+                      type="submit"
+                      disabled={profileSubmitting}
+                      className="px-8 py-2.5 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                    >
+                      {profileSubmitting ? 'Saving…' : 'Save Changes'}
+                    </button>
+                  </div>
+                );
+              })()}
+
+            </form>
+          </div>
+        )}
+
+        {activeView !== 'dashboard' && activeView !== 'workspace' && activeView !== 'clients' && activeView !== 'projects' && activeView !== 'billing' && activeView !== 'profile' && (
           <div className="bg-white rounded-2xl border border-[#EBEBEB] p-10 text-center">
             <p className="text-sm text-[#AAA]">Coming soon</p>
           </div>
@@ -1264,7 +1598,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 {/* Project */}
                 <div className="space-y-3">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Project</p>
-                  <div className="grid grid-cols-[1fr_120px] gap-4">
+                  <div className="grid grid-cols-[1fr_120px_120px] gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Project Name <span className="text-red-400">*</span></label>
                       <input
@@ -1287,6 +1621,18 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                         placeholder="0"
                         className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
                       />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Status</label>
+                      <select
+                        value={invoiceForm.status}
+                        onChange={e => setInvoiceForm(f => ({ ...f, status: e.target.value }))}
+                        className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      >
+                        <option>Unsent</option>
+                        <option>Not Paid</option>
+                        <option>Paid</option>
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -1627,7 +1973,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 {/* Project */}
                 <div className="space-y-3">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Project</p>
-                  <div className="grid grid-cols-[1fr_120px] gap-4">
+                  <div className="grid grid-cols-[1fr_120px_120px] gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Project Name <span className="text-red-400">*</span></label>
                       <input
@@ -1645,6 +1991,18 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                         onChange={e => setEditInvForm(f => ({ ...f, taxRate: e.target.value }))}
                         className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
                       />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Status</label>
+                      <select
+                        value={editInvForm.status}
+                        onChange={e => setEditInvForm(f => ({ ...f, status: e.target.value }))}
+                        className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                      >
+                        <option>Unsent</option>
+                        <option>Not Paid</option>
+                        <option>Paid</option>
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -1795,6 +2153,21 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 16 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-full bg-[#1a2030] text-white text-sm font-medium shadow-xl whitespace-nowrap"
+          >
+            {toast}
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

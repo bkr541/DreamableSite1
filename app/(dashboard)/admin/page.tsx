@@ -7,9 +7,9 @@ export default async function AdminPage() {
   const session = await getSession();
   if (!session || !session.admin) redirect('/portal');
 
-  const [totalUsers, totalProjects, activeProjects, openInquiries, recentInquiries, recentUsers, clients, companies, services, projects, invoices] =
+  const [totalUsers, totalProjects, activeProjects, openInquiries, recentInquiries, recentUsers, clients, companies, services, projects, invoices, adminUser] =
     await Promise.all([
-      prisma.user.count(),
+      prisma.user.count({ where: { admin: false } }),
       prisma.project.count(),
       prisma.project.count({ where: { status: { notIn: ['COMPLETED', 'CANCELLED'] } } }),
       prisma.inquiry.count({ where: { status: 'INQUIRY' } }),
@@ -56,9 +56,13 @@ export default async function AdminPage() {
         select: {
           id: true, invoiceNumber: true, clientName: true, clientEmail: true,
           clientCompany: true, projectName: true, issueDate: true, dueDate: true,
-          taxRate: true, createdAt: true,
+          taxRate: true, status: true, createdAt: true,
           lineItems: { select: { description: true, qty: true, rate: true } },
         },
+      }),
+      prisma.user.findUnique({
+        where: { id: session.userId },
+        select: { company: { select: { id: true, name: true, website: true } } },
       }),
     ]);
 
@@ -73,6 +77,7 @@ export default async function AdminPage() {
       services={services}
       projects={projects.map((p) => ({ ...p, createdAt: p.createdAt.toISOString() }))}
       invoices={invoices.map((inv) => ({ ...inv, createdAt: inv.createdAt.toISOString() }))}
+      adminCompany={adminUser?.company ?? null}
     />
   );
 }
