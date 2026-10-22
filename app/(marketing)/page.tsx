@@ -3,7 +3,7 @@
 import { useState } from 'react';
 
 import Link from 'next/link';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import SplineBackground from '@/components/SplineBackground';
 import InteractiveElement from '@/components/InteractiveElement';
 import HeroRibbons from '@/components/HeroRibbons';
@@ -12,27 +12,75 @@ import HeroCarousel from '@/components/HeroCarousel';
 import CustomSelect from '@/components/CustomSelect';
 import Image from 'next/image';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ToolCaseIcon } from '@hugeicons/core-free-icons';
+import {
+  ToolCaseIcon,
+  SourceCodeSquareIcon,
+  PaintBoardIcon,
+  PencilRulerIcon,
+  Message01Icon,
+  MoreHorizontalCircle01Icon,
+  Tick02Icon,
+  ArrowLeft01Icon,
+  ArrowRight01Icon,
+} from '@hugeicons/core-free-icons';
+
+// Swap each `icon` for an <Image src="/…svg" /> once the custom artwork is ready.
+const PROJECT_TYPES = [
+  { value: 'App or Web Development', label: 'App or Web Development', icon: SourceCodeSquareIcon },
+  { value: 'Brand Identity', label: 'Brand Identity', icon: PaintBoardIcon },
+  { value: 'UI/UX Design', label: 'UI/UX Design', icon: PencilRulerIcon },
+  { value: 'Consulting', label: 'Consulting', icon: Message01Icon },
+  { value: 'Other', label: 'Other', icon: MoreHorizontalCircle01Icon },
+];
+
+const stepVariants = {
+  enter: (dir: number) => ({ opacity: 0, x: dir * 48 }),
+  center: { opacity: 1, x: 0 },
+  exit: (dir: number) => ({ opacity: 0, x: dir * -48 }),
+};
+
+const LAST_STEP = 2;
+
+const INITIAL_FORM = {
+  name: '', email: '', phone: '', projectName: '', projectType: 'App or Web Development', budgetRange: '< $500', timeline: '1 - 2 weeks', message: '',
+};
 
 export default function Home() {
-  const [formData, setFormData] = useState({
-    name: '', email: '', projectType: 'App or Web Development', budgetRange: '< $500', timeline: '1 - 2 weeks', message: '',
-  });
-  const [attachment, setAttachment] = useState<File | null>(null);
+  const [formData, setFormData] = useState(INITIAL_FORM);
+  const [step, setStep] = useState(0);
+  const [direction, setDirection] = useState(1);
   const [honeypot, setHoneypot] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [submitError, setSubmitError] = useState('');
   const [fieldError, setFieldError] = useState<{ field: string; message: string } | null>(null);
 
+  const handleNext = () => {
+    setFieldError(null);
+    if (step === 0) {
+      if (!formData.name.trim()) { setFieldError({ field: 'name', message: 'Name is required.' }); return; }
+      if (!formData.email.trim()) { setFieldError({ field: 'email', message: 'Email is required.' }); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) { setFieldError({ field: 'email', message: 'Please enter a valid email address.' }); return; }
+    } else if (!formData.projectName.trim()) {
+      setFieldError({ field: 'projectName', message: 'Project name is required.' });
+      return;
+    }
+    setDirection(1);
+    setStep(step + 1);
+  };
+
+  const handleBack = () => {
+    setFieldError(null);
+    setDirection(-1);
+    setStep(step - 1);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (step < LAST_STEP) { handleNext(); return; }
     setFieldError(null);
 
-    if (!formData.name.trim()) { setFieldError({ field: 'name', message: 'Name is required.' }); return; }
-    if (!formData.email.trim()) { setFieldError({ field: 'email', message: 'Email is required.' }); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) { setFieldError({ field: 'email', message: 'Please enter a valid email address.' }); return; }
-    if (!formData.message.trim()) { setFieldError({ field: 'message', message: 'Message is required.' }); return; }
+    if (!formData.message.trim()) { setFieldError({ field: 'message', message: 'Project description is required.' }); return; }
 
     setSubmitting(true);
     setSubmitStatus('idle');
@@ -52,6 +100,8 @@ export default function Home() {
           description: formData.message,
           budget_range: formData.budgetRange,
           timeline: formData.timeline,
+          phone: formData.phone || undefined,
+          project_name: formData.projectName,
           website_hp: honeypot, // honeypot
           utm_source: params.get('utm_source') || undefined,
           utm_medium: params.get('utm_medium') || undefined,
@@ -69,8 +119,9 @@ export default function Home() {
       }
 
       setSubmitStatus('success');
-      setFormData({ name: '', email: '', projectType: 'App or Web Development', budgetRange: '< $500', timeline: '1 - 2 weeks', message: '' });
-      setAttachment(null);
+      setFormData(INITIAL_FORM);
+      setDirection(-1);
+      setStep(0);
     } catch (err) {
       setSubmitStatus('error');
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -251,79 +302,167 @@ export default function Home() {
                 <HugeiconsIcon icon={ToolCaseIcon} size={28} color="#1a2030" strokeWidth={2} />
                 <p className="text-xl font-semibold text-[#1a1a1a]">Tell Us About Your Project</p>
               </div>
-              <form className="w-full space-y-6" onSubmit={handleSubmit} noValidate>
-                {/* Row 1: Name + Email */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div className="flex flex-col">
-                    <label htmlFor="contact-name" className="text-sm font-medium text-[#555] mb-2">Name</label>
-                    <input
-                      type="text"
-                      id="contact-name"
-                      value={formData.name}
-                      onChange={(e) => { setFormData({ ...formData, name: e.target.value }); setFieldError(null); }}
-                      className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all ${fieldError?.field === 'name' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                      placeholder="Jane Doe"
-                    />
-                    {fieldError?.field === 'name' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
-                  </div>
-                  <div className="flex flex-col">
-                    <label htmlFor="contact-email" className="text-sm font-medium text-[#555] mb-2">Email</label>
-                    <input
-                      type="text"
-                      id="contact-email"
-                      autoComplete="email"
-                      value={formData.email}
-                      onChange={(e) => { setFormData({ ...formData, email: e.target.value }); setFieldError(null); }}
-                      className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all ${fieldError?.field === 'email' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                      placeholder="jane@example.com"
-                    />
-                    {fieldError?.field === 'email' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
-                  </div>
-                </div>
+              <form className="w-full" onSubmit={handleSubmit} noValidate>
+                <div className="h-[580px] sm:h-[340px]">
+                  <AnimatePresence mode="wait" initial={false} custom={direction}>
+                    {step === 0 ? (
+                      <motion.div
+                        key="step-contact"
+                        custom={direction}
+                        variants={stepVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.25, ease: 'easeInOut' }}
+                        className="space-y-6"
+                      >
+                        <div className="flex flex-col">
+                          <label htmlFor="contact-name" className="text-sm font-medium text-[#555] mb-2">Name</label>
+                          <input
+                            type="text"
+                            id="contact-name"
+                            value={formData.name}
+                            onChange={(e) => { setFormData({ ...formData, name: e.target.value }); setFieldError(null); }}
+                            className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all ${fieldError?.field === 'name' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                            placeholder="Jane Doe"
+                          />
+                          {fieldError?.field === 'name' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                        </div>
+                        <div className="flex flex-col">
+                          <label htmlFor="contact-email" className="text-sm font-medium text-[#555] mb-2">Email</label>
+                          <input
+                            type="text"
+                            id="contact-email"
+                            autoComplete="email"
+                            value={formData.email}
+                            onChange={(e) => { setFormData({ ...formData, email: e.target.value }); setFieldError(null); }}
+                            className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all ${fieldError?.field === 'email' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                            placeholder="jane@example.com"
+                          />
+                          {fieldError?.field === 'email' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                        </div>
+                        <div className="flex flex-col">
+                          <label htmlFor="contact-phone" className="text-sm font-medium text-[#555] mb-2">Phone Number</label>
+                          <input
+                            type="text"
+                            id="contact-phone"
+                            autoComplete="tel"
+                            inputMode="tel"
+                            value={formData.phone}
+                            onChange={(e) => { setFormData({ ...formData, phone: e.target.value }); setFieldError(null); }}
+                            className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all ${fieldError?.field === 'phone' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                            placeholder="(555) 123-4567"
+                          />
+                          {fieldError?.field === 'phone' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                        </div>
 
-                {/* Row 2: Project Type + Budget + Timeline */}
-                <div className="grid grid-cols-1 sm:grid-cols-[1fr_160px_1fr] gap-6">
-                  <div className="flex flex-col">
-                    <label htmlFor="contact-project" className="text-sm font-medium text-[#555] mb-2">Project Type</label>
-                    <CustomSelect
-                      id="contact-project"
-                      value={formData.projectType}
-                      onChange={(projectType) => setFormData({ ...formData, projectType })}
-                      options={['App or Web Development', 'Branding & Identity', 'UI/UX Design', 'Consulting', 'Other']}
-                    />
-                  </div>
-                  <div className="flex flex-col">
-                    <label htmlFor="contact-budget" className="text-sm font-medium text-[#555] mb-2">Budget</label>
-                    <CustomSelect
-                      id="contact-budget"
-                      value={formData.budgetRange}
-                      onChange={(budgetRange) => setFormData({ ...formData, budgetRange })}
-                      options={['< $500', '$500 - $1k', '$1k - $5k', '$5k+']}
-                    />
-                  </div>
-                  <div className="flex flex-col">
-                    <label htmlFor="contact-timeline" className="text-sm font-medium text-[#555] mb-2">Timeline</label>
-                    <CustomSelect
-                      id="contact-timeline"
-                      value={formData.timeline}
-                      onChange={(timeline) => setFormData({ ...formData, timeline })}
-                      options={['1 - 2 weeks', '1 month', '2 - 3 months', '3 - 6 months', '6+ months', 'Not sure']}
-                    />
-                  </div>
-                </div>
+                      </motion.div>
+                    ) : step === 1 ? (
+                      <motion.div
+                        key="step-project"
+                        custom={direction}
+                        variants={stepVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.25, ease: 'easeInOut' }}
+                        className="space-y-6"
+                      >
+                        <div className="flex flex-col">
+                          <label htmlFor="contact-project-name" className="text-sm font-medium text-[#555] mb-2">Project Name</label>
+                          <input
+                            type="text"
+                            id="contact-project-name"
+                            value={formData.projectName}
+                            onChange={(e) => { setFormData({ ...formData, projectName: e.target.value }); setFieldError(null); }}
+                            className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all ${fieldError?.field === 'projectName' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                            placeholder="My Next Big Idea"
+                          />
+                          {fieldError?.field === 'projectName' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                        </div>
 
-                {/* Row 4: Message */}
-                <div className="flex flex-col">
-                  <label htmlFor="contact-message" className="text-sm font-medium text-[#555] mb-2">Message</label>
-                  <textarea
-                    id="contact-message"
-                    rows={4}
-                    value={formData.message}
-                    onChange={(e) => { setFormData({ ...formData, message: e.target.value }); setFieldError(null); }}
-                    className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all resize-none ${fieldError?.field === 'message' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                    placeholder="Tell us about your project..."
-                  />
-                  {fieldError?.field === 'message' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                        <div className="flex flex-col">
+                          <span id="contact-project-label" className="text-sm font-medium text-[#555]">Project Type</span>
+                          <span className="text-sm text-[#999] mb-3">What kind of project are you looking to start?</span>
+                          <div role="radiogroup" aria-labelledby="contact-project-label" className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                            {PROJECT_TYPES.map((type) => {
+                              const selected = formData.projectType === type.value;
+                              return (
+                                <button
+                                  key={type.value}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={selected}
+                                  onClick={() => setFormData({ ...formData, projectType: type.value })}
+                                  className={`relative flex flex-col items-center justify-center gap-3 rounded-2xl border px-2 py-5 text-center cursor-pointer transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 ${selected ? 'border-cyan-300 bg-[#eef6ff] shadow-[0_0_0_3px_rgba(165,243,252,0.35)]' : 'border-[#E5E5E5] bg-white hover:border-[#c7d2fe] hover:-translate-y-0.5'}`}
+                                >
+                                  <AnimatePresence>
+                                    {selected && (
+                                      <motion.span
+                                        initial={{ scale: 0 }}
+                                        animate={{ scale: 1 }}
+                                        exit={{ scale: 0 }}
+                                        className="absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full bg-[#3b82f6] text-white"
+                                      >
+                                        <HugeiconsIcon icon={Tick02Icon} size={14} color="currentColor" strokeWidth={3} />
+                                      </motion.span>
+                                    )}
+                                  </AnimatePresence>
+                                  <HugeiconsIcon icon={type.icon} size={56} color={selected ? '#4f6df5' : '#9aa5d6'} strokeWidth={1.25} />
+                                  <span className="text-sm font-medium text-[#1a1a1a] leading-tight">{type.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="step-details"
+                        custom={direction}
+                        variants={stepVariants}
+                        initial="enter"
+                        animate="center"
+                        exit="exit"
+                        transition={{ duration: 0.25, ease: 'easeInOut' }}
+                        className="space-y-6"
+                      >
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div className="flex flex-col">
+                          <label htmlFor="contact-budget" className="text-sm font-medium text-[#555] mb-2">Budget</label>
+                          <CustomSelect
+                            id="contact-budget"
+                            value={formData.budgetRange}
+                            onChange={(budgetRange) => setFormData({ ...formData, budgetRange })}
+                            options={['< $500', '$500 - $1k', '$1k - $5k', '$5k+']}
+                          />
+                        </div>
+                        <div className="flex flex-col">
+                          <label htmlFor="contact-timeline" className="text-sm font-medium text-[#555] mb-2">Timeframe</label>
+                          <CustomSelect
+                            id="contact-timeline"
+                            value={formData.timeline}
+                            onChange={(timeline) => setFormData({ ...formData, timeline })}
+                            options={['1 - 2 weeks', '1 month', '2 - 3 months', '3 - 6 months', '6+ months', 'Not sure']}
+                          />
+                        </div>
+                        </div>
+
+                        <div className="flex flex-col">
+                          <label htmlFor="contact-message" className="text-sm font-medium text-[#555] mb-2">Project Description</label>
+                          <textarea
+                            id="contact-message"
+                            rows={4}
+                            value={formData.message}
+                            onChange={(e) => { setFormData({ ...formData, message: e.target.value }); setFieldError(null); }}
+                            className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all resize-none ${fieldError?.field === 'message' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                            placeholder="Tell us about your project..."
+                          />
+                          {fieldError?.field === 'message' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* Honeypot – hidden from real users */}
@@ -337,55 +476,33 @@ export default function Home() {
                   />
                 </div>
 
-                {/* Send button + attachment */}
-                <div className="grid grid-cols-[1fr_auto_1fr] items-center pt-6">
-                  <div />
+                {/* Navigation */}
+                <div className="flex items-center justify-center gap-3 pt-8">
+                  {step > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleBack}
+                      className="inline-flex items-center gap-1 px-6 py-3.5 rounded-full border border-[#1a2030] text-[#1a2030] text-sm font-medium hover:bg-[#1a2030] hover:text-white transition-all"
+                    >
+                      <HugeiconsIcon icon={ArrowLeft01Icon} size={16} color="currentColor" strokeWidth={2} />
+                      Back
+                    </button>
+                  )}
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="px-12 py-3.5 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+                    className="inline-flex items-center gap-1 px-12 py-3.5 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
                   >
-                    {submitting ? 'Sending…' : 'Send'}
-                  </button>
-                  <div className="flex items-center justify-end gap-1.5">
-                    {attachment && (
+                    {step < LAST_STEP ? (
                       <>
-                        <span className="text-xs text-[#777] max-w-[90px] truncate">{attachment.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAttachment(null);
-                            const fileInput = document.getElementById('contact-attachment') as HTMLInputElement;
-                            if (fileInput) fileInput.value = '';
-                          }}
-                          className="p-0.5 text-[#aaa] hover:text-[#333] transition-colors"
-                          aria-label="Remove attachment"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        </button>
+                        {step === 0 ? 'Get Started' : 'Next'}
+                        <HugeiconsIcon icon={ArrowRight01Icon} size={16} color="currentColor" strokeWidth={2} />
                       </>
-                    )}
-                    <label
-                      htmlFor="contact-attachment"
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-full cursor-pointer transition-colors ${attachment ? 'text-[#B87AF5] hover:bg-purple-50' : 'text-[#999] hover:text-[#1a2030] hover:bg-[#f5f5f5]'}`}
-                      title="Attach a file"
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66L9.41 17.41a2 2 0 01-2.83-2.83l8.49-8.49" /></svg>
-                      <span className="text-sm font-medium">Add Attachment</span>
-                      <input
-                        type="file"
-                        id="contact-attachment"
-                        className="sr-only"
-                        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.svg,.sketch,.fig,.xd"
-                        onChange={(e) => setAttachment(e.target.files?.[0] || null)}
-                      />
-                    </label>
-                  </div>
+                    ) : submitting ? 'Sending…' : 'Send'}
+                  </button>
                 </div>
                 {submitStatus === 'error' && (
-                  <p className="text-sm text-red-500 font-medium text-center">{submitError}</p>
+                  <p className="text-sm text-red-500 font-medium text-center mt-4">{submitError}</p>
                 )}
               </form>
             </div>

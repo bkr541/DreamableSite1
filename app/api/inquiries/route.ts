@@ -32,6 +32,8 @@ interface InquiryPayload {
     description: string;
     budgetRange: string | null;
     timeline: string | null;
+    phone: string | null;
+    projectName: string | null;
     utmSource: string | null;
     utmMedium: string | null;
     utmCampaign: string | null;
@@ -71,6 +73,8 @@ async function sendInquiryEmail(inquiry: InquiryPayload): Promise<void> {
         ${row('Inquiry ID', inquiry.inquiryId)}
         ${row('Name', inquiry.name)}
         ${row('Email', `<a href="mailto:${inquiry.email}">${inquiry.email}</a>`)}
+        ${row('Phone', inquiry.phone)}
+        ${row('Project Name', inquiry.projectName)}
         ${row('Company', inquiry.company)}
         ${row('Website', inquiry.website)}
         ${row('Service', inquiry.service)}
@@ -143,7 +147,11 @@ export async function POST(req: NextRequest) {
         const utmTerm = trim(body.utm_term) || null;
         const utmContent = trim(body.utm_content) || null;
         const referrer = trim(body.referrer) || null;
-        const metadata = body.metadata ?? null;
+        const phone = trim(body.phone) || null;
+        const projectName = trim(body.project_name) || null;
+        const extra = { ...(phone && { phone }), ...(projectName && { projectName }) };
+        const metadata =
+            body.metadata || Object.keys(extra).length ? { ...(body.metadata ?? {}), ...extra } : null;
 
         // Validate required fields
         if (!name) {
@@ -212,6 +220,8 @@ export async function POST(req: NextRequest) {
             description,
             budgetRange,
             timeline,
+            phone,
+            projectName,
             utmSource,
             utmMedium,
             utmCampaign,
