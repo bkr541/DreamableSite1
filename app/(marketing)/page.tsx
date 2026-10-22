@@ -9,6 +9,7 @@ import InteractiveElement from '@/components/InteractiveElement';
 import HeroRibbons from '@/components/HeroRibbons';
 import CubePuzzle from '@/components/CubePuzzle';
 import HeroCarousel from '@/components/HeroCarousel';
+import CustomSelect from '@/components/CustomSelect';
 import Image from 'next/image';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ToolCaseIcon } from '@hugeicons/core-free-icons';
@@ -248,7 +249,7 @@ export default function Home() {
             <div className="w-full rounded-3xl p-8 bg-white shadow-lg border border-[#F0F0F0]">
               <div className="flex items-center gap-3 mb-8">
                 <HugeiconsIcon icon={ToolCaseIcon} size={28} color="#1a2030" strokeWidth={2} />
-                <p className="text-xl font-semibold text-[#1a1a1a]">Tell us about your project</p>
+                <p className="text-xl font-semibold text-[#1a1a1a]">Tell Us About Your Project</p>
               </div>
               <form className="w-full space-y-6" onSubmit={handleSubmit} noValidate>
                 {/* Row 1: Name + Email */}
@@ -284,48 +285,30 @@ export default function Home() {
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_160px_1fr] gap-6">
                   <div className="flex flex-col">
                     <label htmlFor="contact-project" className="text-sm font-medium text-[#555] mb-2">Project Type</label>
-                    <select
+                    <CustomSelect
                       id="contact-project"
                       value={formData.projectType}
-                      onChange={(e) => setFormData({ ...formData, projectType: e.target.value })}
-                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all appearance-none cursor-pointer"
-                    >
-                      <option value="App or Web Development">App or Web Development</option>
-                      <option value="Branding & Identity">Branding &amp; Identity</option>
-                      <option value="UI/UX Design">UI/UX Design</option>
-                      <option value="Consulting">Consulting</option>
-                      <option value="Other">Other</option>
-                    </select>
+                      onChange={(projectType) => setFormData({ ...formData, projectType })}
+                      options={['App or Web Development', 'Branding & Identity', 'UI/UX Design', 'Consulting', 'Other']}
+                    />
                   </div>
                   <div className="flex flex-col">
                     <label htmlFor="contact-budget" className="text-sm font-medium text-[#555] mb-2">Budget</label>
-                    <select
+                    <CustomSelect
                       id="contact-budget"
                       value={formData.budgetRange}
-                      onChange={(e) => setFormData({ ...formData, budgetRange: e.target.value })}
-                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all appearance-none cursor-pointer"
-                    >
-                      <option value="< $500">&lt; $500</option>
-                      <option value="$500 - $1k">$500 - $1k</option>
-                      <option value="$1k - $5k">$1k - $5k</option>
-                      <option value="$5k+">$5k+</option>
-                    </select>
+                      onChange={(budgetRange) => setFormData({ ...formData, budgetRange })}
+                      options={['< $500', '$500 - $1k', '$1k - $5k', '$5k+']}
+                    />
                   </div>
                   <div className="flex flex-col">
                     <label htmlFor="contact-timeline" className="text-sm font-medium text-[#555] mb-2">Timeline</label>
-                    <select
+                    <CustomSelect
                       id="contact-timeline"
                       value={formData.timeline}
-                      onChange={(e) => setFormData({ ...formData, timeline: e.target.value })}
-                      className="w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border border-[#D0D0D0] transition-all appearance-none cursor-pointer"
-                    >
-                      <option value="1 - 2 weeks">1 - 2 weeks</option>
-                      <option value="1 month">1 month</option>
-                      <option value="2 - 3 months">2 - 3 months</option>
-                      <option value="3 - 6 months">3 - 6 months</option>
-                      <option value="6+ months">6+ months</option>
-                      <option value="Not sure">Not sure</option>
-                    </select>
+                      onChange={(timeline) => setFormData({ ...formData, timeline })}
+                      options={['1 - 2 weeks', '1 month', '2 - 3 months', '3 - 6 months', '6+ months', 'Not sure']}
+                    />
                   </div>
                 </div>
 
@@ -355,8 +338,8 @@ export default function Home() {
                 </div>
 
                 {/* Send button + attachment */}
-                <div className="flex items-center justify-between pt-6">
-                  <div className="w-10" />
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center pt-6">
+                  <div />
                   <button
                     type="submit"
                     disabled={submitting}
@@ -364,7 +347,7 @@ export default function Home() {
                   >
                     {submitting ? 'Sending…' : 'Send'}
                   </button>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center justify-end gap-1.5">
                     {attachment && (
                       <>
                         <span className="text-xs text-[#777] max-w-[90px] truncate">{attachment.name}</span>
