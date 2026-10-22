@@ -1,9 +1,22 @@
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { SessionPayload } from '@/lib/session';
+import FileTile from '@/components/FileTile';
+import FilePreviewModal, { PreviewFile } from '@/components/FilePreviewModal';
+import { getDeliverableCategories } from '@/lib/deliverables';
+
+interface Deliverable {
+  id: string;
+  inquiryId: string | null;
+  projectId: string | null;
+  category: string;
+  fileName: string;
+  size: number;
+}
 
 interface Project {
   id: string;
@@ -18,6 +31,8 @@ interface Project {
 
 interface UserData {
   id: string;
+  inquiryId: string | null;
+  inquiryService: string | null;
   name: string;
   email: string;
   company: { name: string } | null;
@@ -27,6 +42,7 @@ interface UserData {
 interface Props {
   session: SessionPayload;
   user: UserData;
+  deliverables: Deliverable[];
 }
 
 const STATUS_META: Record<string, { label: string; color: string; step: number }> = {
@@ -78,8 +94,40 @@ function fmtDate(iso: string | null) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export default function CustomerDashboardClient({ session, user }: Props) {
+function DeliverableGroups({ service, items, onPreview }: { service: string; items: Deliverable[]; onPreview: (f: PreviewFile) => void }) {
+  const known = getDeliverableCategories(service);
+  // Keep any category that's no longer in the list so a file never disappears from the client's view.
+  const categories = [...known, ...Array.from(new Set(items.map((d) => d.category))).filter((c) => !known.includes(c))];
+  const groups = categories
+    .map((category) => ({ category, items: items.filter((d) => d.category === category) }))
+    .filter((g) => g.items.length > 0);
+
+  return (
+    <div className="space-y-5">
+      {groups.map((g) => (
+        <div key={g.category}>
+          <p className="text-[10px] font-semibold text-[#BBB] uppercase tracking-widest mb-2">{g.category}</p>
+          <div className="flex flex-wrap gap-3">
+            {g.items.map((d) => (
+              <FileTile
+                key={d.id}
+                url={`/api/deliverables/${d.id}`}
+                fileName={d.fileName}
+                size={d.size}
+                onOpen={() => onPreview({ url: `/api/deliverables/${d.id}`, fileName: d.fileName, size: d.size })}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function CustomerDashboardClient({ session, user, deliverables }: Props) {
   const router = useRouter();
+  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
+  const inquiryDeliverables = deliverables.filter((d) => d.inquiryId && d.inquiryId === user.inquiryId);
 
   async function logout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -160,10 +208,35 @@ export default function CustomerDashboardClient({ session, user }: Props) {
                     <p className="text-sm text-[#555]">{fmtDate(project.targetEndDate)}</p>
                   </div>
                 </div>
+
+                {deliverables.some((d) => d.projectId === project.id) && (
+                  <div className="pt-4 border-t border-[#F5F5F5]">
+                    <p className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">Deliverables</p>
+                    <DeliverableGroups
+                      service={project.service}
+                      items={deliverables.filter((d) => d.projectId === project.id)}
+                      onPreview={setPreviewFile}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
+
+        {/* Deliverables shared before a project exists (from the original inquiry) */}
+        {inquiryDeliverables.length > 0 && (
+          <div className="mt-5 bg-white rounded-2xl border border-[#EBEBEB] p-6">
+            <p className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">Deliverables</p>
+            <DeliverableGroups
+              service={user.inquiryService ?? 'Other'}
+              items={inquiryDeliverables}
+              onPreview={setPreviewFile}
+            />
+          </div>
+        )}
+
+        <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
 
         {/* Help footer */}
         <div className="mt-10 p-6 bg-white rounded-2xl border border-[#EBEBEB] flex flex-col sm:flex-row items-center justify-between gap-4">

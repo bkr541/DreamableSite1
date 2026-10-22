@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import nodemailer from 'nodemailer';
+import { Prisma } from '@prisma/client';
 
 /* ── In-memory rate limiter (best-effort, per-instance) ──────────────────────
    This is per-instance and not suitable for distributed production.
@@ -40,6 +41,7 @@ interface InquiryPayload {
     utmTerm: string | null;
     utmContent: string | null;
     referrer: string | null;
+    attachments: { filename: string; content: Buffer; contentType: string }[];
 }
 
 async function sendInquiryEmail(inquiry: InquiryPayload): Promise<void> {
@@ -100,12 +102,16 @@ async function sendInquiryEmail(inquiry: InquiryPayload): Promise<void> {
         replyTo: inquiry.email,
         subject: `New Inquiry: ${inquiry.name} — ${inquiry.service}`,
         html,
+        attachments: inquiry.attachments,
     });
 }
 
 /* ── Helpers ── */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_DESC = 5_000;
+const MAX_FILES = 5;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_EXT = /\.(pdf|docx?|png|jpe?g|gif|svg|sketch|fig|xd|mp4|mov|webm|txt|md|csv)$/i;
 
 function trim(val: unknown): string {
     return typeof val === 'string' ? val.trim() : '';
@@ -124,7 +130,15 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const body = await req.json();
+        let body: Record<string, unknown>;
+        let files: File[] = [];
+        if (req.headers.get('content-type')?.includes('multipart/form-data')) {
+            const form = await req.formData();
+            body = JSON.parse(String(form.get('payload') ?? '{}'));
+            files = form.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
+        } else {
+            body = await req.json();
+        }
 
         // Honeypot: if filled, silently succeed without inserting
         if (body.website_hp) {
@@ -176,6 +190,34 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        if (files.length > MAX_FILES) {
+            return NextResponse.json(
+                { ok: false, message: `You can attach up to ${MAX_FILES} files.` },
+                { status: 400 }
+            );
+        }
+        for (const f of files) {
+            if (f.size > MAX_FILE_BYTES) {
+                return NextResponse.json(
+                    { ok: false, message: `${f.name} is larger than 10 MB.` },
+                    { status: 400 }
+                );
+            }
+            if (!ALLOWED_EXT.test(f.name)) {
+                return NextResponse.json(
+                    { ok: false, message: `${f.name} is not a supported file type.` },
+                    { status: 400 }
+                );
+            }
+        }
+        const attachments = await Promise.all(
+            files.map(async (f) => ({
+                filename: f.name,
+                contentType: f.type || 'application/octet-stream',
+                content: Buffer.from(await f.arrayBuffer()),
+            }))
+        );
+
         // Persist to database
         let inquiryId = 'demo-' + Date.now();
 
@@ -197,7 +239,15 @@ export async function POST(req: NextRequest) {
                     utmTerm,
                     utmContent,
                     referrer,
-                    metadata,
+                    metadata: metadata as Prisma.InputJsonValue | undefined,
+                    attachments: {
+                        create: attachments.map((a) => ({
+                            fileName: a.filename,
+                            contentType: a.contentType,
+                            size: a.content.length,
+                            data: new Uint8Array(a.content),
+                        })),
+                    },
                 },
                 select: { id: true },
             });
@@ -228,6 +278,7 @@ export async function POST(req: NextRequest) {
             utmTerm,
             utmContent,
             referrer,
+            attachments,
         }).catch((err) => {
             console.error('[sendInquiryEmail] Failed to send notification:', err);
         });

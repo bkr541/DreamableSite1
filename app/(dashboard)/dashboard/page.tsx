@@ -14,6 +14,8 @@ export default async function DashboardPage() {
       id: true,
       name: true,
       email: true,
+      inquiryId: true,
+      inquiry: { select: { service: true } },
       company: { select: { name: true } },
       projects: {
         orderBy: { createdAt: 'desc' },
@@ -33,11 +35,24 @@ export default async function DashboardPage() {
 
   if (!user) redirect('/portal');
 
+  const deliverables = await prisma.deliverable.findMany({
+    where: {
+      OR: [
+        { project: { primaryUserId: user.id } },
+        ...(user.inquiryId ? [{ inquiryId: user.inquiryId }] : []),
+      ],
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, inquiryId: true, projectId: true, category: true, fileName: true, size: true },
+  });
+
   return (
     <CustomerDashboardClient
       session={session}
+      deliverables={deliverables}
       user={{
         ...user,
+        inquiryService: user.inquiry?.service ?? null,
         company: user.company ?? null,
         projects: user.projects.map((p) => ({
           ...p,

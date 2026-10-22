@@ -38,12 +38,51 @@ model Inquiry {
 
   user          User?
   companyRecord Company?
+  attachments   InquiryAttachment[]
+  deliverables  Deliverable[]
   project       Project?
 
   @@index([createdAt(sort: Desc)])
   @@index([status])
   @@index([email])
   @@map("inquiries")
+}
+
+model InquiryAttachment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  inquiryId   String @map("inquiry_id") @db.Uuid
+  fileName    String @map("file_name")
+  contentType String @map("content_type")
+  size        Int
+  data        Bytes
+
+  inquiry Inquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+
+  @@index([inquiryId])
+  @@map("inquiry_attachments")
+}
+
+model Deliverable {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  inquiryId String? @map("inquiry_id") @db.Uuid
+  projectId String? @map("project_id") @db.Uuid
+
+  category    String
+  fileName    String @map("file_name")
+  contentType String @map("content_type")
+  size        Int
+  data        Bytes
+
+  inquiry Inquiry? @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([inquiryId])
+  @@index([projectId])
+  @@map("deliverables")
 }
 
 model User {
@@ -183,6 +222,7 @@ model Project {
   targetEndDate DateTime? @map("target_end_date") @db.Date
   completedAt   DateTime? @map("completed_at") @db.Timestamptz()
 
+  deliverables Deliverable[]
   inquiry     Inquiry? @relation(fields: [inquiryId], references: [id])
   company     Company  @relation(fields: [companyId], references: [id])
   primaryUser User?    @relation("ProjectPrimaryUser", fields: [primaryUserId], references: [id])

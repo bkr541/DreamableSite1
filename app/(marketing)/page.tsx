@@ -9,6 +9,7 @@ import InteractiveElement from '@/components/InteractiveElement';
 import HeroRibbons from '@/components/HeroRibbons';
 import CubePuzzle from '@/components/CubePuzzle';
 import HeroCarousel from '@/components/HeroCarousel';
+import { formatPhone } from '@/lib/utils';
 import CustomSelect from '@/components/CustomSelect';
 import Image from 'next/image';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -47,6 +48,7 @@ const INITIAL_FORM = {
 
 export default function Home() {
   const [formData, setFormData] = useState(INITIAL_FORM);
+  const [attachments, setAttachments] = useState<File[]>([]);
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState(1);
   const [honeypot, setHoneypot] = useState('');
@@ -92,8 +94,9 @@ export default function Home() {
 
       const res = await fetch('/api/inquiries', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: (() => {
+          const body = new FormData();
+          body.append('payload', JSON.stringify({
           name: formData.name,
           email: formData.email,
           service: formData.projectType,
@@ -109,7 +112,10 @@ export default function Home() {
           utm_term: params.get('utm_term') || undefined,
           utm_content: params.get('utm_content') || undefined,
           referrer: document.referrer || undefined,
-        }),
+          }));
+          attachments.forEach((file) => body.append('files', file));
+          return body;
+        })(),
       });
 
       const data = await res.json();
@@ -120,6 +126,7 @@ export default function Home() {
 
       setSubmitStatus('success');
       setFormData(INITIAL_FORM);
+      setAttachments([]);
       setDirection(-1);
       setStep(0);
     } catch (err) {
@@ -303,7 +310,7 @@ export default function Home() {
                 <p className="text-xl font-semibold text-[#1a1a1a]">Tell Us About Your Project</p>
               </div>
               <form className="w-full" onSubmit={handleSubmit} noValidate>
-                <div className="h-[580px] sm:h-[340px]">
+                <div className="h-[370px]">
                   <AnimatePresence mode="wait" initial={false} custom={direction}>
                     {step === 0 ? (
                       <motion.div
@@ -349,9 +356,9 @@ export default function Home() {
                             autoComplete="tel"
                             inputMode="tel"
                             value={formData.phone}
-                            onChange={(e) => { setFormData({ ...formData, phone: e.target.value }); setFieldError(null); }}
+                            onChange={(e) => { setFormData({ ...formData, phone: formatPhone(e.target.value, formData.phone) }); setFieldError(null); }}
                             className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all ${fieldError?.field === 'phone' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                            placeholder="(555) 123-4567"
+                            placeholder="(555)-123-4567"
                           />
                           {fieldError?.field === 'phone' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
                         </div>
@@ -382,9 +389,8 @@ export default function Home() {
                         </div>
 
                         <div className="flex flex-col">
-                          <span id="contact-project-label" className="text-sm font-medium text-[#555]">Project Type</span>
-                          <span className="text-sm text-[#999] mb-3">What kind of project are you looking to start?</span>
-                          <div role="radiogroup" aria-labelledby="contact-project-label" className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                          <span id="contact-project-label" className="text-sm font-medium text-[#555] mb-3">Project Type</span>
+                                          <div role="radiogroup" aria-labelledby="contact-project-label" className="flex flex-wrap justify-center gap-3 max-w-[600px] mx-auto w-full">
                             {PROJECT_TYPES.map((type) => {
                               const selected = formData.projectType === type.value;
                               return (
@@ -394,7 +400,7 @@ export default function Home() {
                                   role="radio"
                                   aria-checked={selected}
                                   onClick={() => setFormData({ ...formData, projectType: type.value })}
-                                  className={`relative flex flex-col items-center justify-center gap-3 rounded-2xl border px-2 py-5 text-center cursor-pointer transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 ${selected ? 'border-cyan-300 bg-[#eef6ff] shadow-[0_0_0_3px_rgba(165,243,252,0.35)]' : 'border-[#E5E5E5] bg-white hover:border-[#c7d2fe] hover:-translate-y-0.5'}`}
+                                  className={`relative flex flex-col items-center justify-center gap-2 basis-[calc((100%-1.5rem)/3)] h-[108px] rounded-2xl border px-2 text-center cursor-pointer transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-200 ${selected ? 'border-cyan-300 bg-[#eef6ff] shadow-[0_0_0_3px_rgba(165,243,252,0.35)]' : 'border-[#E5E5E5] bg-white hover:border-[#c7d2fe] hover:-translate-y-0.5'}`}
                                 >
                                   <AnimatePresence>
                                     {selected && (
@@ -408,8 +414,8 @@ export default function Home() {
                                       </motion.span>
                                     )}
                                   </AnimatePresence>
-                                  <HugeiconsIcon icon={type.icon} size={56} color={selected ? '#4f6df5' : '#9aa5d6'} strokeWidth={1.25} />
-                                  <span className="text-sm font-medium text-[#1a1a1a] leading-tight">{type.label}</span>
+                                  <HugeiconsIcon icon={type.icon} size={44} color={selected ? '#4f6df5' : '#9aa5d6'} strokeWidth={1.25} />
+                                  <span className="text-[13px] font-medium text-[#1a1a1a] leading-tight">{type.label}</span>
                                 </button>
                               );
                             })}
@@ -452,7 +458,7 @@ export default function Home() {
                           <label htmlFor="contact-message" className="text-sm font-medium text-[#555] mb-2">Project Description</label>
                           <textarea
                             id="contact-message"
-                            rows={4}
+                            rows={3}
                             value={formData.message}
                             onChange={(e) => { setFormData({ ...formData, message: e.target.value }); setFieldError(null); }}
                             className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all resize-none ${fieldError?.field === 'message' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
@@ -460,6 +466,29 @@ export default function Home() {
                           />
                           {fieldError?.field === 'message' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
                         </div>
+
+                        {attachments.length > 0 && (
+                          <div className="flex flex-col">
+                            <p className="text-sm font-medium text-[#555] mb-2">Attached Files</p>
+                            <ul className="max-h-[84px] overflow-y-auto space-y-1.5 pr-1">
+                              {attachments.map((file, i) => (
+                                <li key={`${file.name}-${file.size}-${i}`} className="flex items-center justify-between gap-3 rounded-lg bg-white/60 border border-[#EBEBEB] px-3 py-1.5">
+                                  <span className="text-sm text-[#555] truncate">{file.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+                                    className="shrink-0 p-0.5 text-[#aaa] hover:text-[#333] transition-colors"
+                                    aria-label={`Remove ${file.name}`}
+                                  >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                                    </svg>
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -477,17 +506,20 @@ export default function Home() {
                 </div>
 
                 {/* Navigation */}
-                <div className="flex items-center justify-center gap-3 pt-8">
-                  {step > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleBack}
-                      className="inline-flex items-center gap-1 px-6 py-3.5 rounded-full border border-[#1a2030] text-[#1a2030] text-sm font-medium hover:bg-[#1a2030] hover:text-white transition-all"
-                    >
-                      <HugeiconsIcon icon={ArrowLeft01Icon} size={16} color="currentColor" strokeWidth={2} />
-                      Back
-                    </button>
-                  )}
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 pt-8">
+                  <div className="flex justify-end">
+                    {step > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleBack}
+                        aria-label="Back"
+                        title="Back"
+                        className="inline-flex items-center justify-center w-[46px] h-[46px] rounded-full border border-[#1a2030] text-[#1a2030] hover:bg-[#1a2030] hover:text-white transition-all"
+                      >
+                        <HugeiconsIcon icon={ArrowLeft01Icon} size={18} color="currentColor" strokeWidth={2} />
+                      </button>
+                    )}
+                  </div>
                   <button
                     type="submit"
                     disabled={submitting}
@@ -500,6 +532,35 @@ export default function Home() {
                       </>
                     ) : submitting ? 'Sending…' : 'Send'}
                   </button>
+                  <div className="flex items-center justify-end gap-1.5 min-w-0">
+                    {step === LAST_STEP && (
+                      <>
+                        <label
+                          htmlFor="contact-attachment"
+                          className={`flex items-center gap-1.5 px-3 py-2 rounded-full cursor-pointer transition-colors ${attachments.length ? 'text-[#B87AF5] hover:bg-purple-50' : 'text-[#999] hover:text-[#1a2030] hover:bg-[#f5f5f5]'}`}
+                          title="Attach files"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66L9.41 17.41a2 2 0 01-2.83-2.83l8.49-8.49" /></svg>
+                          <span className="hidden sm:inline text-sm font-medium">Add Attachment</span>
+                          <input
+                            type="file"
+                            id="contact-attachment"
+                            className="sr-only"
+                            multiple
+                            accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.svg,.sketch,.fig,.xd,.mp4,.mov,.webm,.txt,.md,.csv"
+                            onChange={(e) => {
+                              const picked = Array.from(e.target.files ?? []);
+                              setAttachments((prev) => [
+                                ...prev,
+                                ...picked.filter((f) => !prev.some((p) => p.name === f.name && p.size === f.size)),
+                              ]);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      </>
+                    )}
+                  </div>
                 </div>
                 {submitStatus === 'error' && (
                   <p className="text-sm text-red-500 font-medium text-center mt-4">{submitError}</p>

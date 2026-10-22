@@ -3,11 +3,13 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import PasswordInput from '@/components/PasswordInput';
 import { generateInvoicePDF, previewInvoicePDF } from '@/lib/generateInvoice';
 import { useRouter } from 'next/navigation';
 import { SessionPayload } from '@/lib/session';
+import DeliverablesPanel, { DeliverableRecord } from '@/components/DeliverablesPanel';
+import FilePreviewModal, { PreviewFile, previewKind, formatBytes } from '@/components/FilePreviewModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
@@ -30,6 +32,9 @@ import {
   Shield01Icon,
   Building01Icon,
   Link01Icon,
+  File02Icon,
+  Attachment01Icon,
+  PackageIcon,
 } from '@hugeicons/core-free-icons';
 
 interface Inquiry {
@@ -39,6 +44,22 @@ interface Inquiry {
   service: string;
   status: string;
   createdAt: string;
+}
+
+interface OpenInquiry {
+  id: string;
+  name: string;
+  email: string;
+  company: string | null;
+  phone: string | null;
+  projectName: string | null;
+  service: string;
+  description: string;
+  budgetRange: string | null;
+  timeline: string | null;
+  status: string;
+  createdAt: string;
+  attachments: { id: string; fileName: string; size: number }[];
 }
 
 interface User {
@@ -103,6 +124,8 @@ interface Props {
   session: SessionPayload;
   stats: { totalUsers: number; totalProjects: number; activeProjects: number; openInquiries: number };
   recentInquiries: Inquiry[];
+  inquiries: OpenInquiry[];
+  deliverables: DeliverableRecord[];
   recentUsers: User[];
   clients: ClientRecord[];
   companies: Company[];
@@ -134,12 +157,46 @@ function Badge({ status }: { status: string }) {
   );
 }
 
+function InquirySection({ icon, label, children }: { icon: typeof User03Icon; label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 text-xs font-semibold text-[#999] uppercase tracking-widest hover:text-[#1a2030] transition-colors"
+      >
+        <HugeiconsIcon icon={icon} size={16} color="currentColor" strokeWidth={1.5} />
+        {label}
+        <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }} className="ml-auto">
+          <ChevronDown size={15} strokeWidth={1.75} />
+        </motion.span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="pt-4 pl-6">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function fmt(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 const NAV_ITEMS = [
   { id: 'dashboard',     label: 'Dashboard',     icon: ChartRoseIcon },
+  { id: 'inquiries',     label: 'Inquiries',     icon: Mail01Icon },
   { id: 'clients',       label: 'Clients',       icon: UserGroup02Icon },
   { id: 'projects',      label: 'Projects',      icon: Briefcase06Icon },
   { id: 'workspace',     label: 'Workspace',     icon: WorkflowSquare03Icon },
@@ -149,8 +206,15 @@ const NAV_ITEMS = [
 
 type ViewId = typeof NAV_ITEMS[number]['id'] | 'profile';
 
+const inquirySlide = {
+  enter: (dir: number) => ({ opacity: 0, x: dir * 48 }),
+  center: { opacity: 1, x: 0 },
+  exit: (dir: number) => ({ opacity: 0, x: dir * -48 }),
+};
+
 const VIEW_META: Record<ViewId, { title: string; subtitle: string }> = {
   dashboard:     { title: 'Overview',         subtitle: 'All activity across Dreamable.studio' },
+  inquiries:     { title: 'Inquiries',        subtitle: 'Review incoming project requests' },
   clients:       { title: 'Clients',          subtitle: 'Manage your client accounts and relationships' },
   projects:      { title: 'Projects',         subtitle: 'Track and manage all active projects' },
   workspace:     { title: 'Workspace',        subtitle: 'Tools and shared resources for your team' },
@@ -177,10 +241,47 @@ function getDefaultInvoiceForm() {
   };
 }
 
-export default function AdminDashboardClient({ session, stats, recentInquiries, recentUsers, clients, companies, services, projects, invoices, adminCompany }: Props) {
+export default function AdminDashboardClient({ session, stats, recentInquiries, inquiries, deliverables, recentUsers, clients, companies, services, projects, invoices, adminCompany }: Props) {
   const router = useRouter();
   const [activeView, setActiveView] = useState<ViewId>('dashboard');
   const [billingSubView, setBillingSubView] = useState<'invoices' | null>(null);
+  const [inquiryFilter, setInquiryFilter] = useState({ search: '', status: '', service: '' });
+  function openProject(id: string) {
+    setProjectDirection(1);
+    setSelectedProjectId(id);
+  }
+
+  function closeProject() {
+    setProjectDirection(-1);
+    setSelectedProjectId(null);
+  }
+
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projectDirection, setProjectDirection] = useState(1);
+  const selectedProject = projects.find(p => p.id === selectedProjectId) ?? null;
+  const [selectedInquiryId, setSelectedInquiryId] = useState<string | null>(null);
+  const [inquiryDirection, setInquiryDirection] = useState(1);
+  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
+  const selectedInquiry = inquiries.find(i => i.id === selectedInquiryId) ?? null;
+  const filteredInquiries = inquiries.filter(i => {
+    if (inquiryFilter.search) {
+      const q = inquiryFilter.search.toLowerCase();
+      if (![i.name, i.email, i.projectName ?? ''].some(v => v.toLowerCase().includes(q))) return false;
+    }
+    if (inquiryFilter.status && i.status !== inquiryFilter.status) return false;
+    if (inquiryFilter.service && i.service !== inquiryFilter.service) return false;
+    return true;
+  });
+
+  function openInquiry(id: string) {
+    setInquiryDirection(1);
+    setSelectedInquiryId(id);
+  }
+
+  function closeInquiry() {
+    setInquiryDirection(-1);
+    setSelectedInquiryId(null);
+  }
   const [clientsGroupOpen, setClientsGroupOpen] = useState(true);
   const [expandedClientIds, setExpandedClientIds] = useState<Set<string>>(new Set());
   const [clientFilter, setClientFilter] = useState({ search: '', status: '' });
@@ -592,7 +693,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
               return (
                 <button
                   key={id}
-                  onClick={() => { setActiveView(id); setBillingSubView(null); }}
+                  onClick={() => { setActiveView(id); setBillingSubView(null); setSelectedInquiryId(null); setSelectedProjectId(null); }}
                   title={label}
                   className={
                     isActive
@@ -689,6 +790,235 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
 
           </>
         )}
+
+        {activeView === 'inquiries' && (
+          <AnimatePresence mode="wait" initial={false} custom={inquiryDirection}>
+            {!selectedInquiry ? (
+              <motion.div
+                key="inquiry-list"
+                custom={inquiryDirection}
+                variants={inquirySlide}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.25, ease: 'easeInOut' }}
+              >
+          <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
+            <div className="px-6 py-4 flex items-center gap-3">
+              <h2 className="text-sm font-semibold text-[#1a1a1a]">Inquiries</h2>
+              <span className="px-2 py-0.5 rounded-full bg-[#F0F0F0] text-[11px] font-semibold text-[#888]">
+                {filteredInquiries.length}
+              </span>
+            </div>
+
+            {/* Filter bar */}
+            <div className="px-6 pb-4 flex items-center gap-3 border-b border-[#F0F0F0]">
+              <input
+                type="text"
+                placeholder="Search by name, email, or project…"
+                value={inquiryFilter.search}
+                onChange={e => setInquiryFilter(f => ({ ...f, search: e.target.value }))}
+                className="flex-1 bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+              />
+              <select
+                value={inquiryFilter.status}
+                onChange={e => setInquiryFilter(f => ({ ...f, status: e.target.value }))}
+                className="bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+              >
+                <option value="">All statuses</option>
+                <option value="INQUIRY">Inquiry</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+              <select
+                value={inquiryFilter.service}
+                onChange={e => setInquiryFilter(f => ({ ...f, service: e.target.value }))}
+                className="bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+              >
+                <option value="">All services</option>
+                {Array.from(new Set(inquiries.map(i => i.service))).map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              {(inquiryFilter.search || inquiryFilter.status || inquiryFilter.service) && (
+                <button onClick={() => setInquiryFilter({ search: '', status: '', service: '' })} className="text-xs text-[#AAAAAA] hover:text-[#1a2030] transition-colors whitespace-nowrap">
+                  Clear
+                </button>
+              )}
+            </div>
+
+            <div className="p-4 pt-0">
+              <div className="border border-[#EBEBEB] rounded-xl overflow-hidden">
+                <div className="grid grid-cols-[1.4fr_1.4fr_160px_130px] gap-4 px-6 py-3 bg-[#FAFAFA] border-b border-[#F0F0F0]">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Inquiry</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Contact</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Service</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Received</p>
+                </div>
+
+                {filteredInquiries.length === 0 ? (
+                  <p className="px-6 py-8 text-sm text-[#AAA]">{inquiries.length === 0 ? 'No inquiries yet.' : 'No inquiries match your filters.'}</p>
+                ) : (
+                  <ul className="divide-y divide-[#F5F5F5]">
+                    {filteredInquiries.map((inq) => {
+                      return (
+                        <li key={inq.id}>
+                          <button
+                            type="button"
+                            onClick={() => openInquiry(inq.id)}
+                            className="w-full grid grid-cols-[1.4fr_1.4fr_160px_130px] gap-4 px-6 py-4 items-center text-left hover:bg-[#FAFAFA] transition-colors"
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium text-[#1a1a1a] truncate">{inq.projectName || inq.service}</p>
+                                <Badge status={inq.status} />
+                              </div>
+                              <p className="text-xs text-[#888] truncate">{inq.name}{inq.company ? ` · ${inq.company}` : ''}</p>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm text-[#555] truncate">{inq.email}</p>
+                              <p className="text-xs text-[#888] truncate">{inq.phone ?? '—'}</p>
+                            </div>
+                            <p className="text-xs text-[#555] truncate">{inq.service}</p>
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-xs text-[#555]">{fmt(inq.createdAt)}</p>
+                              <ChevronRight size={15} strokeWidth={1.75} className="text-[#AAAAAA]" />
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+              </motion.div>
+            ) : (
+            <motion.div
+              key="inquiry-detail"
+              custom={inquiryDirection}
+              variants={inquirySlide}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+            >
+              <button
+                type="button"
+                onClick={closeInquiry}
+                className="inline-flex items-center gap-1 mb-4 text-sm font-medium text-[#888] hover:text-[#1a2030] transition-colors"
+              >
+                <ChevronLeft size={16} strokeWidth={1.75} />
+                Back
+              </button>
+              <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
+                <div className="px-6 py-5 flex flex-wrap items-start justify-between gap-3 border-b border-[#F0F0F0]">
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-semibold text-[#1a1a1a] truncate">{selectedInquiry.projectName || selectedInquiry.service}</h2>
+                    <p className="text-xs text-[#888] mt-0.5">Received {fmt(selectedInquiry.createdAt)}</p>
+                  </div>
+                  <Badge status={selectedInquiry.status} />
+                </div>
+                <div className="p-6 space-y-8">
+                  <InquirySection icon={User03Icon} label="Contact">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Name</p>
+                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Email</p>
+                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.email}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Phone</p>
+                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.phone ?? '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Company</p>
+                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.company ?? '—'}</p>
+                    </div>
+                    </div>
+                  </InquirySection>
+                  <InquirySection icon={Briefcase06Icon} label="Project">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Project Name</p>
+                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.projectName ?? '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Project Type</p>
+                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.service}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Budget</p>
+                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.budgetRange ?? '—'}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Timeframe</p>
+                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.timeline ?? '—'}</p>
+                    </div>
+                    </div>
+                  </InquirySection>
+                  <InquirySection icon={File02Icon} label="Project Description">
+                    <p className="text-sm text-[#555] whitespace-pre-wrap">{selectedInquiry.description}</p>
+                  </InquirySection>
+                  <InquirySection icon={Attachment01Icon} label="Attached Files">
+                    {selectedInquiry.attachments.length === 0 ? (
+                      <p className="text-sm text-[#AAA]">No files attached.</p>
+                    ) : (
+                      <ul className="flex flex-wrap gap-3">
+                        {selectedInquiry.attachments.map((file) => {
+                          const url = `/api/admin/inquiries/${selectedInquiry.id}/attachments/${file.id}`;
+                          const kind = previewKind(file.fileName);
+                          const ext = file.fileName.split('.').pop()?.toUpperCase() ?? 'FILE';
+                          return (
+                            <li key={file.id}>
+                              <button
+                                type="button"
+                                onClick={() => setPreviewFile({ url, fileName: file.fileName, size: file.size })}
+                                title={`${file.fileName} · ${formatBytes(file.size)}`}
+                                className="group relative block w-[120px] h-[120px] rounded-2xl overflow-hidden border border-[#EBEBEB] bg-[#FAFAFA] hover:border-[#1a2030]/25 hover:shadow-md transition-all"
+                              >
+                                {kind === 'image' && (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={`${url}?inline=1`} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                                )}
+                                {kind === 'video' && (
+                                  <video src={`${url}?inline=1#t=0.1`} preload="metadata" muted playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+                                )}
+                                {kind !== 'image' && kind !== 'video' && (
+                                  <div className="absolute inset-0 pb-7 flex flex-col items-center justify-center gap-1.5">
+                                    <HugeiconsIcon icon={File02Icon} size={32} color="#AAAAAA" strokeWidth={1.5} />
+                                    <span className="text-[10px] font-semibold tracking-widest text-[#AAA]">{ext}</span>
+                                  </div>
+                                )}
+                                <span className="absolute inset-x-0 bottom-0 px-2.5 py-1.5 bg-white/90 backdrop-blur-sm border-t border-[#F0F0F0] text-[11px] text-[#1a1a1a] truncate text-left">
+                                  {file.fileName}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </InquirySection>
+                  <InquirySection icon={PackageIcon} label="Deliverables">
+                    <DeliverablesPanel
+                      targetType="inquiry"
+                      targetId={selectedInquiry.id}
+                      service={selectedInquiry.service}
+                      deliverables={deliverables}
+                      onPreview={setPreviewFile}
+                    />
+                  </InquirySection>
+                </div>
+              </div>
+            </motion.div>
+            )}
+          </AnimatePresence>
+        )}
+
+        <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
 
         {activeView === 'workspace' && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -881,6 +1211,17 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
         )}
 
         {activeView === 'projects' && (
+          <AnimatePresence mode="wait" initial={false} custom={projectDirection}>
+            {!selectedProject ? (
+              <motion.div
+                key="project-list"
+                custom={projectDirection}
+                variants={inquirySlide}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.25, ease: 'easeInOut' }}
+              >
           <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
             <div className="px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -957,7 +1298,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                       if (projectFilter.service && p.service !== projectFilter.service) return false;
                       return true;
                     }).map((p) => (
-                      <li key={p.id} className="grid grid-cols-[1fr_1fr_160px_80px] gap-4 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors">
+                      <li key={p.id} onClick={() => openProject(p.id)} className="grid grid-cols-[1fr_1fr_160px_80px] gap-4 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors cursor-pointer">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-medium text-[#1a1a1a] truncate">{p.name}</p>
@@ -967,7 +1308,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                         </div>
                         <p className="text-sm text-[#555] truncate">{p.company?.name ?? '—'}</p>
                         <p className="text-xs text-[#555] truncate">{p.service}</p>
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => openInvoiceForProject(p)}
                             className="text-[#7c3aed] hover:text-[#5b21b6] transition-colors"
@@ -993,6 +1334,63 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
               </div>
             </div>
           </div>
+              </motion.div>
+            ) : (
+            <motion.div
+              key="project-detail"
+              custom={projectDirection}
+              variants={inquirySlide}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+            >
+              <button
+                type="button"
+                onClick={closeProject}
+                className="inline-flex items-center gap-1 mb-4 text-sm font-medium text-[#888] hover:text-[#1a2030] transition-colors"
+              >
+                <ChevronLeft size={16} strokeWidth={1.75} />
+                Back
+              </button>
+              <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
+                <div className="px-6 py-5 flex flex-wrap items-start justify-between gap-3 border-b border-[#F0F0F0]">
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-semibold text-[#1a1a1a] truncate">{selectedProject.name}</h2>
+                    <p className="text-xs text-[#888] mt-0.5">Created {fmt(selectedProject.createdAt)}</p>
+                  </div>
+                  <Badge status={selectedProject.status} />
+                </div>
+                <div className="p-6 space-y-8">
+                  <InquirySection icon={Briefcase06Icon} label="Project">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                      {[
+                        ['Project Type', selectedProject.service],
+                        ['Company', selectedProject.company?.name ?? '—'],
+                        ['Client', selectedProject.primaryUser?.name ?? '—'],
+                        ['Client Email', selectedProject.primaryUser?.email ?? '—'],
+                      ].map(([label, value]) => (
+                        <div key={label}>
+                          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">{label}</p>
+                          <p className="text-sm text-[#1a1a1a] break-words">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </InquirySection>
+                  <InquirySection icon={PackageIcon} label="Deliverables">
+                    <DeliverablesPanel
+                      targetType="project"
+                      targetId={selectedProject.id}
+                      service={selectedProject.service}
+                      deliverables={deliverables}
+                      onPreview={setPreviewFile}
+                    />
+                  </InquirySection>
+                </div>
+              </div>
+            </motion.div>
+            )}
+          </AnimatePresence>
         )}
 
         {activeView === 'billing' && billingSubView === null && (
@@ -1259,7 +1657,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
           </div>
         )}
 
-        {activeView !== 'dashboard' && activeView !== 'workspace' && activeView !== 'clients' && activeView !== 'projects' && activeView !== 'billing' && activeView !== 'profile' && (
+        {activeView !== 'dashboard' && activeView !== 'workspace' && activeView !== 'inquiries' && activeView !== 'clients' && activeView !== 'projects' && activeView !== 'billing' && activeView !== 'profile' && (
           <div className="bg-white rounded-2xl border border-[#EBEBEB] p-10 text-center">
             <p className="text-sm text-[#AAA]">Coming soon</p>
           </div>
