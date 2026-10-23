@@ -23,7 +23,7 @@ export default async function AdminPage() {
       }),
       prisma.deliverable.findMany({
         orderBy: { createdAt: 'asc' },
-        select: { id: true, inquiryId: true, projectId: true, category: true, fileName: true, size: true, createdAt: true },
+        select: { id: true, inquiryId: true, projectId: true, category: true, description: true, fileName: true, size: true, createdAt: true },
       }),
       prisma.inquiry.findMany({
         orderBy: { createdAt: 'desc' },

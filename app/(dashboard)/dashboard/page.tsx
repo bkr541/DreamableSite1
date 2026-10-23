@@ -43,7 +43,7 @@ export default async function DashboardPage() {
       ],
     },
     orderBy: { createdAt: 'asc' },
-    select: { id: true, inquiryId: true, projectId: true, category: true, fileName: true, size: true },
+    select: { id: true, inquiryId: true, projectId: true, category: true, description: true, fileName: true, size: true },
   });
 
   return (

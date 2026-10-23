@@ -8,12 +8,13 @@ interface FileTileProps {
   url: string;
   fileName: string;
   size: number;
+  description?: string | null;
   onOpen: () => void;
   onDelete?: () => void;
 }
 
 /** 120px rounded square with a thumbnail for images/videos and a file icon for everything else. */
-export default function FileTile({ url, fileName, size, onOpen, onDelete }: FileTileProps) {
+export default function FileTile({ url, fileName, size, description, onOpen, onDelete }: FileTileProps) {
   const kind = previewKind(fileName);
   const ext = fileName.split('.').pop()?.toUpperCase() ?? 'FILE';
 
@@ -23,7 +24,7 @@ export default function FileTile({ url, fileName, size, onOpen, onDelete }: File
         type="button"
         onClick={onOpen}
         title={`${fileName} · ${formatBytes(size)}`}
-        className="relative block w-[120px] h-[120px] rounded-2xl overflow-hidden border border-[#EBEBEB] bg-[#FAFAFA] hover:border-[#1a2030]/25 hover:shadow-md transition-all"
+        className="relative block w-[120px] h-[120px] rounded-2xl overflow-hidden border border-[#EBEBEB] hover:border-[#1a2030]/25 hover:shadow-md transition-all"
       >
         {kind === 'image' && (
           // eslint-disable-next-line @next/next/no-img-element
@@ -38,10 +39,11 @@ export default function FileTile({ url, fileName, size, onOpen, onDelete }: File
             <span className="text-[10px] font-semibold tracking-widest text-[#AAA]">{ext}</span>
           </div>
         )}
-        <span className="absolute inset-x-0 bottom-0 px-2.5 py-1.5 bg-white/90 backdrop-blur-sm border-t border-[#F0F0F0] text-[11px] text-[#1a1a1a] truncate text-left">
+        <span className="absolute inset-x-0 bottom-0 px-2.5 py-1.5 bg-white border-t border-[#F0F0F0] text-[11px] text-[#1a1a1a] truncate text-left">
           {fileName}
         </span>
       </button>
+      {description && <p className="w-[120px] mt-1.5 text-[11px] leading-snug text-[#888] line-clamp-2" title={description}>{description}</p>}
       {onDelete && (
         <button
           type="button"

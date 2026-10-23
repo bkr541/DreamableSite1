@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import { fileResponse } from '@/lib/serveFile';
+import { applyWatermark, canWatermark } from '@/lib/watermark';
 
 // Serves a deliverable to an admin, or to the client it was delivered to.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -33,7 +34,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    return fileResponse(file, req.nextUrl.searchParams.get('inline') === '1');
+    const wantInline = req.nextUrl.searchParams.get('inline') === '1';
+    if (file.watermark && canWatermark(file.fileName)) {
+      const data = await applyWatermark(file.fileName, file.data);
+      return fileResponse({ fileName: file.fileName, size: data.length, data }, wantInline);
+    }
+    return fileResponse(file, wantInline);
   } catch (err) {
     console.error('[deliverables GET]', err);
     return NextResponse.json({ ok: false, error: 'Internal server error.' }, { status: 500 });

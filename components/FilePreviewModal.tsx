@@ -9,6 +9,7 @@ export interface PreviewFile {
   url: string;
   fileName: string;
   size: number;
+  description?: string | null;
 }
 
 export type PreviewKind = 'image' | 'pdf' | 'video' | 'text' | null;
@@ -74,6 +75,7 @@ export default function FilePreviewModal({ file, onClose }: { file: PreviewFile 
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-[#1a1a1a] truncate">{file.fileName}</p>
                   <p className="text-xs text-[#888]">{formatBytes(file.size)}</p>
+                  {file.description && <p className="text-sm text-[#555] mt-1.5 whitespace-pre-wrap">{file.description}</p>}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   <a

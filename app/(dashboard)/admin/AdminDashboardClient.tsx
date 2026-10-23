@@ -157,6 +157,41 @@ function Badge({ status }: { status: string }) {
   );
 }
 
+type DetailTab = 'info' | 'deliverables';
+
+function DetailTabs({ tab, onChange }: { tab: DetailTab; onChange: (t: DetailTab) => void }) {
+  const tabs: { id: DetailTab; label: string }[] = [
+    { id: 'info', label: 'Project Information' },
+    { id: 'deliverables', label: 'Deliverables' },
+  ];
+  return (
+    <div role="tablist" className="px-6 flex gap-6 border-b border-[#F0F0F0]">
+      {tabs.map((t) => {
+        const active = tab === t.id;
+        return (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(t.id)}
+            className={`relative py-3 text-sm font-medium transition-colors ${active ? 'text-[#1a2030]' : 'text-[#999] hover:text-[#555]'}`}
+          >
+            {t.label}
+            {active && (
+              <motion.span
+                layoutId="detail-tab-underline"
+                className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-[#3DD9C8] via-[#7BB5F5] to-[#B87AF5]"
+                transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+              />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function InquirySection({ icon, label, children }: { icon: typeof User03Icon; label: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(true);
   return (
@@ -165,7 +200,7 @@ function InquirySection({ icon, label, children }: { icon: typeof User03Icon; la
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-2 text-xs font-semibold text-[#999] uppercase tracking-widest hover:text-[#1a2030] transition-colors"
+        className="w-full flex items-center gap-2 py-1.5 text-xs font-semibold text-[#999] uppercase tracking-widest hover:text-[#1a2030] transition-colors"
       >
         <HugeiconsIcon icon={icon} size={16} color="currentColor" strokeWidth={1.5} />
         {label}
@@ -176,13 +211,12 @@ function InquirySection({ icon, label, children }: { icon: typeof User03Icon; la
       <AnimatePresence initial={false}>
         {open && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
+            initial={{ height: 0, opacity: 0, overflow: 'hidden' }}
+            animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }}
+            exit={{ height: 0, opacity: 0, overflow: 'hidden' }}
             transition={{ duration: 0.2 }}
-            className="overflow-hidden"
           >
-            <div className="pt-4 pl-6">{children}</div>
+            <div className="pt-2 pb-2 pl-6">{children}</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -248,6 +282,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
   const [inquiryFilter, setInquiryFilter] = useState({ search: '', status: '', service: '' });
   function openProject(id: string) {
     setProjectDirection(1);
+    setDetailTab('info');
     setSelectedProjectId(id);
   }
 
@@ -256,6 +291,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
     setSelectedProjectId(null);
   }
 
+  const [detailTab, setDetailTab] = useState<DetailTab>('info');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [projectDirection, setProjectDirection] = useState(1);
   const selectedProject = projects.find(p => p.id === selectedProjectId) ?? null;
@@ -275,6 +311,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
 
   function openInquiry(id: string) {
     setInquiryDirection(1);
+    setDetailTab('info');
     setSelectedInquiryId(id);
   }
 
@@ -910,7 +947,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 <ChevronLeft size={16} strokeWidth={1.75} />
                 Back
               </button>
-              <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
+              <div className="bg-white rounded-2xl border border-[#EBEBEB]">
                 <div className="px-6 py-5 flex flex-wrap items-start justify-between gap-3 border-b border-[#F0F0F0]">
                   <div className="min-w-0">
                     <h2 className="text-lg font-semibold text-[#1a1a1a] truncate">{selectedInquiry.projectName || selectedInquiry.service}</h2>
@@ -918,90 +955,99 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                   </div>
                   <Badge status={selectedInquiry.status} />
                 </div>
-                <div className="p-6 space-y-8">
-                  <InquirySection icon={User03Icon} label="Contact">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Name</p>
-                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.name}</p>
+                <DetailTabs tab={detailTab} onChange={setDetailTab} />
+                <div className="px-6 py-4 space-y-3">
+                  {detailTab === 'info' ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-[7fr_3fr] gap-x-8 gap-y-3 items-start">
+                    <div className="space-y-3 min-w-0">
+                    <InquirySection icon={User03Icon} label="Contact">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Name</p>
+                        <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Email</p>
+                        <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.email}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Phone</p>
+                        <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.phone ?? '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Company</p>
+                        <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.company ?? '—'}</p>
+                      </div>
+                      </div>
+                    </InquirySection>
+                    <InquirySection icon={Briefcase06Icon} label="Project">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Project Name</p>
+                        <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.projectName ?? '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Project Type</p>
+                        <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.service}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Budget</p>
+                        <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.budgetRange ?? '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Timeframe</p>
+                        <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.timeline ?? '—'}</p>
+                      </div>
+                      </div>
+                    </InquirySection>
+                    <InquirySection icon={File02Icon} label="Project Description">
+                      <p className="text-sm text-[#555] whitespace-pre-wrap">{selectedInquiry.description}</p>
+                    </InquirySection>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Email</p>
-                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.email}</p>
+                    <div className="min-w-0">
+                    <InquirySection icon={Attachment01Icon} label="Attached Files">
+                      {selectedInquiry.attachments.length === 0 ? (
+                        <p className="text-sm text-[#AAA]">No files attached.</p>
+                      ) : (
+                        <ul className="flex flex-wrap gap-3">
+                          {selectedInquiry.attachments.map((file) => {
+                            const url = `/api/admin/inquiries/${selectedInquiry.id}/attachments/${file.id}`;
+                            const kind = previewKind(file.fileName);
+                            const ext = file.fileName.split('.').pop()?.toUpperCase() ?? 'FILE';
+                            return (
+                              <li key={file.id}>
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewFile({ url, fileName: file.fileName, size: file.size })}
+                                  title={`${file.fileName} · ${formatBytes(file.size)}`}
+                                  className="group relative block w-[120px] h-[120px] rounded-2xl overflow-hidden border border-[#EBEBEB] hover:border-[#1a2030]/25 hover:shadow-md transition-all"
+                                >
+                                  {kind === 'image' && (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={`${url}?inline=1`} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                                  )}
+                                  {kind === 'video' && (
+                                    <video src={`${url}?inline=1#t=0.1`} preload="metadata" muted playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+                                  )}
+                                  {kind !== 'image' && kind !== 'video' && (
+                                    <div className="absolute inset-0 pb-7 flex flex-col items-center justify-center gap-1.5">
+                                      <HugeiconsIcon icon={File02Icon} size={32} color="#AAAAAA" strokeWidth={1.5} />
+                                      <span className="text-[10px] font-semibold tracking-widest text-[#AAA]">{ext}</span>
+                                    </div>
+                                  )}
+                                  <span className="absolute inset-x-0 bottom-0 px-2.5 py-1.5 bg-white border-t border-[#F0F0F0] text-[11px] text-[#1a1a1a] truncate text-left">
+                                    {file.fileName}
+                                  </span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </InquirySection>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Phone</p>
-                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.phone ?? '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Company</p>
-                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.company ?? '—'}</p>
-                    </div>
-                    </div>
-                  </InquirySection>
-                  <InquirySection icon={Briefcase06Icon} label="Project">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Project Name</p>
-                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.projectName ?? '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Project Type</p>
-                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.service}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Budget</p>
-                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.budgetRange ?? '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] mb-1">Timeframe</p>
-                      <p className="text-sm text-[#1a1a1a] break-words">{selectedInquiry.timeline ?? '—'}</p>
-                    </div>
-                    </div>
-                  </InquirySection>
-                  <InquirySection icon={File02Icon} label="Project Description">
-                    <p className="text-sm text-[#555] whitespace-pre-wrap">{selectedInquiry.description}</p>
-                  </InquirySection>
-                  <InquirySection icon={Attachment01Icon} label="Attached Files">
-                    {selectedInquiry.attachments.length === 0 ? (
-                      <p className="text-sm text-[#AAA]">No files attached.</p>
-                    ) : (
-                      <ul className="flex flex-wrap gap-3">
-                        {selectedInquiry.attachments.map((file) => {
-                          const url = `/api/admin/inquiries/${selectedInquiry.id}/attachments/${file.id}`;
-                          const kind = previewKind(file.fileName);
-                          const ext = file.fileName.split('.').pop()?.toUpperCase() ?? 'FILE';
-                          return (
-                            <li key={file.id}>
-                              <button
-                                type="button"
-                                onClick={() => setPreviewFile({ url, fileName: file.fileName, size: file.size })}
-                                title={`${file.fileName} · ${formatBytes(file.size)}`}
-                                className="group relative block w-[120px] h-[120px] rounded-2xl overflow-hidden border border-[#EBEBEB] bg-[#FAFAFA] hover:border-[#1a2030]/25 hover:shadow-md transition-all"
-                              >
-                                {kind === 'image' && (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={`${url}?inline=1`} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
-                                )}
-                                {kind === 'video' && (
-                                  <video src={`${url}?inline=1#t=0.1`} preload="metadata" muted playsInline className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
-                                )}
-                                {kind !== 'image' && kind !== 'video' && (
-                                  <div className="absolute inset-0 pb-7 flex flex-col items-center justify-center gap-1.5">
-                                    <HugeiconsIcon icon={File02Icon} size={32} color="#AAAAAA" strokeWidth={1.5} />
-                                    <span className="text-[10px] font-semibold tracking-widest text-[#AAA]">{ext}</span>
-                                  </div>
-                                )}
-                                <span className="absolute inset-x-0 bottom-0 px-2.5 py-1.5 bg-white/90 backdrop-blur-sm border-t border-[#F0F0F0] text-[11px] text-[#1a1a1a] truncate text-left">
-                                  {file.fileName}
-                                </span>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </InquirySection>
+                  </div>
+                  ) : (
                   <InquirySection icon={PackageIcon} label="Deliverables">
                     <DeliverablesPanel
                       targetType="inquiry"
@@ -1011,6 +1057,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                       onPreview={setPreviewFile}
                     />
                   </InquirySection>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -1353,7 +1400,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 <ChevronLeft size={16} strokeWidth={1.75} />
                 Back
               </button>
-              <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
+              <div className="bg-white rounded-2xl border border-[#EBEBEB]">
                 <div className="px-6 py-5 flex flex-wrap items-start justify-between gap-3 border-b border-[#F0F0F0]">
                   <div className="min-w-0">
                     <h2 className="text-lg font-semibold text-[#1a1a1a] truncate">{selectedProject.name}</h2>
@@ -1361,9 +1408,11 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                   </div>
                   <Badge status={selectedProject.status} />
                 </div>
-                <div className="p-6 space-y-8">
+                <DetailTabs tab={detailTab} onChange={setDetailTab} />
+                <div className="px-6 py-4 space-y-3">
+                  {detailTab === 'info' ? (
                   <InquirySection icon={Briefcase06Icon} label="Project">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       {[
                         ['Project Type', selectedProject.service],
                         ['Company', selectedProject.company?.name ?? '—'],
@@ -1377,6 +1426,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                       ))}
                     </div>
                   </InquirySection>
+                  ) : (
                   <InquirySection icon={PackageIcon} label="Deliverables">
                     <DeliverablesPanel
                       targetType="project"
@@ -1386,6 +1436,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                       onPreview={setPreviewFile}
                     />
                   </InquirySection>
+                  )}
                 </div>
               </div>
             </motion.div>

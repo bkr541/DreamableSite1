@@ -72,6 +72,8 @@ model Deliverable {
   projectId String? @map("project_id") @db.Uuid
 
   category    String
+  description String?
+  watermark   Boolean @default(false)
   fileName    String @map("file_name")
   contentType String @map("content_type")
   size        Int

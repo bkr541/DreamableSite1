@@ -14,6 +14,7 @@ interface Deliverable {
   inquiryId: string | null;
   projectId: string | null;
   category: string;
+  description: string | null;
   fileName: string;
   size: number;
 }
@@ -114,7 +115,8 @@ function DeliverableGroups({ service, items, onPreview }: { service: string; ite
                 url={`/api/deliverables/${d.id}`}
                 fileName={d.fileName}
                 size={d.size}
-                onOpen={() => onPreview({ url: `/api/deliverables/${d.id}`, fileName: d.fileName, size: d.size })}
+                description={d.description}
+                onOpen={() => onPreview({ url: `/api/deliverables/${d.id}`, fileName: d.fileName, size: d.size, description: d.description })}
               />
             ))}
           </div>

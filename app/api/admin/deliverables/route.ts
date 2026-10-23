@@ -7,6 +7,7 @@ import {
   DELIVERABLE_MAX_FILES,
 } from '@/lib/deliverables';
 import { UPLOAD_EXT } from '@/lib/serveFile';
+import { canWatermark } from '@/lib/watermark';
 
 const fail = (error: string, status: number) => NextResponse.json({ ok: false, error }, { status });
 
@@ -19,6 +20,8 @@ export async function POST(req: NextRequest) {
     const targetType = String(form.get('targetType') ?? '');
     const targetId = String(form.get('targetId') ?? '');
     const category = String(form.get('category') ?? '');
+    const wordmark = form.get('watermark') === '1';
+    const descriptions: unknown = JSON.parse(String(form.get('descriptions') ?? '[]'));
     const files = form.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
 
     if (targetType !== 'inquiry' && targetType !== 'project') return fail('Invalid target.', 400);
@@ -40,9 +43,12 @@ export async function POST(req: NextRequest) {
     }
 
     const rows = await Promise.all(
-      files.map(async (f) => ({
+      files.map(async (f, i) => ({
         [targetType === 'inquiry' ? 'inquiryId' : 'projectId']: targetId,
         category,
+        watermark: wordmark && canWatermark(f.name),
+        description:
+          (Array.isArray(descriptions) && typeof descriptions[i] === 'string' ? descriptions[i].trim().slice(0, 500) : '') || null,
         fileName: f.name,
         contentType: f.type || 'application/octet-stream',
         size: f.size,
@@ -51,7 +57,8 @@ export async function POST(req: NextRequest) {
     );
     await prisma.deliverable.createMany({ data: rows });
 
-    return NextResponse.json({ ok: true, count: rows.length });
+    const skipped = wordmark ? files.filter((f) => !canWatermark(f.name)).map((f) => f.name) : [];
+    return NextResponse.json({ ok: true, count: rows.length, skipped });
   } catch (err) {
     console.error('[admin/deliverables POST]', err);
     return fail('Internal server error.', 500);
