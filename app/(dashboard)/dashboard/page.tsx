@@ -43,13 +43,25 @@ export default async function DashboardPage() {
       ],
     },
     orderBy: { createdAt: 'asc' },
-    select: { id: true, inquiryId: true, projectId: true, category: true, description: true, fileName: true, size: true },
+    select: { id: true, inquiryId: true, projectId: true, folderId: true, title: true, description: true, fileName: true, size: true },
+  });
+
+  const folders = await prisma.deliverableFolder.findMany({
+    where: {
+      OR: [
+        { project: { primaryUserId: user.id } },
+        ...(user.inquiryId ? [{ inquiryId: user.inquiryId }] : []),
+      ],
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, inquiryId: true, projectId: true, name: true, description: true },
   });
 
   return (
     <CustomerDashboardClient
       session={session}
       deliverables={deliverables}
+      folders={folders}
       user={{
         ...user,
         inquiryService: user.inquiry?.service ?? null,

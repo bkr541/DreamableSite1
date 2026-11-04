@@ -40,6 +40,7 @@ model Inquiry {
   companyRecord Company?
   attachments   InquiryAttachment[]
   deliverables  Deliverable[]
+  deliverableFolders DeliverableFolder[]
   project       Project?
 
   @@index([createdAt(sort: Desc)])
@@ -71,7 +72,9 @@ model Deliverable {
   inquiryId String? @map("inquiry_id") @db.Uuid
   projectId String? @map("project_id") @db.Uuid
 
-  category    String
+  folderId    String? @map("folder_id") @db.Uuid
+  category    String?
+  title       String?
   description String?
   watermark   Boolean @default(false)
   fileName    String @map("file_name")
@@ -81,10 +84,34 @@ model Deliverable {
 
   inquiry Inquiry? @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  folder  DeliverableFolder? @relation(fields: [folderId], references: [id], onDelete: Cascade)
 
   @@index([inquiryId])
   @@index([projectId])
+  @@index([folderId])
   @@map("deliverables")
+}
+
+model DeliverableFolder {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  inquiryId String? @map("inquiry_id") @db.Uuid
+  projectId String? @map("project_id") @db.Uuid
+
+  name        String
+  description String?
+  isPublic    Boolean @default(false) @map("is_public")
+  shareToken  String  @unique @map("share_token")
+
+  inquiry      Inquiry?      @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  project      Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deliverables Deliverable[]
+
+  @@index([inquiryId])
+  @@index([projectId])
+  @@map("deliverable_folders")
 }
 
 model User {
@@ -225,6 +252,7 @@ model Project {
   completedAt   DateTime? @map("completed_at") @db.Timestamptz()
 
   deliverables Deliverable[]
+  deliverableFolders DeliverableFolder[]
   inquiry     Inquiry? @relation(fields: [inquiryId], references: [id])
   company     Company  @relation(fields: [companyId], references: [id])
   primaryUser User?    @relation("ProjectPrimaryUser", fields: [primaryUserId], references: [id])

@@ -9,6 +9,8 @@ export interface PreviewFile {
   url: string;
   fileName: string;
   size: number;
+  /** Display name; falls back to the file name. */
+  title?: string | null;
   description?: string | null;
 }
 
@@ -64,7 +66,7 @@ export default function FilePreviewModal({ file, onClose }: { file: PreviewFile 
             <motion.div
               role="dialog"
               aria-modal="true"
-              aria-label={file.fileName}
+              aria-label={file.title || file.fileName}
               initial={{ opacity: 0, scale: 0.97, y: 10 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.97, y: 10 }}
@@ -73,8 +75,8 @@ export default function FilePreviewModal({ file, onClose }: { file: PreviewFile 
             >
               <div className="px-6 py-4 flex items-center justify-between gap-4 border-b border-[#F0F0F0]">
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-[#1a1a1a] truncate">{file.fileName}</p>
-                  <p className="text-xs text-[#888]">{formatBytes(file.size)}</p>
+                  <p className="text-sm font-semibold text-[#1a1a1a] truncate">{file.title || file.fileName}</p>
+                  <p className="text-xs text-[#888] truncate">{file.title && file.title !== file.fileName ? `${file.fileName} · ` : ''}{formatBytes(file.size)}</p>
                   {file.description && <p className="text-sm text-[#555] mt-1.5 whitespace-pre-wrap">{file.description}</p>}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">

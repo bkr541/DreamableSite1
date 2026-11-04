@@ -11,7 +11,7 @@ import { useToast } from '@/components/Toast';
 import RecordList, { Avatar, StatusDot } from '@/components/RecordList';
 import DatePicker from '@/components/DatePicker';
 import CustomSelect from '@/components/CustomSelect';
-import DeliverablesPanel, { DeliverableRecord } from '@/components/DeliverablesPanel';
+import DeliverablesPanel, { DeliverableRecord, FolderRecord } from '@/components/DeliverablesPanel';
 import FilePreviewModal, { PreviewFile, previewKind, formatBytes } from '@/components/FilePreviewModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -142,6 +142,7 @@ interface Props {
   recentInquiries: Inquiry[];
   inquiries: OpenInquiry[];
   deliverables: DeliverableRecord[];
+  folders: FolderRecord[];
   recentUsers: User[];
   clients: ClientRecord[];
   companies: Company[];
@@ -291,7 +292,7 @@ function getDefaultInvoiceForm() {
   };
 }
 
-export default function AdminDashboardClient({ session, initialView, initialInquiryId, initialProjectId, initialTab, initialBilling, stats, recentInquiries, inquiries, deliverables, recentUsers, clients, companies, services, projects, invoices, adminCompany }: Props) {
+export default function AdminDashboardClient({ session, initialView, initialInquiryId, initialProjectId, initialTab, initialBilling, stats, recentInquiries, inquiries, deliverables, folders, recentUsers, clients, companies, services, projects, invoices, adminCompany }: Props) {
   const router = useRouter();
   const [activeView, setActiveView] = useState<ViewId>(initialView);
   const [billingSubView, setBillingSubView] = useState<'invoices' | null>(initialBilling);
@@ -970,10 +971,10 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 key: 'inquiry', label: 'Inquiry', icon: Mail01Icon, width: 'minmax(0,2.2fr)',
                 render: (inq) => (
                   <div className="flex items-center gap-4 min-w-0">
-                    <Avatar name={inq.name} size={36} />
+                    <Avatar name={inq.name} size={32} />
                     <div className="min-w-0">
-                      <p className="record-title text-[15px] font-semibold text-[#1a1a1a] truncate">{inq.projectName || inq.service}</p>
-                      <p className="text-sm text-[#666] truncate">{inq.name}{inq.company ? ` · ${inq.company}` : ''}</p>
+                      <p className="record-title text-sm font-semibold text-[#1a1a1a] truncate">{inq.projectName || inq.service}</p>
+                      <p className="text-xs text-[#666] truncate">{inq.name}{inq.company ? ` · ${inq.company}` : ''}</p>
                     </div>
                   </div>
                 ),
@@ -982,14 +983,14 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 key: 'contact', label: 'Contact', icon: Call02Icon, width: 'minmax(0,1.6fr)',
                 render: (inq) => (
                   <>
-                    <p className="text-sm font-medium text-[#222] truncate">{inq.email}</p>
+                    <p className="text-[13px] font-medium text-[#222] truncate">{inq.email}</p>
                     <p className="text-xs text-[#777] truncate">{inq.phone ?? '—'}</p>
                   </>
                 ),
               },
-              { key: 'service', label: 'Service', icon: Briefcase06Icon, width: 'minmax(0,1.2fr)', render: (inq) => <p className="text-sm text-[#333] truncate">{inq.service}</p> },
+              { key: 'service', label: 'Service', icon: Briefcase06Icon, width: 'minmax(0,1.2fr)', render: (inq) => <p className="text-[13px] text-[#333] truncate">{inq.service}</p> },
               { key: 'status', label: 'Status', icon: Activity01Icon, width: '104px', render: (inq) => <StatusDot status={inq.status} /> },
-              { key: 'received', label: 'Received', icon: Calendar03Icon, width: '112px', render: (inq) => <p className="text-sm text-[#555]">{fmt(inq.createdAt)}</p> },
+              { key: 'received', label: 'Received', icon: Calendar03Icon, width: '112px', render: (inq) => <p className="text-[13px] text-[#555]">{fmt(inq.createdAt)}</p> },
             ]}
             trailing={{
               label: 'Action', icon: MoreHorizontalCircle01Icon, width: '88px', interactive: true,
@@ -997,7 +998,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 <button
                   type="button"
                   onClick={() => { setDeleteError(''); setInquiryToDelete(inq); }}
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-[#e05252] hover:bg-red-50 transition-colors"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-[#e05252] hover:bg-red-50 transition-colors"
                   title="Delete inquiry"
                   aria-label={`Delete inquiry from ${inq.name}`}
                 >
@@ -1131,6 +1132,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                       targetType="inquiry"
                       targetId={selectedInquiry.id}
                       service={selectedInquiry.service}
+                      folders={folders}
                       deliverables={deliverables}
                       onPreview={setPreviewFile}
                     />
@@ -1247,13 +1249,13 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 key: 'client', label: 'Client', icon: User03Icon, width: 'minmax(0,2.2fr)',
                 render: (c) => (
                   <div className="flex items-center gap-4 min-w-0">
-                    <Avatar name={c.name} size={36} />
+                    <Avatar name={c.name} size={32} />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="record-title text-[15px] font-semibold text-[#1a1a1a] truncate">{c.name}</p>
+                        <p className="record-title text-sm font-semibold text-[#1a1a1a] truncate">{c.name}</p>
                         {c.admin && <span className="px-1.5 py-px rounded text-[10px] font-bold bg-[#1a2030] text-white uppercase tracking-widest shrink-0">Admin</span>}
                       </div>
-                      <p className="text-sm text-[#666] truncate">{c.email}</p>
+                      <p className="text-xs text-[#666] truncate">{c.email}</p>
                     </div>
                   </div>
                 ),
@@ -1262,14 +1264,14 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 key: 'company', label: 'Company', icon: Building01Icon, width: 'minmax(0,1.5fr)',
                 render: (c) => c.company ? (
                   <>
-                    <p className="text-sm font-medium text-[#222] truncate">{c.company.name}</p>
+                    <p className="text-[13px] font-medium text-[#222] truncate">{c.company.name}</p>
                     {c.company.website && <p className="text-xs text-[#777] truncate">{c.company.website}</p>}
                   </>
                 ) : <p className="text-sm text-[#999]">—</p>,
               },
               {
                 key: 'role', label: 'Role', icon: Shield01Icon, width: '88px',
-                render: (c) => <span className="rounded-md border border-[#D5D9E4] px-2.5 py-1 text-xs font-semibold capitalize text-[#444]">{c.role.toLowerCase()}</span>,
+                render: (c) => <span className="rounded-md border border-[#D5D9E4] px-2 py-0.5 text-xs font-semibold capitalize text-[#444]">{c.role.toLowerCase()}</span>,
               },
               { key: 'status', label: 'Status', icon: Activity01Icon, width: '104px', render: (c) => <StatusDot status={c.status} /> },
               {
@@ -1277,7 +1279,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 render: (c) => {
                   const n = projects.filter(p => p.primaryUser?.id === c.id).length;
                   return (
-                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${n ? 'bg-[#EEF2FF] text-[#4f6df5]' : 'bg-[#F1F2F5] text-[#8a90a0]'}`}>
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${n ? 'bg-[#EEF2FF] text-[#4f6df5]' : 'bg-[#F1F2F5] text-[#8a90a0]'}`}>
                       {n} {n === 1 ? 'project' : 'projects'}
                     </span>
                   );
@@ -1290,7 +1292,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 <button
                   type="button"
                   onClick={() => openProjectForClient(c)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-[#7c3aed] hover:bg-purple-50 transition-colors"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-[#7c3aed] hover:bg-purple-50 transition-colors"
                   title={`Create a project for ${c.name}`}
                   aria-label={`Create a project for ${c.name}`}
                 >
@@ -1368,26 +1370,26 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 key: 'project', label: 'Project', icon: Briefcase06Icon, width: 'minmax(0,2.2fr)',
                 render: (p) => (
                   <div className="flex items-center gap-4 min-w-0">
-                    <Avatar name={p.name} size={36} />
+                    <Avatar name={p.name} size={32} />
                     <div className="min-w-0">
-                      <p className="record-title text-[15px] font-semibold text-[#1a1a1a] truncate">{p.name}</p>
-                      <p className="text-sm text-[#666] truncate">{p.service}</p>
+                      <p className="record-title text-sm font-semibold text-[#1a1a1a] truncate">{p.name}</p>
+                      <p className="text-xs text-[#666] truncate">{p.service}</p>
                     </div>
                   </div>
                 ),
               },
-              { key: 'company', label: 'Company', icon: Building01Icon, width: 'minmax(0,1.3fr)', render: (p) => <p className="text-sm font-medium text-[#222] truncate">{p.company?.name ?? '—'}</p> },
+              { key: 'company', label: 'Company', icon: Building01Icon, width: 'minmax(0,1.3fr)', render: (p) => <p className="text-[13px] font-medium text-[#222] truncate">{p.company?.name ?? '—'}</p> },
               {
                 key: 'client', label: 'Client', icon: User03Icon, width: 'minmax(0,1.4fr)',
                 render: (p) => p.primaryUser ? (
                   <div className="flex items-center gap-2.5 min-w-0">
                     <Avatar name={p.primaryUser.name} size={28} />
-                    <span className="text-sm text-[#333] truncate">{p.primaryUser.name}</span>
+                    <span className="text-[13px] text-[#333] truncate">{p.primaryUser.name}</span>
                   </div>
                 ) : <span className="text-sm text-[#999]">—</span>,
               },
               { key: 'status', label: 'Status', icon: Activity01Icon, width: '104px', render: (p) => <StatusDot status={p.status} /> },
-              { key: 'created', label: 'Created', icon: Calendar03Icon, width: '112px', render: (p) => <p className="text-sm text-[#555]">{fmt(p.createdAt)}</p> },
+              { key: 'created', label: 'Created', icon: Calendar03Icon, width: '112px', render: (p) => <p className="text-[13px] text-[#555]">{fmt(p.createdAt)}</p> },
             ]}
             trailing={{
               label: 'Actions', icon: MoreHorizontalCircle01Icon, width: '96px', interactive: true,
@@ -1395,7 +1397,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => openInvoiceForProject(p)}
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-[#7c3aed] hover:bg-purple-50 transition-colors"
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-[#7c3aed] hover:bg-purple-50 transition-colors"
                     title="Generate invoice"
                     aria-label={`Generate invoice for ${p.name}`}
                   >
@@ -1403,7 +1405,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   </button>
                   <button
                     onClick={() => deleteProject(p)}
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-[#e05252] hover:bg-red-50 transition-colors"
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-[#e05252] hover:bg-red-50 transition-colors"
                     title="Delete project"
                     aria-label={`Delete ${p.name}`}
                   >
@@ -1464,6 +1466,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                       targetType="project"
                       targetId={selectedProject.id}
                       service={selectedProject.service}
+                      folders={folders}
                       deliverables={deliverables}
                       onPreview={setPreviewFile}
                     />

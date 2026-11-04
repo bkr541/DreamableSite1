@@ -1,0 +1,1 @@
+ALTER TABLE "deliverables" ADD COLUMN IF NOT EXISTS "title" TEXT;

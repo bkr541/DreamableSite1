@@ -19,7 +19,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const view = one(sp.view);
   const initialView = (VIEWS as readonly string[]).includes(view ?? '') ? (view as (typeof VIEWS)[number]) : 'dashboard';
 
-  const [totalUsers, totalProjects, activeProjects, openInquiries, allInquiries, deliverables, recentInquiries, recentUsers, clients, companies, services, projects, invoices, adminUser] =
+  const [totalUsers, totalProjects, activeProjects, openInquiries, allInquiries, deliverables, folders, recentInquiries, recentUsers, clients, companies, services, projects, invoices, adminUser] =
     await Promise.all([
       prisma.user.count({ where: { admin: false } }),
       prisma.project.count(),
@@ -35,7 +35,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       }),
       prisma.deliverable.findMany({
         orderBy: { createdAt: 'asc' },
-        select: { id: true, inquiryId: true, projectId: true, category: true, description: true, fileName: true, size: true, createdAt: true },
+        select: { id: true, inquiryId: true, projectId: true, folderId: true, title: true, description: true, fileName: true, size: true, createdAt: true },
+      }),
+      prisma.deliverableFolder.findMany({
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, inquiryId: true, projectId: true, name: true, description: true, isPublic: true, shareToken: true, createdAt: true },
       }),
       prisma.inquiry.findMany({
         orderBy: { createdAt: 'desc' },
@@ -109,6 +113,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       clients={clients.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() }))}
       companies={companies}
       services={services}
+      folders={folders.map((f) => ({ ...f, createdAt: f.createdAt.toISOString() }))}
       deliverables={deliverables.map((d) => ({ ...d, createdAt: d.createdAt.toISOString() }))}
       projects={projects.map((p) => ({ ...p, createdAt: p.createdAt.toISOString() }))}
       invoices={invoices.map((inv) => ({ ...inv, createdAt: inv.createdAt.toISOString() }))}

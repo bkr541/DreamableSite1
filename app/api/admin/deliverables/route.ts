@@ -1,41 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionFromRequest } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
-import {
-  getDeliverableCategories,
-  DELIVERABLE_MAX_BYTES,
-  DELIVERABLE_MAX_FILES,
-} from '@/lib/deliverables';
+import { DELIVERABLE_MAX_BYTES, DELIVERABLE_MAX_FILES } from '@/lib/deliverables';
 import { UPLOAD_EXT } from '@/lib/serveFile';
 import { canWatermark } from '@/lib/watermark';
 
 const fail = (error: string, status: number) => NextResponse.json({ ok: false, error }, { status });
 
+// Uploads files into an existing folder. A folder is required; files can't be added loose.
 export async function POST(req: NextRequest) {
   const session = getSessionFromRequest(req);
   if (!session?.admin) return fail('Unauthorized.', 401);
 
   try {
     const form = await req.formData();
-    const targetType = String(form.get('targetType') ?? '');
-    const targetId = String(form.get('targetId') ?? '');
-    const category = String(form.get('category') ?? '');
+    const folderId = String(form.get('folderId') ?? '');
     const wordmark = form.get('watermark') === '1';
     const descriptions: unknown = JSON.parse(String(form.get('descriptions') ?? '[]'));
+    const titles: unknown = JSON.parse(String(form.get('titles') ?? '[]'));
     const files = form.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
 
-    if (targetType !== 'inquiry' && targetType !== 'project') return fail('Invalid target.', 400);
-    if (!targetId) return fail('Invalid target.', 400);
+    if (!folderId) return fail('Create or choose a folder first.', 400);
     if (files.length === 0) return fail('Choose at least one file.', 400);
     if (files.length > DELIVERABLE_MAX_FILES) return fail(`Upload up to ${DELIVERABLE_MAX_FILES} files at a time.`, 400);
 
-    const target =
-      targetType === 'inquiry'
-        ? await prisma.inquiry.findUnique({ where: { id: targetId }, select: { service: true } })
-        : await prisma.project.findUnique({ where: { id: targetId }, select: { service: true } });
-    if (!target) return fail('Target not found.', 404);
-
-    if (!getDeliverableCategories(target.service).includes(category)) return fail('Invalid category.', 400);
+    const folder = await prisma.deliverableFolder.findUnique({
+      where: { id: folderId },
+      select: { id: true, inquiryId: true, projectId: true },
+    });
+    if (!folder) return fail('Folder not found.', 404);
 
     for (const f of files) {
       if (f.size > DELIVERABLE_MAX_BYTES) return fail(`${f.name} is larger than 25 MB.`, 400);
@@ -44,9 +37,13 @@ export async function POST(req: NextRequest) {
 
     const rows = await Promise.all(
       files.map(async (f, i) => ({
-        [targetType === 'inquiry' ? 'inquiryId' : 'projectId']: targetId,
-        category,
+        folderId: folder.id,
+        // Kept on the file too, so client-portal access checks don't need to look the folder up.
+        inquiryId: folder.inquiryId,
+        projectId: folder.projectId,
         watermark: wordmark && canWatermark(f.name),
+        // The title is the artifact's display name; it defaults to the file name.
+        title: (Array.isArray(titles) && typeof titles[i] === 'string' ? titles[i].trim().slice(0, 200) : '') || f.name,
         description:
           (Array.isArray(descriptions) && typeof descriptions[i] === 'string' ? descriptions[i].trim().slice(0, 500) : '') || null,
         fileName: f.name,

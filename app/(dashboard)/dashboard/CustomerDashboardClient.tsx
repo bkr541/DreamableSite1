@@ -7,16 +7,24 @@ import { useRouter } from 'next/navigation';
 import { SessionPayload } from '@/lib/session';
 import FileTile from '@/components/FileTile';
 import FilePreviewModal, { PreviewFile } from '@/components/FilePreviewModal';
-import { getDeliverableCategories } from '@/lib/deliverables';
 
 interface Deliverable {
   id: string;
   inquiryId: string | null;
   projectId: string | null;
-  category: string;
+  folderId: string | null;
+  title: string | null;
   description: string | null;
   fileName: string;
   size: number;
+}
+
+interface Folder {
+  id: string;
+  inquiryId: string | null;
+  projectId: string | null;
+  name: string;
+  description: string | null;
 }
 
 interface Project {
@@ -44,6 +52,7 @@ interface Props {
   session: SessionPayload;
   user: UserData;
   deliverables: Deliverable[];
+  folders: Folder[];
 }
 
 const STATUS_META: Record<string, { label: string; color: string; step: number }> = {
@@ -95,28 +104,30 @@ function fmtDate(iso: string | null) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function DeliverableGroups({ service, items, onPreview }: { service: string; items: Deliverable[]; onPreview: (f: PreviewFile) => void }) {
-  const known = getDeliverableCategories(service);
-  // Keep any category that's no longer in the list so a file never disappears from the client's view.
-  const categories = [...known, ...Array.from(new Set(items.map((d) => d.category))).filter((c) => !known.includes(c))];
-  const groups = categories
-    .map((category) => ({ category, items: items.filter((d) => d.category === category) }))
-    .filter((g) => g.items.length > 0);
+/** Files grouped under the folder they were delivered in. */
+function DeliverableGroups({ folders, items, onPreview }: { folders: Folder[]; items: Deliverable[]; onPreview: (f: PreviewFile) => void }) {
+  const groups = [
+    ...folders.map((f) => ({ id: f.id, name: f.name, description: f.description, items: items.filter((d) => d.folderId === f.id) })),
+    // Files delivered before folders existed still show up.
+    { id: 'unfiled', name: 'Other files', description: null as string | null, items: items.filter((d) => !d.folderId) },
+  ].filter((g) => g.items.length > 0);
 
   return (
     <div className="space-y-5">
       {groups.map((g) => (
-        <div key={g.category}>
-          <p className="text-[10px] font-semibold text-[#BBB] uppercase tracking-widest mb-2">{g.category}</p>
-          <div className="flex flex-wrap gap-3">
+        <div key={g.id}>
+          <p className="text-xs font-semibold text-[#555] mb-0.5">{g.name}</p>
+          {g.description && <p className="text-xs text-[#888] mb-2">{g.description}</p>}
+          <div className="flex flex-wrap gap-3 mt-2">
             {g.items.map((d) => (
               <FileTile
                 key={d.id}
                 url={`/api/deliverables/${d.id}`}
                 fileName={d.fileName}
                 size={d.size}
+                title={d.title}
                 description={d.description}
-                onOpen={() => onPreview({ url: `/api/deliverables/${d.id}`, fileName: d.fileName, size: d.size, description: d.description })}
+                onOpen={() => onPreview({ url: `/api/deliverables/${d.id}`, fileName: d.fileName, size: d.size, title: d.title, description: d.description })}
               />
             ))}
           </div>
@@ -126,7 +137,7 @@ function DeliverableGroups({ service, items, onPreview }: { service: string; ite
   );
 }
 
-export default function CustomerDashboardClient({ session, user, deliverables }: Props) {
+export default function CustomerDashboardClient({ session, user, deliverables, folders }: Props) {
   const router = useRouter();
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
   const inquiryDeliverables = deliverables.filter((d) => d.inquiryId && d.inquiryId === user.inquiryId);
@@ -215,7 +226,7 @@ export default function CustomerDashboardClient({ session, user, deliverables }:
                   <div className="pt-4 border-t border-[#F5F5F5]">
                     <p className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">Deliverables</p>
                     <DeliverableGroups
-                      service={project.service}
+                      folders={folders.filter((f) => f.projectId === project.id)}
                       items={deliverables.filter((d) => d.projectId === project.id)}
                       onPreview={setPreviewFile}
                     />
@@ -231,7 +242,7 @@ export default function CustomerDashboardClient({ session, user, deliverables }:
           <div className="mt-5 bg-white rounded-2xl border border-[#EBEBEB] p-6">
             <p className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">Deliverables</p>
             <DeliverableGroups
-              service={user.inquiryService ?? 'Other'}
+              folders={folders.filter((f) => f.inquiryId && f.inquiryId === user.inquiryId)}
               items={inquiryDeliverables}
               onPreview={setPreviewFile}
             />
