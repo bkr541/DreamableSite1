@@ -9,6 +9,12 @@ import PasswordInput from '@/components/PasswordInput';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Mail01Icon, LockPasswordIcon } from '@hugeicons/core-free-icons';
 
+const SERVER_ERROR = 'Something went wrong on our end. Please try again in a few minutes.';
+
+/** Server-side failures (5xx) get a plain-language message; expected errors like "Invalid email or password." pass through. */
+const friendlyError = (status: number, message: unknown, fallback: string) =>
+  status >= 500 ? SERVER_ERROR : typeof message === 'string' && message ? message : fallback;
+
 export default function Portal() {
   const router = useRouter();
   const [email, setEmail] = useState('');
@@ -50,13 +56,13 @@ export default function Portal() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || 'Something went wrong.');
+        setError(friendlyError(res.status, data.error, 'Something went wrong.'));
         return;
       }
 
       router.push(data.admin ? '/admin' : '/dashboard');
     } catch {
-      setError('Unable to connect. Please try again.');
+      setError(SERVER_ERROR);
     } finally {
       setSubmitting(false);
     }
@@ -104,12 +110,12 @@ export default function Portal() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setResetError(data.error || 'Something went wrong.');
+        setResetError(friendlyError(res.status, data.error, 'Something went wrong.'));
       } else {
         setResetStep('code');
       }
     } catch {
-      setResetError('Unable to connect. Please try again.');
+      setResetError(SERVER_ERROR);
     } finally {
       setResetSubmitting(false);
     }
@@ -133,12 +139,12 @@ export default function Portal() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setResetError(data.error || 'Invalid code.');
+        setResetError(friendlyError(res.status, data.error, 'Invalid code.'));
       } else {
         setResetStep('password');
       }
     } catch {
-      setResetError('Unable to connect. Please try again.');
+      setResetError(SERVER_ERROR);
     } finally {
       setResetSubmitting(false);
     }
@@ -170,12 +176,12 @@ export default function Portal() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setResetError(data.error || 'Something went wrong.');
+        setResetError(friendlyError(res.status, data.error, 'Something went wrong.'));
       } else {
         setResetStep('success');
       }
     } catch {
-      setResetError('Unable to connect. Please try again.');
+      setResetError(SERVER_ERROR);
     } finally {
       setResetSubmitting(false);
     }

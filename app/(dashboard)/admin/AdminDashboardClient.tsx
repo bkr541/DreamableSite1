@@ -34,6 +34,8 @@ import {
   Mail01Icon,
   Shield01Icon,
   Building01Icon,
+  Search01Icon,
+  Call02Icon,
   Link01Icon,
   File02Icon,
   Attachment01Icon,
@@ -157,6 +159,78 @@ function Badge({ status }: { status: string }) {
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide ${cls}`}>
       {status}
     </span>
+  );
+}
+
+const STATUS_DOT: Record<string, string> = {
+  INQUIRY: 'bg-amber-400',
+  APPROVED: 'bg-green-500',
+  REJECTED: 'bg-red-500',
+  ACTIVE: 'bg-blue-500',
+  INVITED: 'bg-purple-500',
+  ONBOARDING: 'bg-sky-500',
+  COMPLETED: 'bg-gray-400',
+  CANCELLED: 'bg-red-400',
+};
+
+const AVATAR_GRADIENTS = [
+  'from-[#3DD9C8] to-[#7BB5F5]',
+  'from-[#7BB5F5] to-[#B87AF5]',
+  'from-[#B87AF5] to-[#F58AC8]',
+  'from-[#F5B87A] to-[#F58A8A]',
+  'from-[#6EDC9B] to-[#3DD9C8]',
+];
+
+/** Round initials badge; the gradient is picked from the name so a person always gets the same color. */
+function Avatar({ name, size = 40 }: { name: string; size?: number }) {
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join('') || '?';
+  const hue = Array.from(name).reduce((h, c) => h + c.charCodeAt(0), 0) % AVATAR_GRADIENTS.length;
+  return (
+    <span
+      style={{ width: size, height: size, fontSize: size * 0.38 }}
+      className={`shrink-0 inline-flex items-center justify-center rounded-full bg-gradient-to-br ${AVATAR_GRADIENTS[hue]} font-semibold text-white`}
+    >
+      {initials}
+    </span>
+  );
+}
+
+function Chip({ icon, children }: { icon?: typeof Mail01Icon; children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 max-w-full rounded-full bg-[#F1F3F9] px-3 py-1 text-xs font-medium text-[#444]">
+      {icon && <HugeiconsIcon icon={icon} size={13} color="#7a869f" strokeWidth={1.75} />}
+      <span className="truncate">{children}</span>
+    </span>
+  );
+}
+
+/** Search + filters that sit directly on the page background instead of inside a card. */
+function ListToolbar({ value, onChange, placeholder, onClear, children }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  onClear?: () => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 mb-5">
+      <div className="relative flex-1 min-w-[240px]">
+        <HugeiconsIcon icon={Search01Icon} size={18} color="#999999" strokeWidth={1.5} className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full bg-white border border-[#E2E4EA] rounded-full pl-11 pr-4 py-3 text-sm text-[#1a1a1a] placeholder:text-[#999] shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-200/60 transition-all"
+        />
+      </div>
+      {children}
+      {onClear && (
+        <button type="button" onClick={onClear} className="text-sm font-medium text-[#7c3aed] hover:text-[#5b21b6] transition-colors whitespace-nowrap">
+          Clear filters
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -342,7 +416,6 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
     setInquiryDirection(-1);
     setSelectedInquiryId(null);
   }
-  const [clientsGroupOpen, setClientsGroupOpen] = useState(true);
   const [expandedClientIds, setExpandedClientIds] = useState<Set<string>>(new Set());
   const [clientFilter, setClientFilter] = useState({ search: '', status: '' });
   const [projectFilter, setProjectFilter] = useState({ search: '', status: '', service: '' });
@@ -863,23 +936,13 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 exit="exit"
                 transition={{ duration: 0.25, ease: 'easeInOut' }}
               >
-          <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
-            <div className="px-6 py-4 flex items-center gap-3">
-              <h2 className="text-sm font-semibold text-[#1a1a1a]">Inquiries</h2>
-              <span className="px-2 py-0.5 rounded-full bg-[#F0F0F0] text-[11px] font-semibold text-[#888]">
-                {filteredInquiries.length}
-              </span>
-            </div>
-
-            {/* Filter bar */}
-            <div className="px-6 pb-4 flex items-center gap-3 border-b border-[#F0F0F0]">
-              <input
-                type="text"
-                placeholder="Search by name, email, or project…"
-                value={inquiryFilter.search}
-                onChange={e => setInquiryFilter(f => ({ ...f, search: e.target.value }))}
-                className="flex-1 bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-              />
+          <div>
+            <ListToolbar
+              value={inquiryFilter.search}
+              onChange={(v) => setInquiryFilter(f => ({ ...f, search: v }))}
+              placeholder="Search by name, email, or project…"
+              onClear={(inquiryFilter.search || inquiryFilter.status || inquiryFilter.service) ? () => setInquiryFilter({ search: '', status: '', service: '' }) : undefined}
+            >
               <CustomSelect
                 value={inquiryFilter.status}
                 onChange={(v) => setInquiryFilter(f => ({ ...f, status: v }))}
@@ -892,67 +955,62 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 options={[{ value: '', label: 'All services' }, ...Array.from(new Set(inquiries.map(i => i.service))).map(sv => ({ value: sv, label: sv }))]}
                 variant="compact"
               />
-              {(inquiryFilter.search || inquiryFilter.status || inquiryFilter.service) && (
-                <button onClick={() => setInquiryFilter({ search: '', status: '', service: '' })} className="text-xs text-[#AAAAAA] hover:text-[#1a2030] transition-colors whitespace-nowrap">
-                  Clear
-                </button>
-              )}
-            </div>
+            </ListToolbar>
 
-            <div className="p-4 pt-0">
-              <div className="border border-[#EBEBEB] rounded-xl overflow-hidden">
-                <div className="grid grid-cols-[1.4fr_1.4fr_160px_130px_80px] gap-4 px-6 py-3 bg-[#FAFAFA] border-b border-[#F0F0F0]">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Inquiry</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Contact</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Service</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Received</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] text-center">Action</p>
-                </div>
+            <p className="text-sm font-medium text-[#666] mb-3">
+              {filteredInquiries.length} {filteredInquiries.length === 1 ? 'inquiry' : 'inquiries'}
+            </p>
 
-                {filteredInquiries.length === 0 ? (
-                  <p className="px-6 py-8 text-sm text-[#AAA]">{inquiries.length === 0 ? 'No inquiries yet.' : 'No inquiries match your filters.'}</p>
-                ) : (
-                  <ul className="divide-y divide-[#F5F5F5]">
-                    {filteredInquiries.map((inq) => {
-                      return (
-                        <li key={inq.id} className="flex items-center gap-4 pr-6 hover:bg-[#FAFAFA] transition-colors">
-                          <button
-                            type="button"
-                            onClick={() => openInquiry(inq.id)}
-                            className="flex-1 min-w-0 grid grid-cols-[1.4fr_1.4fr_160px_130px] gap-4 pl-6 py-4 items-center text-left"
-                          >
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="text-sm font-medium text-[#1a1a1a] truncate">{inq.projectName || inq.service}</p>
-                                <Badge status={inq.status} />
-                              </div>
-                              <p className="text-xs text-[#888] truncate">{inq.name}{inq.company ? ` · ${inq.company}` : ''}</p>
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-sm text-[#555] truncate">{inq.email}</p>
-                              <p className="text-xs text-[#888] truncate">{inq.phone ?? '—'}</p>
-                            </div>
-                            <p className="text-xs text-[#555] truncate">{inq.service}</p>
-                            <p className="text-xs text-[#555]">{fmt(inq.createdAt)}</p>
-                          </button>
-                          <div className="w-[80px] shrink-0 flex items-center justify-center">
-                            <button
-                              type="button"
-                              onClick={() => { setDeleteError(''); setInquiryToDelete(inq); }}
-                              className="text-[#e05252] hover:text-[#c03a3a] transition-colors"
-                              title="Delete inquiry"
-                              aria-label={`Delete inquiry from ${inq.name}`}
-                            >
-                              <HugeiconsIcon icon={Delete02Icon} size={18} color="currentColor" strokeWidth={1.5} />
-                            </button>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
+            {filteredInquiries.length === 0 ? (
+              <div className="rounded-2xl bg-white border border-[#E8E8EC] px-6 py-12 text-center text-sm text-[#666]">
+                {inquiries.length === 0 ? 'No inquiries yet.' : 'No inquiries match your filters.'}
               </div>
-            </div>
+            ) : (
+              <ul className="space-y-3">
+                {filteredInquiries.map((inq) => (
+                  <li
+                    key={inq.id}
+                    className="flex items-stretch rounded-2xl bg-white border border-[#E8E8EC] shadow-sm overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-all"
+                  >
+                    <span className={`w-1.5 shrink-0 ${STATUS_DOT[inq.status] ?? 'bg-gray-300'}`} />
+                    <button
+                      type="button"
+                      onClick={() => openInquiry(inq.id)}
+                      className="flex-1 min-w-0 flex items-center gap-5 px-5 py-5 text-left"
+                    >
+                      <Avatar name={inq.name} size={48} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <p className="text-base font-semibold text-[#1a1a1a] truncate">{inq.projectName || inq.service}</p>
+                          <Badge status={inq.status} />
+                        </div>
+                        <p className="text-sm text-[#666] mt-0.5 truncate">{inq.name}{inq.company ? ` · ${inq.company}` : ''}</p>
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          <Chip icon={Mail01Icon}>{inq.email}</Chip>
+                          {inq.phone && <Chip icon={Call02Icon}>{inq.phone}</Chip>}
+                          <Chip icon={Briefcase06Icon}>{inq.service}</Chip>
+                        </div>
+                      </div>
+                      <div className="hidden sm:block text-right shrink-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#999]">Received</p>
+                        <p className="text-sm font-medium text-[#333] mt-0.5">{fmt(inq.createdAt)}</p>
+                      </div>
+                    </button>
+                    <div className="flex items-center pr-4">
+                      <button
+                        type="button"
+                        onClick={() => { setDeleteError(''); setInquiryToDelete(inq); }}
+                        className="flex h-10 w-10 items-center justify-center rounded-full text-[#e05252] hover:bg-red-50 transition-colors"
+                        title="Delete inquiry"
+                        aria-label={`Delete inquiry from ${inq.name}`}
+                      >
+                        <HugeiconsIcon icon={Delete02Icon} size={20} color="currentColor" strokeWidth={1.5} />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
               </motion.div>
             ) : (
@@ -1169,172 +1227,141 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
           </div>
         )}
 
-        {activeView === 'clients' && (
-          <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
-            {/* Group header */}
-            <div className="px-6 py-4 flex items-center justify-between">
-              <button
-                onClick={() => setClientsGroupOpen(v => !v)}
-                className="flex items-center gap-3 hover:opacity-70 transition-opacity"
-              >
-                <h2 className="text-sm font-semibold text-[#1a1a1a]">Clients</h2>
-                <span className="px-2 py-0.5 rounded-full bg-[#F0F0F0] text-[11px] font-semibold text-[#888]">
-                  {clients.filter(c => {
-                    if (clientFilter.search) { const q = clientFilter.search.toLowerCase(); if (!c.name.toLowerCase().includes(q) && !c.email.toLowerCase().includes(q)) return false; }
-                    if (clientFilter.status && c.status !== clientFilter.status) return false;
-                    return true;
-                  }).length}
-                </span>
-                <motion.div animate={{ rotate: clientsGroupOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                  <HugeiconsIcon icon={ArrowDown01Icon} size={15} color="currentColor" strokeWidth={1.75} className="text-[#AAAAAA]" />
-                </motion.div>
-              </button>
-              <button
-                onClick={() => { resetAddForm(); setShowAddClient(true); }}
-                className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
-              >
-                <HugeiconsIcon icon={UserAdd02Icon} size={16} color="#ffffff" strokeWidth={1.5} />
-                Add Client
-              </button>
-            </div>
+        {activeView === 'clients' && (() => {
+          const visibleClients = clients.filter(c => {
+            if (clientFilter.search) { const q = clientFilter.search.toLowerCase(); if (!c.name.toLowerCase().includes(q) && !c.email.toLowerCase().includes(q)) return false; }
+            if (clientFilter.status && c.status !== clientFilter.status) return false;
+            return true;
+          });
+          const cols = 'grid-cols-[minmax(0,2.2fr)_minmax(0,1.5fr)_110px_140px_120px_36px]';
+          return (
+            <div className="bg-white rounded-2xl border border-[#E2E4EA] shadow-sm overflow-hidden">
+              <div className="px-6 py-5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-base font-semibold text-[#1a1a1a]">All clients</h2>
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#EEF2FF] text-xs font-semibold text-[#4f6df5]">{visibleClients.length}</span>
+                </div>
+                <button
+                  onClick={() => { resetAddForm(); setShowAddClient(true); }}
+                  className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
+                >
+                  <HugeiconsIcon icon={UserAdd02Icon} size={16} color="#ffffff" strokeWidth={1.5} />
+                  Add Client
+                </button>
+              </div>
 
-            {/* Collapsible content */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateRows: clientsGroupOpen ? '1fr' : '0fr',
-                transition: 'grid-template-rows 0.2s ease-in-out',
-              }}
-            >
-              <div className="overflow-hidden">
-                {/* Filter bar */}
-                <div className="px-6 pt-4 pb-3 flex items-center gap-3 border-b border-[#F0F0F0]">
+              <div className="px-6 pb-5 flex flex-wrap items-center gap-3">
+                <div className="relative flex-1 min-w-[240px]">
+                  <HugeiconsIcon icon={Search01Icon} size={18} color="#999999" strokeWidth={1.5} className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                   <input
                     type="text"
                     placeholder="Search by name or email…"
                     value={clientFilter.search}
                     onChange={e => setClientFilter(f => ({ ...f, search: e.target.value }))}
-                    className="flex-1 bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                    className="w-full bg-[#F6F7FA] border border-transparent rounded-full pl-11 pr-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#999] focus:outline-none focus:bg-white focus:border-[#D0D4E0] focus:ring-2 focus:ring-purple-200/60 transition-all"
                   />
-                  <CustomSelect
-                value={clientFilter.status}
-                onChange={(v) => setClientFilter(f => ({ ...f, status: v }))}
-                options={[{ value: '', label: 'All statuses' }, { value: 'INVITED', label: 'Invited' }, { value: 'ACTIVE', label: 'Active' }, { value: 'ONBOARDING', label: 'Onboarding' }, { value: 'COMPLETED', label: 'Completed' }]}
-                variant="compact"
-              />
-                  {(clientFilter.search || clientFilter.status) && (
-                    <button onClick={() => setClientFilter({ search: '', status: '' })} className="text-xs text-[#AAAAAA] hover:text-[#1a2030] transition-colors whitespace-nowrap">
-                      Clear
-                    </button>
-                  )}
                 </div>
-                <div className="p-4">
-                  <div className="border border-[#EBEBEB] rounded-xl overflow-hidden">
-                  {/* Table header */}
-                  <div className="grid grid-cols-[1fr_1fr_120px_36px] gap-4 px-6 py-3 bg-[#FAFAFA] border-b border-[#F0F0F0]">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Name</p>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Company</p>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Role</p>
-                    <div />
-                  </div>
+                <CustomSelect
+                  value={clientFilter.status}
+                  onChange={(v) => setClientFilter(f => ({ ...f, status: v }))}
+                  options={[{ value: '', label: 'All statuses' }, { value: 'INVITED', label: 'Invited' }, { value: 'ACTIVE', label: 'Active' }, { value: 'ONBOARDING', label: 'Onboarding' }, { value: 'COMPLETED', label: 'Completed' }]}
+                  variant="compact"
+                />
+                {(clientFilter.search || clientFilter.status) && (
+                  <button onClick={() => setClientFilter({ search: '', status: '' })} className="text-sm font-medium text-[#7c3aed] hover:text-[#5b21b6] transition-colors whitespace-nowrap">
+                    Clear filters
+                  </button>
+                )}
+              </div>
 
-                  {clients.length === 0 ? (
-                    <p className="px-6 py-8 text-sm text-[#AAA]">No clients yet.</p>
-                  ) : (
-                    <ul className="divide-y divide-[#F5F5F5]">
-                      {clients.filter(c => {
-                        if (clientFilter.search) { const q = clientFilter.search.toLowerCase(); if (!c.name.toLowerCase().includes(q) && !c.email.toLowerCase().includes(q)) return false; }
-                        if (clientFilter.status && c.status !== clientFilter.status) return false;
-                        return true;
-                      }).map((c) => {
-                        const clientProjects = projects.filter(p => p.primaryUser?.id === c.id);
-                        const isExpanded = expandedClientIds.has(c.id);
-                        return (
-                          <li key={c.id} className="flex flex-col">
-                            {/* Main row */}
-                            <div
-                              className="grid grid-cols-[1fr_1fr_120px_36px] gap-4 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors cursor-pointer"
-                              onClick={() => toggleClientExpand(c.id)}
-                            >
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="text-sm font-medium text-[#1a1a1a] truncate">{c.name}</p>
-                                  <Badge status={c.status} />
-                                  {c.admin && (
-                                    <span className="px-1.5 py-px rounded text-[10px] font-bold bg-[#1a2030] text-white uppercase tracking-widest shrink-0">
-                                      Admin
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-[#888] truncate">{c.email}</p>
-                              </div>
-                              <div className="min-w-0">
-                                {c.company ? (
-                                  <>
-                                    <p className="text-sm text-[#1a1a1a] truncate">{c.company.name}</p>
-                                    {c.company.website && (
-                                      <p className="text-xs text-[#AAA] truncate">{c.company.website}</p>
-                                    )}
-                                  </>
-                                ) : (
-                                  <p className="text-xs text-[#CCC]">—</p>
+              {/* Column headers */}
+              <div className={`grid ${cols} gap-4 px-6 py-3.5 bg-[#EEF0F6] border-y border-[#E2E4EA]`}>
+                {['Client', 'Company', 'Role', 'Status', 'Projects', ''].map((h, i) => (
+                  <p key={i} className="text-xs font-bold uppercase tracking-wider text-[#4a5368]">{h}</p>
+                ))}
+              </div>
+
+              {visibleClients.length === 0 ? (
+                <p className="px-6 py-12 text-center text-sm text-[#666]">{clients.length === 0 ? 'No clients yet.' : 'No clients match your filters.'}</p>
+              ) : (
+                <ul>
+                  {visibleClients.map((c, idx) => {
+                    const clientProjects = projects.filter(p => p.primaryUser?.id === c.id);
+                    const isExpanded = expandedClientIds.has(c.id);
+                    return (
+                      <li key={c.id} className={`border-b border-[#EEF0F4] last:border-b-0 ${idx % 2 === 1 ? 'bg-[#FAFBFD]' : 'bg-white'}`}>
+                        <button
+                          type="button"
+                          aria-expanded={isExpanded}
+                          onClick={() => toggleClientExpand(c.id)}
+                          className={`w-full grid ${cols} gap-4 px-6 py-5 items-center text-left hover:bg-[#F3F5FB] transition-colors`}
+                        >
+                          <div className="flex items-center gap-4 min-w-0">
+                            <Avatar name={c.name} size={44} />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="text-[15px] font-semibold text-[#1a1a1a] truncate">{c.name}</p>
+                                {c.admin && (
+                                  <span className="px-1.5 py-px rounded text-[10px] font-bold bg-[#1a2030] text-white uppercase tracking-widest shrink-0">Admin</span>
                                 )}
                               </div>
-                              <p className="text-xs text-[#555] truncate">{c.role}</p>
-                              <motion.div
-                                animate={{ rotate: isExpanded ? 180 : 0 }}
-                                transition={{ duration: 0.2 }}
-                                className="flex items-center justify-center"
-                              >
-                                <HugeiconsIcon icon={ArrowDown01Icon} size={15} color="currentColor" strokeWidth={1.75} className={`transition-colors ${clientProjects.length === 0 ? 'text-[#E0E0E0]' : 'text-[#7c3aed]'}`} />
-                              </motion.div>
+                              <p className="text-sm text-[#666] truncate">{c.email}</p>
                             </div>
+                          </div>
+                          <div className="min-w-0">
+                            {c.company ? (
+                              <>
+                                <p className="text-sm font-medium text-[#222] truncate">{c.company.name}</p>
+                                {c.company.website && <p className="text-xs text-[#777] truncate">{c.company.website}</p>}
+                              </>
+                            ) : (
+                              <p className="text-sm text-[#999]">—</p>
+                            )}
+                          </div>
+                          <span className="justify-self-start rounded-md border border-[#D5D9E4] px-2.5 py-1 text-xs font-semibold capitalize text-[#444]">
+                            {c.role.toLowerCase()}
+                          </span>
+                          <span className="inline-flex items-center gap-2 text-sm font-medium capitalize text-[#333]">
+                            <span className={`h-2.5 w-2.5 rounded-full ${STATUS_DOT[c.status] ?? 'bg-gray-300'}`} />
+                            {c.status.toLowerCase()}
+                          </span>
+                          <span className={`justify-self-start rounded-full px-3 py-1 text-xs font-semibold ${clientProjects.length ? 'bg-[#EEF2FF] text-[#4f6df5]' : 'bg-[#F1F2F5] text-[#8a90a0]'}`}>
+                            {clientProjects.length} {clientProjects.length === 1 ? 'project' : 'projects'}
+                          </span>
+                          <motion.span animate={{ rotate: isExpanded ? 180 : 0 }} transition={{ duration: 0.2 }} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F1F2F7]">
+                            <HugeiconsIcon icon={ArrowDown01Icon} size={16} color="currentColor" strokeWidth={1.75} className="text-[#555]" />
+                          </motion.span>
+                        </button>
 
-                            {/* Expandable projects sub-section */}
-                            <div
-                              style={{
-                                display: 'grid',
-                                gridTemplateRows: isExpanded ? '1fr' : '0fr',
-                                transition: 'grid-template-rows 0.2s ease-in-out',
-                              }}
-                            >
-                              <div className="overflow-hidden">
-                                <div className="px-6 pb-4">
-                                  {clientProjects.length === 0 ? (
-                                    <p className="text-xs text-[#CCC] py-1">No projects assigned to this client.</p>
-                                  ) : (
-                                    <div className="rounded-xl border border-[#F0F0F0] overflow-hidden">
-                                      <div className="grid grid-cols-[1fr_160px] gap-4 px-4 py-2 bg-[#FAFAFA] border-b border-[#F0F0F0]">
-                                        <p className="text-[9px] font-semibold uppercase tracking-widest text-[#CCC]">Project</p>
-                                        <p className="text-[9px] font-semibold uppercase tracking-widest text-[#CCC]">Service</p>
+                        <div style={{ display: 'grid', gridTemplateRows: isExpanded ? '1fr' : '0fr', transition: 'grid-template-rows 0.2s ease-in-out' }}>
+                          <div className="overflow-hidden">
+                            <div className="mx-6 mb-5 rounded-xl bg-[#F3F5FB] border border-[#E4E8F3] p-4">
+                              {clientProjects.length === 0 ? (
+                                <p className="text-sm text-[#777]">No projects assigned to this client.</p>
+                              ) : (
+                                <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  {clientProjects.map(p => (
+                                    <li key={p.id} className="flex items-center justify-between gap-3 rounded-lg bg-white border border-[#E8E8EC] px-4 py-3">
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-semibold text-[#1a1a1a] truncate">{p.name}</p>
+                                        <p className="text-xs text-[#777] truncate">{p.service}</p>
                                       </div>
-                                      <ul className="divide-y divide-[#F8F8F8]">
-                                        {clientProjects.map(p => (
-                                          <li key={p.id} className="grid grid-cols-[1fr_160px] gap-4 px-4 py-2.5 items-center">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                              <p className="text-xs font-medium text-[#1a1a1a] truncate">{p.name}</p>
-                                              <Badge status={p.status} />
-                                            </div>
-                                            <p className="text-xs text-[#888] truncate">{p.service}</p>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
+                                      <Badge status={p.status} />
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
                             </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                  </div>
-                </div>
-              </div>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {activeView === 'projects' && (
           <AnimatePresence mode="wait" initial={false} custom={projectDirection}>
@@ -1348,37 +1375,13 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 exit="exit"
                 transition={{ duration: 0.25, ease: 'easeInOut' }}
               >
-          <div className="bg-white rounded-2xl border border-[#EBEBEB] overflow-hidden">
-            <div className="px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <h2 className="text-sm font-semibold text-[#1a1a1a]">Projects</h2>
-                <span className="px-2 py-0.5 rounded-full bg-[#F0F0F0] text-[11px] font-semibold text-[#888]">
-                  {projects.filter(p => {
-                    if (projectFilter.search && !p.name.toLowerCase().includes(projectFilter.search.toLowerCase())) return false;
-                    if (projectFilter.status && p.status !== projectFilter.status) return false;
-                    if (projectFilter.service && p.service !== projectFilter.service) return false;
-                    return true;
-                  }).length}
-                </span>
-              </div>
-              <button
-                onClick={() => { resetProjectForm(); setShowCreateProject(true); }}
-                className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
-              >
-                <HugeiconsIcon icon={Briefcase06Icon} size={16} color="#ffffff" strokeWidth={1.5} />
-                Create Project
-              </button>
-            </div>
-
-            {/* Filter bar */}
-            <div className="px-6 pb-4 flex items-center gap-3 border-b border-[#F0F0F0]">
-              <input
-                type="text"
-                placeholder="Search by project name…"
-                value={projectFilter.search}
-                onChange={e => setProjectFilter(f => ({ ...f, search: e.target.value }))}
-                className="flex-1 bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-              />
+          <div>
+            <ListToolbar
+              value={projectFilter.search}
+              onChange={(v) => setProjectFilter(f => ({ ...f, search: v }))}
+              placeholder="Search by project name…"
+              onClear={(projectFilter.search || projectFilter.status || projectFilter.service) ? () => setProjectFilter({ search: '', status: '', service: '' }) : undefined}
+            >
               <CustomSelect
                 value={projectFilter.status}
                 onChange={(v) => setProjectFilter(f => ({ ...f, status: v }))}
@@ -1391,67 +1394,93 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 options={[{ value: '', label: 'All services' }, ...services.map(sv => ({ value: sv.name, label: sv.name }))]}
                 variant="compact"
               />
-              {(projectFilter.search || projectFilter.status || projectFilter.service) && (
-                <button onClick={() => setProjectFilter({ search: '', status: '', service: '' })} className="text-xs text-[#AAAAAA] hover:text-[#1a2030] transition-colors whitespace-nowrap">
-                  Clear
-                </button>
-              )}
-            </div>
+              <button
+                onClick={() => { resetProjectForm(); setShowCreateProject(true); }}
+                className="inline-flex items-center gap-2 h-11 px-5 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
+              >
+                <HugeiconsIcon icon={Briefcase06Icon} size={16} color="#ffffff" strokeWidth={1.5} />
+                Create Project
+              </button>
+            </ListToolbar>
 
-            <div className="p-4 pt-0">
-              <div className="border border-[#EBEBEB] rounded-xl overflow-hidden">
-                <div className="grid grid-cols-[1fr_1fr_160px_80px] gap-4 px-6 py-3 bg-[#FAFAFA] border-b border-[#F0F0F0]">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Project</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Company</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Service</p>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] text-center">Actions</p>
-                </div>
-
-                {projects.length === 0 ? (
-                  <p className="px-6 py-8 text-sm text-[#AAA]">No projects yet.</p>
-                ) : (
-                  <ul className="divide-y divide-[#F5F5F5]">
-                    {projects.filter(p => {
-                      if (projectFilter.search && !p.name.toLowerCase().includes(projectFilter.search.toLowerCase())) return false;
-                      if (projectFilter.status && p.status !== projectFilter.status) return false;
-                      if (projectFilter.service && p.service !== projectFilter.service) return false;
-                      return true;
-                    }).map((p) => (
-                      <li key={p.id} onClick={() => openProject(p.id)} className="grid grid-cols-[1fr_1fr_160px_80px] gap-4 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors cursor-pointer">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-[#1a1a1a] truncate">{p.name}</p>
-                            <Badge status={p.status} />
+            {(() => {
+              const visible = projects.filter(p => {
+                if (projectFilter.search && !p.name.toLowerCase().includes(projectFilter.search.toLowerCase())) return false;
+                if (projectFilter.status && p.status !== projectFilter.status) return false;
+                if (projectFilter.service && p.service !== projectFilter.service) return false;
+                return true;
+              });
+              return (
+                <>
+                  <p className="text-sm font-medium text-[#666] mb-3">
+                    {visible.length} {visible.length === 1 ? 'project' : 'projects'}
+                  </p>
+                  {visible.length === 0 ? (
+                    <div className="rounded-2xl bg-white border border-[#E8E8EC] px-6 py-12 text-center text-sm text-[#666]">
+                      {projects.length === 0 ? 'No projects yet.' : 'No projects match your filters.'}
+                    </div>
+                  ) : (
+                    <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                      {visible.map((p) => (
+                        <li
+                          key={p.id}
+                          onClick={() => openProject(p.id)}
+                          className="flex flex-col rounded-2xl bg-white border border-[#E8E8EC] shadow-sm overflow-hidden cursor-pointer hover:shadow-lg hover:-translate-y-1 transition-all"
+                        >
+                          <div className="h-1.5 bg-gradient-to-r from-[#3DD9C8] via-[#7BB5F5] to-[#B87AF5]" />
+                          <div className="flex-1 p-5 flex flex-col gap-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#EEF2FF]">
+                                <HugeiconsIcon icon={Briefcase06Icon} size={22} color="#4f6df5" strokeWidth={1.5} />
+                              </span>
+                              <Badge status={p.status} />
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="text-lg font-semibold tracking-tight text-[#1a1a1a] truncate">{p.name}</h3>
+                              <p className="text-sm text-[#666] truncate">{p.service}</p>
+                            </div>
+                            <div className="space-y-2.5">
+                              <div className="flex items-center gap-2.5 text-sm text-[#444] min-w-0">
+                                <HugeiconsIcon icon={Building01Icon} size={16} color="#7a869f" strokeWidth={1.5} className="shrink-0" />
+                                <span className="truncate">{p.company?.name ?? 'No company'}</span>
+                              </div>
+                              <div className="flex items-center gap-2.5 text-sm text-[#444] min-w-0">
+                                {p.primaryUser ? <Avatar name={p.primaryUser.name} size={24} /> : <HugeiconsIcon icon={User03Icon} size={16} color="#7a869f" strokeWidth={1.5} className="shrink-0" />}
+                                <span className="truncate">{p.primaryUser?.name ?? 'No client assigned'}</span>
+                              </div>
+                            </div>
                           </div>
-                          {p.primaryUser && <p className="text-xs text-[#888] truncate">{p.primaryUser.name}</p>}
-                        </div>
-                        <p className="text-sm text-[#555] truncate">{p.company?.name ?? '—'}</p>
-                        <p className="text-xs text-[#555] truncate">{p.service}</p>
-                        <div className="flex items-center justify-center gap-2" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => openInvoiceForProject(p)}
-                            className="text-[#7c3aed] hover:text-[#5b21b6] transition-colors"
-                            title="Generate invoice"
-                          >
-                            <HugeiconsIcon icon={Invoice03Icon} size={18} color="currentColor" strokeWidth={1.5} />
-                          </button>
-                          <button
-                            onClick={async () => {
-                              await fetch(`/api/admin/projects/${p.id}`, { method: 'DELETE' });
-                              router.refresh();
-                            }}
-                            className="text-[#e05252] hover:text-[#c03a3a] transition-colors"
-                            title="Delete project"
-                          >
-                            <HugeiconsIcon icon={Delete04Icon} size={18} color="currentColor" strokeWidth={1.5} />
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
+                          <div className="px-5 py-3 border-t border-[#EEF0F4] bg-[#FAFBFD] flex items-center justify-between" >
+                            <span className="text-xs font-medium text-[#777]">Created {fmt(p.createdAt)}</span>
+                            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={() => openInvoiceForProject(p)}
+                                className="flex h-9 w-9 items-center justify-center rounded-full text-[#7c3aed] hover:bg-purple-50 transition-colors"
+                                title="Generate invoice"
+                                aria-label={`Generate invoice for ${p.name}`}
+                              >
+                                <HugeiconsIcon icon={Invoice03Icon} size={19} color="currentColor" strokeWidth={1.5} />
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  await fetch(`/api/admin/projects/${p.id}`, { method: 'DELETE' });
+                                  router.refresh();
+                                }}
+                                className="flex h-9 w-9 items-center justify-center rounded-full text-[#e05252] hover:bg-red-50 transition-colors"
+                                title="Delete project"
+                                aria-label={`Delete ${p.name}`}
+                              >
+                                <HugeiconsIcon icon={Delete04Icon} size={19} color="currentColor" strokeWidth={1.5} />
+                              </button>
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              );
+            })()}
           </div>
               </motion.div>
             ) : (

@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     return res;
   } catch (err) {
     console.error('[login] error:', err);
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ ok: false, error: process.env.NODE_ENV === 'development' ? msg : 'Internal server error.' }, { status: 500 });
+    // Details stay in the server log; never send database or stack text to the browser.
+    return NextResponse.json({ ok: false, error: 'We could not sign you in right now. Please try again in a few minutes.' }, { status: 500 });
   }
 }
