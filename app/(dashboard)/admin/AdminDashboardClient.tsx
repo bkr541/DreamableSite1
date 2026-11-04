@@ -949,7 +949,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 key: 'inquiry', label: 'Inquiry', icon: Mail01Icon, width: 'minmax(0,2.2fr)',
                 render: (inq) => (
                   <div className="flex items-center gap-4 min-w-0">
-                    <Avatar name={inq.name} size={44} />
+                    <Avatar name={inq.name} size={36} />
                     <div className="min-w-0">
                       <p className="text-[15px] font-semibold text-[#1a1a1a] truncate">{inq.projectName || inq.service}</p>
                       <p className="text-sm text-[#666] truncate">{inq.name}{inq.company ? ` · ${inq.company}` : ''}</p>
@@ -967,11 +967,11 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 ),
               },
               { key: 'service', label: 'Service', icon: Briefcase06Icon, width: 'minmax(0,1.2fr)', render: (inq) => <p className="text-sm text-[#333] truncate">{inq.service}</p> },
-              { key: 'status', label: 'Status', icon: Activity01Icon, width: '130px', render: (inq) => <StatusDot status={inq.status} /> },
-              { key: 'received', label: 'Received', icon: Calendar03Icon, width: '120px', render: (inq) => <p className="text-sm text-[#555]">{fmt(inq.createdAt)}</p> },
+              { key: 'status', label: 'Status', icon: Activity01Icon, width: '104px', render: (inq) => <StatusDot status={inq.status} /> },
+              { key: 'received', label: 'Received', icon: Calendar03Icon, width: '112px', render: (inq) => <p className="text-sm text-[#555]">{fmt(inq.createdAt)}</p> },
             ]}
             trailing={{
-              label: 'Action', icon: MoreHorizontalCircle01Icon, width: '80px', interactive: true,
+              label: 'Action', icon: MoreHorizontalCircle01Icon, width: '88px', interactive: true,
               render: (inq) => (
                 <button
                   type="button"
@@ -1201,6 +1201,16 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
         )}
 
         {activeView === 'clients' && (
+          <>
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={() => { resetAddForm(); setShowAddClient(true); }}
+              className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
+            >
+              <HugeiconsIcon icon={UserAdd02Icon} size={16} color="#ffffff" strokeWidth={1.5} />
+              Add Client
+            </button>
+          </div>
           <RecordList
             title="All clients"
             rows={clients.filter(c => {
@@ -1210,15 +1220,6 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
             })}
             rowKey={(c) => c.id}
             onRowClick={(c) => toggleClientExpand(c.id)}
-            action={
-              <button
-                onClick={() => { resetAddForm(); setShowAddClient(true); }}
-                className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
-              >
-                <HugeiconsIcon icon={UserAdd02Icon} size={16} color="#ffffff" strokeWidth={1.5} />
-                Add Client
-              </button>
-            }
             search={{ value: clientFilter.search, onChange: (v) => setClientFilter(f => ({ ...f, search: v })), placeholder: 'Search by name or email…' }}
             onClearFilters={(clientFilter.search || clientFilter.status) ? () => setClientFilter({ search: '', status: '' }) : undefined}
             filters={
@@ -1235,7 +1236,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 key: 'client', label: 'Client', icon: User03Icon, width: 'minmax(0,2.2fr)',
                 render: (c) => (
                   <div className="flex items-center gap-4 min-w-0">
-                    <Avatar name={c.name} size={44} />
+                    <Avatar name={c.name} size={36} />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-[15px] font-semibold text-[#1a1a1a] truncate">{c.name}</p>
@@ -1256,12 +1257,12 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 ) : <p className="text-sm text-[#999]">—</p>,
               },
               {
-                key: 'role', label: 'Role', icon: Shield01Icon, width: '110px',
+                key: 'role', label: 'Role', icon: Shield01Icon, width: '88px',
                 render: (c) => <span className="rounded-md border border-[#D5D9E4] px-2.5 py-1 text-xs font-semibold capitalize text-[#444]">{c.role.toLowerCase()}</span>,
               },
-              { key: 'status', label: 'Status', icon: Activity01Icon, width: '140px', render: (c) => <StatusDot status={c.status} /> },
+              { key: 'status', label: 'Status', icon: Activity01Icon, width: '104px', render: (c) => <StatusDot status={c.status} /> },
               {
-                key: 'projects', label: 'Projects', icon: Briefcase06Icon, width: '120px',
+                key: 'projects', label: 'Projects', icon: Briefcase06Icon, width: '112px',
                 render: (c) => {
                   const n = projects.filter(p => p.primaryUser?.id === c.id).length;
                   return (
@@ -1273,7 +1274,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               },
             ]}
             trailing={{
-              label: 'Actions', icon: MoreHorizontalCircle01Icon, width: '80px', interactive: true,
+              label: 'Actions', icon: MoreHorizontalCircle01Icon, width: '96px', interactive: true,
               render: (c) => (
                 <button
                   type="button"
@@ -1308,6 +1309,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               );
             }}
           />
+          </>
         )}
 
         {activeView === 'projects' && (
@@ -1365,7 +1367,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 key: 'project', label: 'Project', icon: Briefcase06Icon, width: 'minmax(0,2.2fr)',
                 render: (p) => (
                   <div className="flex items-center gap-4 min-w-0">
-                    <Avatar name={p.name} size={44} />
+                    <Avatar name={p.name} size={36} />
                     <div className="min-w-0">
                       <p className="text-[15px] font-semibold text-[#1a1a1a] truncate">{p.name}</p>
                       <p className="text-sm text-[#666] truncate">{p.service}</p>
@@ -1383,8 +1385,8 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   </div>
                 ) : <span className="text-sm text-[#999]">—</span>,
               },
-              { key: 'status', label: 'Status', icon: Activity01Icon, width: '130px', render: (p) => <StatusDot status={p.status} /> },
-              { key: 'created', label: 'Created', icon: Calendar03Icon, width: '120px', render: (p) => <p className="text-sm text-[#555]">{fmt(p.createdAt)}</p> },
+              { key: 'status', label: 'Status', icon: Activity01Icon, width: '104px', render: (p) => <StatusDot status={p.status} /> },
+              { key: 'created', label: 'Created', icon: Calendar03Icon, width: '112px', render: (p) => <p className="text-sm text-[#555]">{fmt(p.createdAt)}</p> },
             ]}
             trailing={{
               label: 'Actions', icon: MoreHorizontalCircle01Icon, width: '96px', interactive: true,

@@ -141,7 +141,7 @@ export default function RecordList<T>({
       <div className="overflow-x-auto">
         <div className="min-w-[880px]">
           {/* Column headings stay visible even when there are no records */}
-          <div style={gridStyle} className="grid gap-2 px-6 py-3.5 bg-[#EEF0F6] border-y border-[#E2E4EA]">
+          <div style={gridStyle} className="grid gap-1.5 px-6 py-3.5 bg-[#EEF0F6] border-y border-[#E2E4EA]">
             {headers.map((h, i) => (
               <p key={i} className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#4a5368]">
                 {h.icon && <HugeiconsIcon icon={h.icon} size={15} color="currentColor" strokeWidth={1.75} className="shrink-0" />}
@@ -160,7 +160,6 @@ export default function RecordList<T>({
                 return (
                   <li key={rowKey(row)} className={`border-b border-[#EEF0F4] last:border-b-0 ${idx % 2 === 1 ? 'bg-[#FAFBFD]' : 'bg-white'}`}>
                     <div
-                      style={gridStyle}
                       role={clickable ? 'button' : undefined}
                       tabIndex={clickable ? 0 : undefined}
                       aria-expanded={renderExpanded ? isExpanded : undefined}
@@ -175,17 +174,25 @@ export default function RecordList<T>({
                             }
                           : undefined
                       }
-                      // The 2px left border is always reserved (transparent) so hovering only recolors it and slides the content 6px right.
-                      className={`grid gap-2 border-l-2 border-transparent pl-[22px] pr-6 py-5 items-center text-left transition-all duration-150 ${clickable ? 'cursor-pointer hover:border-[#9CA3AF] hover:pl-[28px] focus:outline-none focus-visible:border-[#9CA3AF] focus-visible:pl-[28px]' : ''}`}
+                      className={`group relative text-left ${clickable ? 'cursor-pointer focus:outline-none' : ''}`}
                     >
-                      {columns.map((c) => (
-                        <div key={c.key} className="min-w-0">{c.render(row)}</div>
-                      ))}
-                      {trailing && (
-                        <div className="min-w-0" onClick={trailing.interactive ? (e) => e.stopPropagation() : undefined}>
-                          {trailing.render(row)}
-                        </div>
+                      {/* 2px left bar that appears on hover; the whole record then slides 6px right as one piece. */}
+                      {clickable && (
+                        <span className="pointer-events-none absolute inset-y-0 left-0 w-0.5 bg-transparent transition-colors duration-150 group-hover:bg-[#9CA3AF] group-focus-visible:bg-[#9CA3AF]" />
                       )}
+                      <div
+                        style={gridStyle}
+                        className={`grid gap-1.5 px-6 py-3 items-center transition-transform duration-150 ${clickable ? 'group-hover:translate-x-1.5 group-focus-visible:translate-x-1.5' : ''}`}
+                      >
+                        {columns.map((c) => (
+                          <div key={c.key} className="min-w-0">{c.render(row)}</div>
+                        ))}
+                        {trailing && (
+                          <div className="min-w-0" onClick={trailing.interactive ? (e) => e.stopPropagation() : undefined}>
+                            {trailing.render(row)}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {renderExpanded && (
