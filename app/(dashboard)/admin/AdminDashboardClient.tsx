@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { SessionPayload } from '@/lib/session';
 import { useToast } from '@/components/Toast';
 import RecordList, { Avatar, StatusDot } from '@/components/RecordList';
+import DatePicker from '@/components/DatePicker';
 import CustomSelect from '@/components/CustomSelect';
 import DeliverablesPanel, { DeliverableRecord } from '@/components/DeliverablesPanel';
 import FilePreviewModal, { PreviewFile, previewKind, formatBytes } from '@/components/FilePreviewModal';
@@ -951,7 +952,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   <div className="flex items-center gap-4 min-w-0">
                     <Avatar name={inq.name} size={36} />
                     <div className="min-w-0">
-                      <p className="text-[15px] font-semibold text-[#1a1a1a] truncate">{inq.projectName || inq.service}</p>
+                      <p className="record-title text-[15px] font-semibold text-[#1a1a1a] truncate">{inq.projectName || inq.service}</p>
                       <p className="text-sm text-[#666] truncate">{inq.name}{inq.company ? ` · ${inq.company}` : ''}</p>
                     </div>
                   </div>
@@ -1239,7 +1240,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                     <Avatar name={c.name} size={36} />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-[15px] font-semibold text-[#1a1a1a] truncate">{c.name}</p>
+                        <p className="record-title text-[15px] font-semibold text-[#1a1a1a] truncate">{c.name}</p>
                         {c.admin && <span className="px-1.5 py-px rounded text-[10px] font-bold bg-[#1a2030] text-white uppercase tracking-widest shrink-0">Admin</span>}
                       </div>
                       <p className="text-sm text-[#666] truncate">{c.email}</p>
@@ -1369,7 +1370,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   <div className="flex items-center gap-4 min-w-0">
                     <Avatar name={p.name} size={36} />
                     <div className="min-w-0">
-                      <p className="text-[15px] font-semibold text-[#1a1a1a] truncate">{p.name}</p>
+                      <p className="record-title text-[15px] font-semibold text-[#1a1a1a] truncate">{p.name}</p>
                       <p className="text-sm text-[#666] truncate">{p.service}</p>
                     </div>
                   </div>
@@ -1774,6 +1775,40 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   <p className="text-xl font-semibold text-[#1a1a1a]">{projectForClient ? `Create Project for ${projectForClient.name}` : 'Create Project'}</p>
                 </div>
 
+                {/* Client (when launched from the Clients screen) */}
+                {projectForClient && (
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Client</p>
+                    <div className="rounded-xl border border-[#D0D0D0] bg-white px-4 py-3 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={projectForClient.name} size={40} />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-[#1a1a1a] truncate">{projectForClient.name}</p>
+                          <p className="text-sm text-[#888] truncate">{projectForClient.email}</p>
+                        </div>
+                      </div>
+                      {projectForClient.company ? (
+                        <p className="flex items-center gap-2 pt-3 border-t border-[#F0F0F0] text-sm text-[#555]">
+                          <HugeiconsIcon icon={Building01Icon} size={16} color="#AAAAAA" strokeWidth={1.5} />
+                          {projectForClient.company.name}
+                        </p>
+                      ) : (
+                        <div className="flex flex-col gap-1.5 pt-3 border-t border-[#F0F0F0]">
+                          <label className="text-sm font-medium text-[#555]">Company <span className="text-red-400">*</span></label>
+                          <input
+                            value={newCompanyName}
+                            onChange={e => { setNewCompanyName(e.target.value); setProjectFieldError(null); }}
+                            placeholder="This client has no company yet — enter one"
+                            className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${projectFieldError?.field === 'newCompanyName' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                          />
+                          {projectFieldError?.field === 'newCompanyName' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
+                          <p className="text-xs text-[#888]">The company is created and linked to this client along with the project.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Project Details */}
                 <div className="space-y-3">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Project Details</p>
@@ -1788,36 +1823,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                     {projectFieldError?.field === 'name' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
                   </div>
 
-                  {projectForClient ? (
-                    <div className="rounded-xl border border-[#E4E8F3] bg-[#F6F7FB] p-4 space-y-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={projectForClient.name} size={40} />
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-[#1a1a1a] truncate">{projectForClient.name}</p>
-                          <p className="text-xs text-[#666] truncate">{projectForClient.email}</p>
-                        </div>
-                        <span className="ml-auto shrink-0 rounded-full bg-[#EEF2FF] px-3 py-1 text-xs font-semibold text-[#4f6df5]">Client</span>
-                      </div>
-                      {projectForClient.company ? (
-                        <p className="flex items-center gap-2 text-sm text-[#444]">
-                          <HugeiconsIcon icon={Building01Icon} size={16} color="#7a869f" strokeWidth={1.5} />
-                          {projectForClient.company.name}
-                        </p>
-                      ) : (
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-sm font-medium text-[#555]">Company name <span className="text-red-400">*</span></label>
-                          <input
-                            value={newCompanyName}
-                            onChange={e => { setNewCompanyName(e.target.value); setProjectFieldError(null); }}
-                            placeholder="This client has no company yet — enter one"
-                            className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${projectFieldError?.field === 'newCompanyName' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                          />
-                          {projectFieldError?.field === 'newCompanyName' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
-                          <p className="text-xs text-[#888]">The company is created and linked to this client with the project.</p>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
+                  {!projectForClient && (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Company <span className="text-red-400">*</span></label>
@@ -1905,20 +1911,16 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Start Date</label>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={projectForm.startDate}
-                        onChange={e => setProjectForm(f => ({ ...f, startDate: e.target.value }))}
-                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                        onChange={(v) => setProjectForm(f => ({ ...f, startDate: v }))}
                       />
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Target End Date</label>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={projectForm.targetEndDate}
-                        onChange={e => setProjectForm(f => ({ ...f, targetEndDate: e.target.value }))}
-                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                        onChange={(v) => setProjectForm(f => ({ ...f, targetEndDate: v }))}
                       />
                     </div>
                   </div>
@@ -2009,21 +2011,19 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Issue Date <span className="text-red-400">*</span></label>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={invoiceForm.issueDate}
-                        onChange={e => { setInvoiceForm(f => ({ ...f, issueDate: e.target.value })); setInvoiceFieldError(null); }}
-                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${invoiceFieldError?.field === 'issueDate' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                        onChange={(v) => { setInvoiceForm(f => ({ ...f, issueDate: v })); setInvoiceFieldError(null); }}
+                        invalid={invoiceFieldError?.field === 'issueDate'}
                       />
                       {invoiceFieldError?.field === 'issueDate' && <p className="text-xs text-[#e05252]">{invoiceFieldError.message}</p>}
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Due Date <span className="text-red-400">*</span></label>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={invoiceForm.dueDate}
-                        onChange={e => { setInvoiceForm(f => ({ ...f, dueDate: e.target.value })); setInvoiceFieldError(null); }}
-                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${invoiceFieldError?.field === 'dueDate' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                        onChange={(v) => { setInvoiceForm(f => ({ ...f, dueDate: v })); setInvoiceFieldError(null); }}
+                        invalid={invoiceFieldError?.field === 'dueDate'}
                       />
                       {invoiceFieldError?.field === 'dueDate' && <p className="text-xs text-[#e05252]">{invoiceFieldError.message}</p>}
                     </div>
@@ -2376,21 +2376,19 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Issue Date <span className="text-red-400">*</span></label>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={editInvForm.issueDate}
-                        onChange={e => { setEditInvForm(f => ({ ...f, issueDate: e.target.value })); setEditInvFieldError(null); }}
-                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${editInvFieldError?.field === 'issueDate' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                        onChange={(v) => { setEditInvForm(f => ({ ...f, issueDate: v })); setEditInvFieldError(null); }}
+                        invalid={editInvFieldError?.field === 'issueDate'}
                       />
                       {editInvFieldError?.field === 'issueDate' && <p className="text-xs text-[#e05252]">{editInvFieldError.message}</p>}
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Due Date <span className="text-red-400">*</span></label>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={editInvForm.dueDate}
-                        onChange={e => { setEditInvForm(f => ({ ...f, dueDate: e.target.value })); setEditInvFieldError(null); }}
-                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${editInvFieldError?.field === 'dueDate' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                        onChange={(v) => { setEditInvForm(f => ({ ...f, dueDate: v })); setEditInvFieldError(null); }}
+                        invalid={editInvFieldError?.field === 'dueDate'}
                       />
                       {editInvFieldError?.field === 'dueDate' && <p className="text-xs text-[#e05252]">{editInvFieldError.message}</p>}
                     </div>

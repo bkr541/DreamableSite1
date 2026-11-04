@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import { motion } from 'motion/react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Search01Icon } from '@hugeicons/core-free-icons';
 
@@ -105,6 +107,8 @@ export default function RecordList<T>({
   expanded,
   renderExpanded,
 }: RecordListProps<T>) {
+  // Hover is tracked in state (not CSS) so the effect is identical in every browser and build.
+  const [activeKey, setActiveKey] = useState<string | null>(null);
   const template = [...columns.map((c) => c.width), ...(trailing ? [trailing.width] : [])].join(' ');
   const gridStyle = { gridTemplateColumns: template };
   const headers = [...columns.map((c) => ({ label: c.label, icon: c.icon })), ...(trailing ? [{ label: trailing.label ?? '', icon: trailing.icon }] : [])];
@@ -155,15 +159,22 @@ export default function RecordList<T>({
           ) : (
             <ul>
               {rows.map((row, idx) => {
+                const key = rowKey(row);
+                const active = activeKey === key;
                 const isExpanded = expanded?.(row) ?? false;
                 const clickable = !!onRowClick;
                 return (
-                  <li key={rowKey(row)} className={`border-b border-[#EEF0F4] last:border-b-0 ${idx % 2 === 1 ? 'bg-[#FAFBFD]' : 'bg-white'}`}>
+                  <li key={key} className={`border-b border-[#EEF0F4] last:border-b-0 ${idx % 2 === 1 ? 'bg-[#FAFBFD]' : 'bg-white'}`}>
                     <div
                       role={clickable ? 'button' : undefined}
                       tabIndex={clickable ? 0 : undefined}
                       aria-expanded={renderExpanded ? isExpanded : undefined}
+                      data-active={active ? 'true' : undefined}
                       onClick={clickable ? () => onRowClick(row) : undefined}
+                      onMouseEnter={clickable ? () => setActiveKey(key) : undefined}
+                      onMouseLeave={clickable ? () => setActiveKey((k) => (k === key ? null : k)) : undefined}
+                      onFocus={clickable ? (e) => { if (e.target === e.currentTarget) setActiveKey(key); } : undefined}
+                      onBlur={clickable ? () => setActiveKey((k) => (k === key ? null : k)) : undefined}
                       onKeyDown={
                         clickable
                           ? (e) => {
@@ -174,16 +185,19 @@ export default function RecordList<T>({
                             }
                           : undefined
                       }
-                      className={`group relative text-left ${clickable ? 'cursor-pointer focus:outline-none' : ''}`}
+                      className={`relative text-left ${clickable ? 'cursor-pointer focus:outline-none' : ''}`}
                     >
-                      {/* 2px left bar that appears on hover; the whole record then slides 6px right as one piece. */}
+                      {/* Accent bar that grows from the middle of the row's left edge. */}
                       {clickable && (
-                        <span className="pointer-events-none absolute inset-y-0 left-0 w-0.5 bg-transparent transition-colors duration-150 group-hover:bg-[#9CA3AF] group-focus-visible:bg-[#9CA3AF]" />
+                        <motion.span
+                          aria-hidden="true"
+                          initial={false}
+                          animate={{ scaleY: active ? 1 : 0, opacity: active ? 1 : 0 }}
+                          transition={{ duration: 0.18, ease: 'easeOut' }}
+                          className="pointer-events-none absolute left-0 top-2 bottom-2 w-1 origin-center rounded-r-full bg-gradient-to-b from-[#3DD9C8] via-[#7BB5F5] to-[#B87AF5]"
+                        />
                       )}
-                      <div
-                        style={gridStyle}
-                        className={`grid gap-1.5 px-6 py-3 items-center transition-transform duration-150 ${clickable ? 'group-hover:translate-x-1.5 group-focus-visible:translate-x-1.5' : ''}`}
-                      >
+                      <div style={gridStyle} className="grid gap-1.5 px-6 py-3 items-center">
                         {columns.map((c) => (
                           <div key={c.key} className="min-w-0">{c.render(row)}</div>
                         ))}

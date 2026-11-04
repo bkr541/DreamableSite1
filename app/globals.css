@@ -54,3 +54,10 @@ h1 {
     scrollbar-width: none;
   }
 }
+/* Record lists: the primary text takes the accent color while its row is hovered or focused. */
+[data-active="true"] .record-title {
+  color: #4f6df5;
+}
+.record-title {
+  transition: color 0.15s ease;
+}
