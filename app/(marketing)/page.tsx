@@ -23,6 +23,8 @@ import {
   Tick02Icon,
   ArrowLeft01Icon,
   ArrowRight01Icon,
+  Cancel01Icon,
+  Attachment01Icon,
 } from '@hugeicons/core-free-icons';
 
 // Swap each `icon` for an <Image src="/…svg" /> once the custom artwork is ready.
@@ -480,9 +482,7 @@ export default function Home() {
                                     className="shrink-0 p-0.5 text-[#aaa] hover:text-[#333] transition-colors"
                                     aria-label={`Remove ${file.name}`}
                                   >
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                                    </svg>
+                                    <HugeiconsIcon icon={Cancel01Icon} size={14} color="currentColor" strokeWidth={2} />
                                   </button>
                                 </li>
                               ))}
@@ -540,7 +540,7 @@ export default function Home() {
                           className={`flex items-center gap-1.5 px-3 py-2 rounded-full cursor-pointer transition-colors ${attachments.length ? 'text-[#B87AF5] hover:bg-purple-50' : 'text-[#999] hover:text-[#1a2030] hover:bg-[#f5f5f5]'}`}
                           title="Attach files"
                         >
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66L9.41 17.41a2 2 0 01-2.83-2.83l8.49-8.49" /></svg>
+                          <HugeiconsIcon icon={Attachment01Icon} size={18} color="currentColor" strokeWidth={2} />
                           <span className="hidden sm:inline text-sm font-medium">Add Attachment</span>
                           <input
                             type="file"
@@ -594,10 +594,7 @@ export default function Home() {
               className="absolute top-5 right-5 z-20 text-[#888] hover:text-[#333] transition-colors"
               aria-label="Close modal"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
+              <HugeiconsIcon icon={Cancel01Icon} size={20} color="currentColor" strokeWidth={2} />
             </button>
 
             {/* Hero Image Area */}

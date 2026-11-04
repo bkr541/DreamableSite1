@@ -3,7 +3,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import PasswordInput from '@/components/PasswordInput';
 import { generateInvoicePDF, previewInvoicePDF } from '@/lib/generateInvoice';
 import { useRouter } from 'next/navigation';
@@ -23,6 +22,9 @@ import {
   UserAdd02Icon,
   CancelCircleIcon,
   Delete04Icon,
+  Delete02Icon,
+  ArrowDown01Icon,
+  ArrowLeft01Icon,
   TaskEdit01Icon,
   FileViewIcon,
   Logout02Icon,
@@ -205,7 +207,7 @@ function InquirySection({ icon, label, children }: { icon: typeof User03Icon; la
         <HugeiconsIcon icon={icon} size={16} color="currentColor" strokeWidth={1.5} />
         {label}
         <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }} className="ml-auto">
-          <ChevronDown size={15} strokeWidth={1.75} />
+          <HugeiconsIcon icon={ArrowDown01Icon} size={15} color="currentColor" strokeWidth={1.75} />
         </motion.span>
       </button>
       <AnimatePresence initial={false}>
@@ -292,6 +294,9 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
   }
 
   const [detailTab, setDetailTab] = useState<DetailTab>('info');
+  const [inquiryToDelete, setInquiryToDelete] = useState<OpenInquiry | null>(null);
+  const [deletingInquiry, setDeletingInquiry] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [projectDirection, setProjectDirection] = useState(1);
   const selectedProject = projects.find(p => p.id === selectedProjectId) ?? null;
@@ -308,6 +313,23 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
     if (inquiryFilter.service && i.service !== inquiryFilter.service) return false;
     return true;
   });
+
+  async function confirmDeleteInquiry() {
+    if (!inquiryToDelete) return;
+    setDeletingInquiry(true);
+    setDeleteError('');
+    try {
+      const res = await fetch(`/api/admin/inquiries/${inquiryToDelete.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Could not delete this inquiry.');
+      setInquiryToDelete(null);
+      router.refresh();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Could not delete this inquiry.');
+    } finally {
+      setDeletingInquiry(false);
+    }
+  }
 
   function openInquiry(id: string) {
     setInquiryDirection(1);
@@ -884,11 +906,12 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
 
             <div className="p-4 pt-0">
               <div className="border border-[#EBEBEB] rounded-xl overflow-hidden">
-                <div className="grid grid-cols-[1.4fr_1.4fr_160px_130px] gap-4 px-6 py-3 bg-[#FAFAFA] border-b border-[#F0F0F0]">
+                <div className="grid grid-cols-[1.4fr_1.4fr_160px_130px_80px] gap-4 px-6 py-3 bg-[#FAFAFA] border-b border-[#F0F0F0]">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Inquiry</p>
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Contact</p>
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Service</p>
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Received</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA] text-center">Action</p>
                 </div>
 
                 {filteredInquiries.length === 0 ? (
@@ -897,11 +920,11 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                   <ul className="divide-y divide-[#F5F5F5]">
                     {filteredInquiries.map((inq) => {
                       return (
-                        <li key={inq.id}>
+                        <li key={inq.id} className="flex items-center gap-4 pr-6 hover:bg-[#FAFAFA] transition-colors">
                           <button
                             type="button"
                             onClick={() => openInquiry(inq.id)}
-                            className="w-full grid grid-cols-[1.4fr_1.4fr_160px_130px] gap-4 px-6 py-4 items-center text-left hover:bg-[#FAFAFA] transition-colors"
+                            className="flex-1 min-w-0 grid grid-cols-[1.4fr_1.4fr_160px_130px] gap-4 pl-6 py-4 items-center text-left"
                           >
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
@@ -915,11 +938,19 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                               <p className="text-xs text-[#888] truncate">{inq.phone ?? '—'}</p>
                             </div>
                             <p className="text-xs text-[#555] truncate">{inq.service}</p>
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-xs text-[#555]">{fmt(inq.createdAt)}</p>
-                              <ChevronRight size={15} strokeWidth={1.75} className="text-[#AAAAAA]" />
-                            </div>
+                            <p className="text-xs text-[#555]">{fmt(inq.createdAt)}</p>
                           </button>
+                          <div className="w-[80px] shrink-0 flex items-center justify-center">
+                            <button
+                              type="button"
+                              onClick={() => { setDeleteError(''); setInquiryToDelete(inq); }}
+                              className="text-[#e05252] hover:text-[#c03a3a] transition-colors"
+                              title="Delete inquiry"
+                              aria-label={`Delete inquiry from ${inq.name}`}
+                            >
+                              <HugeiconsIcon icon={Delete02Icon} size={18} color="currentColor" strokeWidth={1.5} />
+                            </button>
+                          </div>
                         </li>
                       );
                     })}
@@ -944,7 +975,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 onClick={closeInquiry}
                 className="inline-flex items-center gap-1 mb-4 text-sm font-medium text-[#888] hover:text-[#1a2030] transition-colors"
               >
-                <ChevronLeft size={16} strokeWidth={1.75} />
+                <HugeiconsIcon icon={ArrowLeft01Icon} size={16} color="currentColor" strokeWidth={1.75} />
                 Back
               </button>
               <div className="bg-white rounded-2xl border border-[#EBEBEB]">
@@ -1067,6 +1098,64 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
 
         <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
 
+        <AnimatePresence>
+          {inquiryToDelete && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+                onClick={() => !deletingInquiry && setInquiryToDelete(null)}
+              />
+              <motion.div
+                role="alertdialog"
+                aria-modal="true"
+                aria-labelledby="delete-inquiry-title"
+                initial={{ opacity: 0, scale: 0.97, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.97, y: 10 }}
+                transition={{ duration: 0.2 }}
+                className="relative w-full max-w-[420px] rounded-2xl bg-white shadow-2xl border border-[#F0F0F0] p-6"
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-[#e05252]">
+                    <HugeiconsIcon icon={Delete02Icon} size={20} color="currentColor" strokeWidth={1.5} />
+                  </span>
+                  <h3 id="delete-inquiry-title" className="text-base font-semibold text-[#1a1a1a]">Delete this inquiry?</h3>
+                </div>
+                <p className="text-sm text-[#555] leading-relaxed">
+                  This will permanently delete the inquiry from <span className="font-medium text-[#1a1a1a]">{inquiryToDelete.name}</span>
+                  {inquiryToDelete.projectName ? <> (<span className="font-medium text-[#1a1a1a]">{inquiryToDelete.projectName}</span>)</> : null}
+                  {' '}along with its attached files and deliverables. This can&apos;t be undone.
+                </p>
+                {inquiryToDelete.status === 'APPROVED' && (
+                  <p className="text-xs text-[#888] mt-2">The client account and project created from this inquiry will be kept.</p>
+                )}
+                {deleteError && <p className="text-sm text-[#e05252] mt-3">{deleteError}</p>}
+                <div className="flex items-center justify-end gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setInquiryToDelete(null)}
+                    disabled={deletingInquiry}
+                    className="inline-flex items-center h-10 px-5 rounded-full border border-[#D0D0D0] text-[#555] text-sm font-medium hover:bg-[#F5F5F5] transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDeleteInquiry}
+                    disabled={deletingInquiry}
+                    className="inline-flex items-center h-10 px-5 rounded-full bg-[#e05252] text-white text-sm font-semibold hover:bg-[#c93f3f] transition-colors disabled:opacity-50"
+                  >
+                    {deletingInquiry ? 'Deleting…' : 'Delete'}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
         {activeView === 'workspace' && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <button
@@ -1102,7 +1191,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                   }).length}
                 </span>
                 <motion.div animate={{ rotate: clientsGroupOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                  <ChevronDown size={15} strokeWidth={1.75} className="text-[#AAAAAA]" />
+                  <HugeiconsIcon icon={ArrowDown01Icon} size={15} color="currentColor" strokeWidth={1.75} className="text-[#AAAAAA]" />
                 </motion.div>
               </button>
               <button
@@ -1207,7 +1296,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                                 transition={{ duration: 0.2 }}
                                 className="flex items-center justify-center"
                               >
-                                <ChevronDown size={15} strokeWidth={1.75} className={`transition-colors ${clientProjects.length === 0 ? 'text-[#E0E0E0]' : 'text-[#7c3aed]'}`} />
+                                <HugeiconsIcon icon={ArrowDown01Icon} size={15} color="currentColor" strokeWidth={1.75} className={`transition-colors ${clientProjects.length === 0 ? 'text-[#E0E0E0]' : 'text-[#7c3aed]'}`} />
                               </motion.div>
                             </div>
 
@@ -1397,7 +1486,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 onClick={closeProject}
                 className="inline-flex items-center gap-1 mb-4 text-sm font-medium text-[#888] hover:text-[#1a2030] transition-colors"
               >
-                <ChevronLeft size={16} strokeWidth={1.75} />
+                <HugeiconsIcon icon={ArrowLeft01Icon} size={16} color="currentColor" strokeWidth={1.75} />
                 Back
               </button>
               <div className="bg-white rounded-2xl border border-[#EBEBEB]">

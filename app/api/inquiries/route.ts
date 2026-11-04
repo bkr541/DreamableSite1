@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import nodemailer from 'nodemailer';
 import { Prisma } from '@prisma/client';
@@ -103,6 +103,49 @@ async function sendInquiryEmail(inquiry: InquiryPayload): Promise<void> {
         subject: `New Inquiry: ${inquiry.name} — ${inquiry.service}`,
         html,
         attachments: inquiry.attachments,
+    });
+}
+
+/* ── Confirmation email to the person who submitted the inquiry ───────────── */
+const escapeHtml = (v: string) =>
+    v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+async function sendConfirmationEmail(to: string, name: string, projectName: string | null): Promise<void> {
+    const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, INQUIRY_FROM_EMAIL } = process.env;
+
+    if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
+        console.warn('[sendConfirmationEmail] SMTP not configured — skipping confirmation email.');
+        return;
+    }
+
+    const port = Number(SMTP_PORT) || 587;
+    const transporter = nodemailer.createTransport({
+        host: SMTP_HOST,
+        port,
+        secure: port === 465,
+        auth: { user: SMTP_USER, pass: SMTP_PASS },
+    });
+
+    const from = INQUIRY_FROM_EMAIL || SMTP_USER;
+    const firstName = escapeHtml(name.split(' ')[0]);
+    const project = projectName ? ` for <strong>${escapeHtml(projectName)}</strong>` : '';
+
+    await transporter.sendMail({
+        from: `"Dreamable.studio" <${from}>`,
+        to,
+        subject: 'We received your inquiry — Dreamable.studio',
+        html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1a1a1a;">
+        <h2 style="font-size:22px;font-weight:600;margin-bottom:16px;">Thanks, ${firstName}!</h2>
+        <p style="color:#555;line-height:1.6;">
+          We received your inquiry${project}. Our team will review it and get back to you within 24 hours.
+          Once it's approved, you'll receive a code to log into the client portal.
+        </p>
+        <p style="color:#aaa;font-size:12px;line-height:1.6;margin-top:28px;">
+          You're receiving this because this email address was used on dreamable.studio.
+        </p>
+      </div>
+    `,
     });
 }
 
@@ -252,6 +295,13 @@ export async function POST(req: NextRequest) {
                 select: { id: true },
             });
             inquiryId = inquiry.id;
+        } else if (process.env.NODE_ENV === 'production') {
+            // Never report success for an inquiry that wasn't saved.
+            console.error('[POST /api/inquiries] DATABASE_URL not set — inquiry was NOT saved.', { name, email, service });
+            return NextResponse.json(
+                { ok: false, message: 'Something went wrong. Please try again later.' },
+                { status: 500 }
+            );
         } else {
             console.warn(
                 '[POST /api/inquiries] DATABASE_URL not set — skipping DB insert.',
@@ -259,8 +309,10 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Fire-and-forget email notification; never blocks the response
-        sendInquiryEmail({
+        // Emails run after the response is sent. On serverless hosts a bare un-awaited promise can be
+        // killed once the response returns, so after() keeps the function alive until they finish.
+        after(async () => {
+            await sendInquiryEmail({
             inquiryId,
             name,
             email,
@@ -279,8 +331,12 @@ export async function POST(req: NextRequest) {
             utmContent,
             referrer,
             attachments,
-        }).catch((err) => {
-            console.error('[sendInquiryEmail] Failed to send notification:', err);
+            }).catch((err) => {
+                console.error('[sendInquiryEmail] Failed to send notification:', err);
+            });
+            await sendConfirmationEmail(email, name, projectName).catch((err) => {
+                console.error('[sendConfirmationEmail] Failed to send confirmation:', err);
+            });
         });
 
         return NextResponse.json({ ok: true, inquiryId });

@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { HugeiconsIcon } from '@hugeicons/react';
+import { ViewIcon, ViewOffIcon } from '@hugeicons/core-free-icons';
 
 type Props = Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'> & {
   leftIcon?: React.ReactNode;
@@ -29,7 +30,7 @@ export default function PasswordInput({ className = '', leftIcon, ...props }: Pr
         aria-label={visible ? 'Hide password' : 'Show password'}
         className="absolute right-3 top-1/2 -translate-y-1/2 text-[#BBBBBB] hover:text-[#555] transition-colors"
       >
-        {visible ? <EyeOff size={16} strokeWidth={1.75} /> : <Eye size={16} strokeWidth={1.75} />}
+        <HugeiconsIcon icon={visible ? ViewOffIcon : ViewIcon} size={16} color="currentColor" strokeWidth={1.75} />
       </button>
     </div>
   );
