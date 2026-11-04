@@ -7,6 +7,7 @@ import PasswordInput from '@/components/PasswordInput';
 import { generateInvoicePDF, previewInvoicePDF } from '@/lib/generateInvoice';
 import { useRouter } from 'next/navigation';
 import { SessionPayload } from '@/lib/session';
+import CustomSelect from '@/components/CustomSelect';
 import DeliverablesPanel, { DeliverableRecord } from '@/components/DeliverablesPanel';
 import FilePreviewModal, { PreviewFile, previewKind, formatBytes } from '@/components/FilePreviewModal';
 import { motion, AnimatePresence } from 'motion/react';
@@ -879,24 +880,18 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 onChange={e => setInquiryFilter(f => ({ ...f, search: e.target.value }))}
                 className="flex-1 bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
               />
-              <select
+              <CustomSelect
                 value={inquiryFilter.status}
-                onChange={e => setInquiryFilter(f => ({ ...f, status: e.target.value }))}
-                className="bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-              >
-                <option value="">All statuses</option>
-                <option value="INQUIRY">Inquiry</option>
-                <option value="APPROVED">Approved</option>
-                <option value="REJECTED">Rejected</option>
-              </select>
-              <select
+                onChange={(v) => setInquiryFilter(f => ({ ...f, status: v }))}
+                options={[{ value: '', label: 'All statuses' }, { value: 'INQUIRY', label: 'Inquiry' }, { value: 'APPROVED', label: 'Approved' }, { value: 'REJECTED', label: 'Rejected' }]}
+                variant="compact"
+              />
+              <CustomSelect
                 value={inquiryFilter.service}
-                onChange={e => setInquiryFilter(f => ({ ...f, service: e.target.value }))}
-                className="bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-              >
-                <option value="">All services</option>
-                {Array.from(new Set(inquiries.map(i => i.service))).map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+                onChange={(v) => setInquiryFilter(f => ({ ...f, service: v }))}
+                options={[{ value: '', label: 'All services' }, ...Array.from(new Set(inquiries.map(i => i.service))).map(sv => ({ value: sv, label: sv }))]}
+                variant="compact"
+              />
               {(inquiryFilter.search || inquiryFilter.status || inquiryFilter.service) && (
                 <button onClick={() => setInquiryFilter({ search: '', status: '', service: '' })} className="text-xs text-[#AAAAAA] hover:text-[#1a2030] transition-colors whitespace-nowrap">
                   Clear
@@ -1221,17 +1216,12 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                     onChange={e => setClientFilter(f => ({ ...f, search: e.target.value }))}
                     className="flex-1 bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
                   />
-                  <select
-                    value={clientFilter.status}
-                    onChange={e => setClientFilter(f => ({ ...f, status: e.target.value }))}
-                    className="bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                  >
-                    <option value="">All statuses</option>
-                    <option value="INVITED">Invited</option>
-                    <option value="ACTIVE">Active</option>
-                    <option value="ONBOARDING">Onboarding</option>
-                    <option value="COMPLETED">Completed</option>
-                  </select>
+                  <CustomSelect
+                value={clientFilter.status}
+                onChange={(v) => setClientFilter(f => ({ ...f, status: v }))}
+                options={[{ value: '', label: 'All statuses' }, { value: 'INVITED', label: 'Invited' }, { value: 'ACTIVE', label: 'Active' }, { value: 'ONBOARDING', label: 'Onboarding' }, { value: 'COMPLETED', label: 'Completed' }]}
+                variant="compact"
+              />
                   {(clientFilter.search || clientFilter.status) && (
                     <button onClick={() => setClientFilter({ search: '', status: '' })} className="text-xs text-[#AAAAAA] hover:text-[#1a2030] transition-colors whitespace-nowrap">
                       Clear
@@ -1389,25 +1379,18 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 onChange={e => setProjectFilter(f => ({ ...f, search: e.target.value }))}
                 className="flex-1 bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
               />
-              <select
+              <CustomSelect
                 value={projectFilter.status}
-                onChange={e => setProjectFilter(f => ({ ...f, status: e.target.value }))}
-                className="bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-              >
-                <option value="">All statuses</option>
-                <option value="ONBOARDING">Onboarding</option>
-                <option value="ACTIVE">Active</option>
-                <option value="COMPLETED">Completed</option>
-                <option value="CANCELLED">Cancelled</option>
-              </select>
-              <select
+                onChange={(v) => setProjectFilter(f => ({ ...f, status: v }))}
+                options={[{ value: '', label: 'All statuses' }, { value: 'ONBOARDING', label: 'Onboarding' }, { value: 'ACTIVE', label: 'Active' }, { value: 'COMPLETED', label: 'Completed' }, { value: 'CANCELLED', label: 'Cancelled' }]}
+                variant="compact"
+              />
+              <CustomSelect
                 value={projectFilter.service}
-                onChange={e => setProjectFilter(f => ({ ...f, service: e.target.value }))}
-                className="bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-              >
-                <option value="">All services</option>
-                {services.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-              </select>
+                onChange={(v) => setProjectFilter(f => ({ ...f, service: v }))}
+                options={[{ value: '', label: 'All services' }, ...services.map(sv => ({ value: sv.name, label: sv.name }))]}
+                variant="compact"
+              />
               {(projectFilter.search || projectFilter.status || projectFilter.service) && (
                 <button onClick={() => setProjectFilter({ search: '', status: '', service: '' })} className="text-xs text-[#AAAAAA] hover:text-[#1a2030] transition-colors whitespace-nowrap">
                   Clear
@@ -1589,16 +1572,12 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 onChange={e => setInvoiceFilter(f => ({ ...f, search: e.target.value }))}
                 className="flex-1 bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
               />
-              <select
+              <CustomSelect
                 value={invoiceFilter.status}
-                onChange={e => setInvoiceFilter(f => ({ ...f, status: e.target.value }))}
-                className="bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-3 py-2 text-sm text-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-              >
-                <option value="">All statuses</option>
-                <option value="Unsent">Unsent</option>
-                <option value="Not Paid">Not Paid</option>
-                <option value="Paid">Paid</option>
-              </select>
+                onChange={(v) => setInvoiceFilter(f => ({ ...f, status: v }))}
+                options={[{ value: '', label: 'All statuses' }, { value: 'Unsent', label: 'Unsent' }, { value: 'Not Paid', label: 'Not Paid' }, { value: 'Paid', label: 'Paid' }]}
+                variant="compact"
+              />
               {(invoiceFilter.search || invoiceFilter.status) && (
                 <button onClick={() => setInvoiceFilter({ search: '', status: '' })} className="text-xs text-[#AAAAAA] hover:text-[#1a2030] transition-colors whitespace-nowrap">
                   Clear
@@ -1853,65 +1832,47 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Company <span className="text-red-400">*</span></label>
-                      <select
-                        value={projectForm.companyId}
-                        onChange={e => { setProjectForm(f => ({ ...f, companyId: e.target.value, primaryUserId: '' })); setProjectFieldError(null); }}
-                        className={`w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${projectFieldError?.field === 'companyId' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                      >
-                        <option value="">Select a company…</option>
-                        {companies.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
+                      <CustomSelect
+                value={projectForm.companyId}
+                onChange={(v) => { setProjectForm(f => ({ ...f, companyId: v, primaryUserId: '' })); setProjectFieldError(null); }}
+                options={[{ value: '', label: 'Select a company…' }, ...companies.map(c => ({ value: c.id, label: c.name }))]}
+                variant="form"
+                invalid={projectFieldError?.field === 'companyId'}
+              />
                       {projectFieldError?.field === 'companyId' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Primary Contact <span className="text-[#CCC] font-normal normal-case">— optional</span></label>
-                      <select
-                        value={projectForm.primaryUserId}
-                        onChange={e => setProjectForm(f => ({ ...f, primaryUserId: e.target.value }))}
-                        className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                      >
-                        <option value="">None</option>
-                        {clients
-                          .filter(c => !projectForm.companyId || c.company?.id === projectForm.companyId)
-                          .map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))}
-                      </select>
+                      <CustomSelect
+                value={projectForm.primaryUserId}
+                onChange={(v) => setProjectForm(f => ({ ...f, primaryUserId: v }))}
+                options={[{ value: '', label: 'None' }, ...clients.filter(c => !projectForm.companyId || c.company?.id === projectForm.companyId).map(c => ({ value: c.id, label: c.name }))]}
+                variant="form"
+              />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Service <span className="text-red-400">*</span></label>
-                      <select
-                        value={projectForm.service}
-                        onChange={e => { setProjectForm(f => ({ ...f, service: e.target.value, subCategory: '' })); setProjectFieldError(null); }}
-                        className={`w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${projectFieldError?.field === 'service' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                      >
-                        <option value="">Select a service…</option>
-                        {services.map(s => (
-                          <option key={s.id} value={s.name}>{s.name}</option>
-                        ))}
-                      </select>
+                      <CustomSelect
+                value={projectForm.service}
+                onChange={(v) => { setProjectForm(f => ({ ...f, service: v, subCategory: '' })); setProjectFieldError(null); }}
+                options={[{ value: '', label: 'Select a service…' }, ...services.map(sv => ({ value: sv.name, label: sv.name }))]}
+                variant="form"
+                invalid={projectFieldError?.field === 'service'}
+              />
                       {projectFieldError?.field === 'service' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Sub-Category <span className="text-[#CCC] font-normal normal-case">— optional</span></label>
-                      <select
-                        value={projectForm.subCategory}
-                        onChange={e => setProjectForm(f => ({ ...f, subCategory: e.target.value }))}
-                        disabled={!projectForm.service}
-                        className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        <option value="">{projectForm.service ? 'Select a sub-category…' : 'Select a service first'}</option>
-                        {services
-                          .find(s => s.name === projectForm.service)
-                          ?.subCategories.map(sc => (
-                            <option key={sc.id} value={sc.name}>{sc.name}</option>
-                          ))}
-                      </select>
+                      <CustomSelect
+                value={projectForm.subCategory}
+                onChange={(v) => setProjectForm(f => ({ ...f, subCategory: v }))}
+                options={[{ value: '', label: projectForm.service ? 'Select a sub-category…' : 'Select a service first' }, ...(services.find(sv => sv.name === projectForm.service)?.subCategories.map(sc => ({ value: sc.name, label: sc.name })) ?? [])]}
+                variant="form"
+                disabled={!projectForm.service}
+              />
                     </div>
                   </div>
 
@@ -1934,34 +1895,21 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Budget Range</label>
-                      <select
-                        value={projectForm.budgetRange}
-                        onChange={e => setProjectForm(f => ({ ...f, budgetRange: e.target.value }))}
-                        className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                      >
-                        <option value="">Select…</option>
-                        <option>Under $5K</option>
-                        <option>$5K – $15K</option>
-                        <option>$15K – $30K</option>
-                        <option>$30K – $60K</option>
-                        <option>$60K+</option>
-                      </select>
+                      <CustomSelect
+                value={projectForm.budgetRange}
+                onChange={(v) => setProjectForm(f => ({ ...f, budgetRange: v }))}
+                options={[{ value: '', label: 'Select…' }, { value: 'Under $5K', label: 'Under $5K' }, { value: '$5K – $15K', label: '$5K – $15K' }, { value: '$15K – $30K', label: '$15K – $30K' }, { value: '$30K – $60K', label: '$30K – $60K' }, { value: '$60K+', label: '$60K+' }]}
+                variant="form"
+              />
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Timeline</label>
-                      <select
-                        value={projectForm.timeline}
-                        onChange={e => setProjectForm(f => ({ ...f, timeline: e.target.value }))}
-                        className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                      >
-                        <option value="">Select…</option>
-                        <option>ASAP</option>
-                        <option>1 – 2 months</option>
-                        <option>2 – 4 months</option>
-                        <option>4 – 6 months</option>
-                        <option>6+ months</option>
-                        <option>Ongoing</option>
-                      </select>
+                      <CustomSelect
+                value={projectForm.timeline}
+                onChange={(v) => setProjectForm(f => ({ ...f, timeline: v }))}
+                options={[{ value: '', label: 'Select…' }, { value: 'ASAP', label: 'ASAP' }, { value: '1 – 2 months', label: '1 – 2 months' }, { value: '2 – 4 months', label: '2 – 4 months' }, { value: '4 – 6 months', label: '4 – 6 months' }, { value: '6+ months', label: '6+ months' }, { value: 'Ongoing', label: 'Ongoing' }]}
+                variant="form"
+              />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -1990,16 +1938,12 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                 <div className="space-y-3">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Status</p>
                   <div className="flex flex-col gap-1.5">
-                    <select
-                      value={projectForm.status}
-                      onChange={e => setProjectForm(f => ({ ...f, status: e.target.value }))}
-                      className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                    >
-                      <option value="ONBOARDING">Onboarding</option>
-                      <option value="ACTIVE">Active</option>
-                      <option value="COMPLETED">Completed</option>
-                      <option value="CANCELLED">Cancelled</option>
-                    </select>
+                    <CustomSelect
+                value={projectForm.status}
+                onChange={(v) => setProjectForm(f => ({ ...f, status: v }))}
+                options={[{ value: 'ONBOARDING', label: 'Onboarding' }, { value: 'ACTIVE', label: 'Active' }, { value: 'COMPLETED', label: 'Completed' }, { value: 'CANCELLED', label: 'Cancelled' }]}
+                variant="form"
+              />
                   </div>
                 </div>
 
@@ -2162,15 +2106,12 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Status</label>
-                      <select
-                        value={invoiceForm.status}
-                        onChange={e => setInvoiceForm(f => ({ ...f, status: e.target.value }))}
-                        className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                      >
-                        <option>Unsent</option>
-                        <option>Not Paid</option>
-                        <option>Paid</option>
-                      </select>
+                      <CustomSelect
+                value={invoiceForm.status}
+                onChange={(v) => setInvoiceForm(f => ({ ...f, status: v }))}
+                options={[{ value: 'Unsent', label: 'Unsent' }, { value: 'Not Paid', label: 'Not Paid' }, { value: 'Paid', label: 'Paid' }]}
+                variant="form"
+              />
                     </div>
                   </div>
                 </div>
@@ -2330,29 +2271,21 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                   <div className="grid grid-cols-2 gap-4">
                       <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium text-[#555]">Role</label>
-                        <select
-                          value={addForm.role}
-                          onChange={e => setAddForm(f => ({ ...f, role: e.target.value }))}
-                          className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                        >
-                          <option value="CLIENT">Client</option>
-                          <option value="DESIGNER">Designer</option>
-                          <option value="DEVELOPER">Developer</option>
-                          <option value="MANAGER">Manager</option>
-                        </select>
+                        <CustomSelect
+                value={addForm.role}
+                onChange={(v) => setAddForm(f => ({ ...f, role: v }))}
+                options={[{ value: 'CLIENT', label: 'Client' }, { value: 'DESIGNER', label: 'Designer' }, { value: 'DEVELOPER', label: 'Developer' }, { value: 'MANAGER', label: 'Manager' }]}
+                variant="form"
+              />
                       </div>
                       <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium text-[#555]">Status</label>
-                        <select
-                          value={addForm.status}
-                          onChange={e => setAddForm(f => ({ ...f, status: e.target.value }))}
-                          className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                        >
-                          <option value="INVITED">Invited</option>
-                          <option value="ACTIVE">Active</option>
-                          <option value="ONBOARDING">Onboarding</option>
-                          <option value="COMPLETED">Completed</option>
-                        </select>
+                        <CustomSelect
+                value={addForm.status}
+                onChange={(v) => setAddForm(f => ({ ...f, status: v }))}
+                options={[{ value: 'INVITED', label: 'Invited' }, { value: 'ACTIVE', label: 'Active' }, { value: 'ONBOARDING', label: 'Onboarding' }, { value: 'COMPLETED', label: 'Completed' }]}
+                variant="form"
+              />
                       </div>
                   </div>
                 </div>
@@ -2532,15 +2465,12 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Status</label>
-                      <select
-                        value={editInvForm.status}
-                        onChange={e => setEditInvForm(f => ({ ...f, status: e.target.value }))}
-                        className="w-full bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                      >
-                        <option>Unsent</option>
-                        <option>Not Paid</option>
-                        <option>Paid</option>
-                      </select>
+                      <CustomSelect
+                value={editInvForm.status}
+                onChange={(v) => setEditInvForm(f => ({ ...f, status: v }))}
+                options={[{ value: 'Unsent', label: 'Unsent' }, { value: 'Not Paid', label: 'Not Paid' }, { value: 'Paid', label: 'Paid' }]}
+                variant="form"
+              />
                     </div>
                   </div>
                 </div>

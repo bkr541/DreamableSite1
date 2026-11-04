@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import CustomSelect from '@/components/CustomSelect';
 
 interface FormData {
   name: string;
@@ -178,21 +179,15 @@ export default function Contact() {
 
               <div className="flex flex-col">
                 <label htmlFor="service" className="text-sm font-medium text-[#707070] mb-2">Project Type</label>
-                <select
+                <CustomSelect
                   id="service"
-                  name="service"
                   value={formData.service}
-                  onChange={handleChange}
-                  className={`w-full bg-transparent border-b py-3 text-[#000000] focus:outline-none transition-colors appearance-none cursor-pointer ${fieldError?.field === 'service' ? 'border-[#e05252] focus:border-[#e05252]' : 'border-[#E5E5E5] focus:border-[#000000]'}`}
-                >
-                  <option value="" disabled>Select a project type</option>
-                  <option value="App or Web Development">App or Web Development</option>
-                  <option value="Branding &amp; Logo">Branding &amp; Logo</option>
-                  <option value="UI/UX Design">UI/UX Design</option>
-                  <option value="Marketing &amp; Ads">Marketing &amp; Ads</option>
-                  <option value="Consulting">Consulting</option>
-                  <option value="Other">Other</option>
-                </select>
+                  onChange={(v) => { setFormData({ ...formData, service: v }); setFieldError(null); }}
+                  options={[{ value: 'App or Web Development', label: 'App or Web Development' }, { value: 'Branding & Logo', label: 'Branding & Logo' }, { value: 'UI/UX Design', label: 'UI/UX Design' }, { value: 'Marketing & Ads', label: 'Marketing & Ads' }, { value: 'Consulting', label: 'Consulting' }, { value: 'Other', label: 'Other' }]}
+                  placeholder="Select a project type"
+                  variant="underline"
+                  invalid={fieldError?.field === 'service'}
+                />
                 {fieldError?.field === 'service' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
               </div>
 
@@ -213,35 +208,26 @@ export default function Contact() {
 
               <div className="flex flex-col">
                 <label htmlFor="timeline" className="text-sm font-medium text-[#707070] mb-2">Timeline</label>
-                <select
+                <CustomSelect
                   id="timeline"
-                  name="timeline"
                   value={formData.timeline}
-                  onChange={handleChange}
-                  className="w-full bg-transparent border-b border-[#E5E5E5] py-3 text-[#000000] focus:outline-none focus:border-[#000000] transition-colors appearance-none cursor-pointer"
-                >
-                  <option value="">Select a timeline</option>
-                  <option value="ASAP">ASAP</option>
-                  <option value="1–3 Months">1–3 Months</option>
-                  <option value="3–6 Months">3–6 Months</option>
-                  <option value="Flexible">Flexible</option>
-                </select>
+                  onChange={(v) => { setFormData({ ...formData, timeline: v }); setFieldError(null); }}
+                  options={[{ value: 'ASAP', label: 'ASAP' }, { value: '1–3 Months', label: '1–3 Months' }, { value: '3–6 Months', label: '3–6 Months' }, { value: 'Flexible', label: 'Flexible' }]}
+                  placeholder="Select a timeline"
+                  variant="underline"
+                />
               </div>
 
               <div className="flex flex-col">
                 <label htmlFor="budgetRange" className="text-sm font-medium text-[#707070] mb-2">Budget range</label>
-                <select
+                <CustomSelect
                   id="budgetRange"
-                  name="budgetRange"
                   value={formData.budgetRange}
-                  onChange={handleChange}
-                  className="w-full bg-transparent border-b border-[#E5E5E5] py-3 text-[#000000] focus:outline-none focus:border-[#000000] transition-colors appearance-none cursor-pointer"
-                >
-                  <option value="">Select a budget</option>
-                  <option value="Under $25k">Under $25k</option>
-                  <option value="$25k – $50k">$25k – $50k</option>
-                  <option value="$50k+">$50k+</option>
-                </select>
+                  onChange={(v) => { setFormData({ ...formData, budgetRange: v }); setFieldError(null); }}
+                  options={[{ value: 'Under $25k', label: 'Under $25k' }, { value: '$25k – $50k', label: '$25k – $50k' }, { value: '$50k+', label: '$50k+' }]}
+                  placeholder="Select a budget"
+                  variant="underline"
+                />
               </div>
 
               <p className="text-sm text-[#AAAAAA]">
