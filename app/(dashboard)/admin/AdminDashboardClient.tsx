@@ -883,7 +883,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
             transition={{ duration: 0.22, ease: 'easeOut' }}
           >
         {/* Page heading — shared across all views */}
-        <div className={`flex items-start justify-between gap-4 ${activeView === 'clients' || activeView === 'inquiries' || activeView === 'projects' ? 'mb-5' : 'mb-10'}`}>
+        <div className={`flex items-end justify-between gap-4 ${activeView === 'clients' || activeView === 'inquiries' || activeView === 'projects' ? 'mb-5' : 'mb-10'}`}>
           <div className="min-w-0">
             <h1 className="text-3xl font-semibold tracking-tight text-[#1a1a1a]">{VIEW_META[activeView].title}</h1>
             <p className="text-sm text-[#888] mt-1">{VIEW_META[activeView].subtitle}</p>
