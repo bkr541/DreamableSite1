@@ -883,9 +883,29 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
             transition={{ duration: 0.22, ease: 'easeOut' }}
           >
         {/* Page heading — shared across all views */}
-        <div className={activeView === 'clients' || activeView === 'inquiries' || activeView === 'projects' ? 'mb-5' : 'mb-10'}>
-          <h1 className="text-3xl font-semibold tracking-tight text-[#1a1a1a]">{VIEW_META[activeView].title}</h1>
-          <p className="text-sm text-[#888] mt-1">{VIEW_META[activeView].subtitle}</p>
+        <div className={`flex items-start justify-between gap-4 ${activeView === 'clients' || activeView === 'inquiries' || activeView === 'projects' ? 'mb-5' : 'mb-10'}`}>
+          <div className="min-w-0">
+            <h1 className="text-3xl font-semibold tracking-tight text-[#1a1a1a]">{VIEW_META[activeView].title}</h1>
+            <p className="text-sm text-[#888] mt-1">{VIEW_META[activeView].subtitle}</p>
+          </div>
+          {activeView === 'clients' && (
+            <button
+              onClick={() => { resetAddForm(); setShowAddClient(true); }}
+              className="shrink-0 inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
+            >
+              <HugeiconsIcon icon={UserAdd02Icon} size={16} color="#ffffff" strokeWidth={1.5} />
+              Add Client
+            </button>
+          )}
+          {activeView === 'projects' && !selectedProject && (
+            <button
+              onClick={() => { resetProjectForm(); setShowCreateProject(true); }}
+              className="shrink-0 inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
+            >
+              <HugeiconsIcon icon={Briefcase06Icon} size={16} color="#ffffff" strokeWidth={1.5} />
+              Create Project
+            </button>
+          )}
         </div>
 
         {activeView === 'dashboard' && (
@@ -1202,16 +1222,6 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
         )}
 
         {activeView === 'clients' && (
-          <>
-          <div className="flex justify-end mb-4">
-            <button
-              onClick={() => { resetAddForm(); setShowAddClient(true); }}
-              className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
-            >
-              <HugeiconsIcon icon={UserAdd02Icon} size={16} color="#ffffff" strokeWidth={1.5} />
-              Add Client
-            </button>
-          </div>
           <RecordList
             title="All clients"
             rows={clients.filter(c => {
@@ -1310,7 +1320,6 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               );
             }}
           />
-          </>
         )}
 
         {activeView === 'projects' && (
@@ -1335,15 +1344,6 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
             })}
             rowKey={(p) => p.id}
             onRowClick={(p) => openProject(p.id)}
-            action={
-              <button
-                onClick={() => { resetProjectForm(); setShowCreateProject(true); }}
-                className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
-              >
-                <HugeiconsIcon icon={Briefcase06Icon} size={16} color="#ffffff" strokeWidth={1.5} />
-                Create Project
-              </button>
-            }
             search={{ value: projectFilter.search, onChange: (v) => setProjectFilter(f => ({ ...f, search: v })), placeholder: 'Search by project name…' }}
             onClearFilters={(projectFilter.search || projectFilter.status || projectFilter.service) ? () => setProjectFilter({ search: '', status: '', service: '' }) : undefined}
             filters={
