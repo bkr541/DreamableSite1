@@ -957,9 +957,16 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
               />
             </ListToolbar>
 
-            <p className="text-sm font-medium text-[#666] mb-3">
-              {filteredInquiries.length} {filteredInquiries.length === 1 ? 'inquiry' : 'inquiries'}
-            </p>
+            {/* Column headings stay visible even when there are no records */}
+            <div className="hidden lg:flex items-center pb-2" aria-hidden="true">
+              <span className="w-1.5 shrink-0" />
+              <div className="flex-1 grid lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1.7fr)_minmax(0,1.2fr)_110px] gap-5 px-5">
+                {['Inquiry', 'Contact', 'Service', 'Received'].map((h) => (
+                  <p key={h} className="text-xs font-bold uppercase tracking-wider text-[#555]">{h}</p>
+                ))}
+              </div>
+              <p className="w-16 pr-2 text-center text-xs font-bold uppercase tracking-wider text-[#555]">Action</p>
+            </div>
 
             {filteredInquiries.length === 0 ? (
               <div className="rounded-2xl bg-white border border-[#E8E8EC] px-6 py-12 text-center text-sm text-[#666]">
@@ -976,27 +983,26 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                     <button
                       type="button"
                       onClick={() => openInquiry(inq.id)}
-                      className="flex-1 min-w-0 flex items-center gap-5 px-5 py-5 text-left"
+                      className="flex-1 min-w-0 grid grid-cols-1 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1.7fr)_minmax(0,1.2fr)_110px] gap-x-5 gap-y-3 px-5 py-5 items-center text-left"
                     >
-                      <Avatar name={inq.name} size={48} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <div className="flex items-center gap-4 min-w-0">
+                        <Avatar name={inq.name} size={48} />
+                        <div className="min-w-0">
                           <p className="text-base font-semibold text-[#1a1a1a] truncate">{inq.projectName || inq.service}</p>
-                          <Badge status={inq.status} />
-                        </div>
-                        <p className="text-sm text-[#666] mt-0.5 truncate">{inq.name}{inq.company ? ` · ${inq.company}` : ''}</p>
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          <Chip icon={Mail01Icon}>{inq.email}</Chip>
-                          {inq.phone && <Chip icon={Call02Icon}>{inq.phone}</Chip>}
-                          <Chip icon={Briefcase06Icon}>{inq.service}</Chip>
+                          <p className="text-sm text-[#666] truncate">{inq.name}{inq.company ? ` · ${inq.company}` : ''}</p>
+                          <div className="mt-1.5"><Badge status={inq.status} /></div>
                         </div>
                       </div>
-                      <div className="hidden sm:block text-right shrink-0">
-                        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#999]">Received</p>
-                        <p className="text-sm font-medium text-[#333] mt-0.5">{fmt(inq.createdAt)}</p>
+                      <div className="flex flex-col items-start gap-1.5 min-w-0">
+                        <Chip icon={Mail01Icon}>{inq.email}</Chip>
+                        {inq.phone && <Chip icon={Call02Icon}>{inq.phone}</Chip>}
                       </div>
+                      <div className="min-w-0">
+                        <Chip icon={Briefcase06Icon}>{inq.service}</Chip>
+                      </div>
+                      <p className="text-sm font-medium text-[#333]">{fmt(inq.createdAt)}</p>
                     </button>
-                    <div className="flex items-center pr-4">
+                    <div className="flex items-center justify-center w-16 pr-2">
                       <button
                         type="button"
                         onClick={() => { setDeleteError(''); setInquiryToDelete(inq); }}
@@ -1415,43 +1421,48 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                   <p className="text-sm font-medium text-[#666] mb-3">
                     {visible.length} {visible.length === 1 ? 'project' : 'projects'}
                   </p>
-                  {visible.length === 0 ? (
-                    <div className="rounded-2xl bg-white border border-[#E8E8EC] px-6 py-12 text-center text-sm text-[#666]">
-                      {projects.length === 0 ? 'No projects yet.' : 'No projects match your filters.'}
+                  <div className="rounded-2xl bg-white border border-[#E2E4EA] shadow-sm overflow-hidden">
+                    {/* Column headings stay visible even when there are no records */}
+                    <div className="hidden lg:grid lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.4fr)_120px_120px_96px] gap-4 px-6 py-3.5 bg-[#1a2030]" aria-hidden="true">
+                      {['Project', 'Company', 'Client', 'Status', 'Created', 'Actions'].map((h) => (
+                        <p key={h} className="text-xs font-bold uppercase tracking-wider text-white/85">{h}</p>
+                      ))}
                     </div>
-                  ) : (
-                    <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                      {visible.map((p) => (
-                        <li
-                          key={p.id}
-                          onClick={() => openProject(p.id)}
-                          className="flex flex-col rounded-2xl bg-white border border-[#E8E8EC] shadow-sm overflow-hidden cursor-pointer hover:shadow-lg hover:-translate-y-1 transition-all"
-                        >
-                          <div className="h-1.5 bg-gradient-to-r from-[#3DD9C8] via-[#7BB5F5] to-[#B87AF5]" />
-                          <div className="flex-1 p-5 flex flex-col gap-4">
-                            <div className="flex items-start justify-between gap-3">
-                              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#EEF2FF]">
+
+                    {visible.length === 0 ? (
+                      <p className="px-6 py-12 text-center text-sm text-[#666]">
+                        {projects.length === 0 ? 'No projects yet.' : 'No projects match your filters.'}
+                      </p>
+                    ) : (
+                      <ul>
+                        {visible.map((p) => (
+                          <li
+                            key={p.id}
+                            onClick={() => openProject(p.id)}
+                            className="grid grid-cols-1 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1.3fr)_minmax(0,1.4fr)_120px_120px_96px] gap-x-4 gap-y-2 px-6 py-4 items-center border-b border-[#EEF0F4] last:border-b-0 cursor-pointer hover:bg-[#F5F7FD] transition-colors"
+                          >
+                            <div className="flex items-center gap-3.5 min-w-0">
+                              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#EEF2FF]">
                                 <HugeiconsIcon icon={Briefcase06Icon} size={22} color="#4f6df5" strokeWidth={1.5} />
                               </span>
-                              <Badge status={p.status} />
-                            </div>
-                            <div className="min-w-0">
-                              <h3 className="text-lg font-semibold tracking-tight text-[#1a1a1a] truncate">{p.name}</h3>
-                              <p className="text-sm text-[#666] truncate">{p.service}</p>
-                            </div>
-                            <div className="space-y-2.5">
-                              <div className="flex items-center gap-2.5 text-sm text-[#444] min-w-0">
-                                <HugeiconsIcon icon={Building01Icon} size={16} color="#7a869f" strokeWidth={1.5} className="shrink-0" />
-                                <span className="truncate">{p.company?.name ?? 'No company'}</span>
-                              </div>
-                              <div className="flex items-center gap-2.5 text-sm text-[#444] min-w-0">
-                                {p.primaryUser ? <Avatar name={p.primaryUser.name} size={24} /> : <HugeiconsIcon icon={User03Icon} size={16} color="#7a869f" strokeWidth={1.5} className="shrink-0" />}
-                                <span className="truncate">{p.primaryUser?.name ?? 'No client assigned'}</span>
+                              <div className="min-w-0">
+                                <p className="text-[15px] font-semibold text-[#1a1a1a] truncate">{p.name}</p>
+                                <p className="text-sm text-[#666] truncate">{p.service}</p>
                               </div>
                             </div>
-                          </div>
-                          <div className="px-5 py-3 border-t border-[#EEF0F4] bg-[#FAFBFD] flex items-center justify-between" >
-                            <span className="text-xs font-medium text-[#777]">Created {fmt(p.createdAt)}</span>
+                            <p className="text-sm text-[#333] truncate">{p.company?.name ?? '—'}</p>
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              {p.primaryUser ? (
+                                <>
+                                  <Avatar name={p.primaryUser.name} size={28} />
+                                  <span className="text-sm text-[#333] truncate">{p.primaryUser.name}</span>
+                                </>
+                              ) : (
+                                <span className="text-sm text-[#999]">—</span>
+                              )}
+                            </div>
+                            <div><Badge status={p.status} /></div>
+                            <p className="text-sm text-[#555]">{fmt(p.createdAt)}</p>
                             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => openInvoiceForProject(p)}
@@ -1473,11 +1484,11 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                                 <HugeiconsIcon icon={Delete04Icon} size={19} color="currentColor" strokeWidth={1.5} />
                               </button>
                             </div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </>
               );
             })()}
