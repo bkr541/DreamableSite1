@@ -85,11 +85,26 @@ model Deliverable {
   inquiry Inquiry? @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
   project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   folder  DeliverableFolder? @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  comments DeliverableComment[]
 
   @@index([inquiryId])
   @@index([projectId])
   @@index([folderId])
   @@map("deliverables")
+}
+
+model DeliverableComment {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  deliverableId String @map("deliverable_id") @db.Uuid
+  authorName    String @map("author_name")
+  body          String @db.Text
+
+  deliverable Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+
+  @@index([deliverableId])
+  @@map("deliverable_comments")
 }
 
 model DeliverableFolder {

@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
-  ArrowDown01Icon,
+  ArrowLeft01Icon,
   Copy01Icon,
   Delete02Icon,
   Edit02Icon,
@@ -14,10 +14,13 @@ import {
   Folder01Icon,
   Globe02Icon,
   LockIcon,
+  Message01Icon,
 } from '@hugeicons/core-free-icons';
 import { useToast } from '@/components/Toast';
 import Toggle from '@/components/Toggle';
-import FileTile from '@/components/FileTile';
+import ArtifactThumb from '@/components/ArtifactThumb';
+import { Avatar } from '@/components/RecordList';
+import { canWatermarkName } from '@/lib/watermarkTypes';
 import { PreviewFile, formatBytes } from '@/components/FilePreviewModal';
 import { getDeliverableCategories, OTHER_CATEGORY } from '@/lib/deliverables';
 
@@ -41,6 +44,15 @@ export interface DeliverableRecord {
   description: string | null;
   fileName: string;
   size: number;
+  watermark: boolean;
+  createdAt: string;
+}
+
+export interface CommentRecord {
+  id: string;
+  deliverableId: string;
+  authorName: string;
+  body: string;
   createdAt: string;
 }
 
@@ -50,8 +62,21 @@ interface Props {
   service: string;
   folders: FolderRecord[];
   deliverables: DeliverableRecord[];
+  comments: CommentRecord[];
+  /** The folder currently open (kept by the parent so it survives data refreshes). */
+  openFolderId: string | null;
+  onOpenFolder: (id: string | null) => void;
   onPreview: (file: PreviewFile) => void;
 }
+
+const slide = {
+  enter: (dir: number) => ({ opacity: 0, x: dir * 48 }),
+  center: { opacity: 1, x: 0 },
+  exit: (dir: number) => ({ opacity: 0, x: dir * -48 }),
+};
+
+const formatWhen = (iso: string) =>
+  new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 const shareUrl = (token: string) => `${window.location.origin}/share/${token}`;
 
@@ -133,20 +158,19 @@ function FolderDialog({
             autoFocus
             className={`${inputCls} ${error && !name.trim() ? '!border-[#e05252]' : ''}`}
           />
-          {!folder && suggestions.length > 0 && (
-            <div className="flex flex-wrap gap-2 pt-1">
-              {suggestions.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => { setName(s); setError(''); }}
-                  className="rounded-full bg-[#F1F3F9] px-3 py-1 text-xs font-medium text-[#555] hover:bg-[#E6EAF5] transition-colors"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Fixed-height row so the dialog is the same size when creating or editing. */}
+          <div className="flex h-7 items-center gap-2 overflow-x-auto pt-1" aria-hidden={!!folder}>
+            {!folder && suggestions.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => { setName(s); setError(''); }}
+                className="shrink-0 rounded-full bg-[#F1F3F9] px-3 py-1 text-xs font-medium text-[#555] hover:bg-[#E6EAF5] transition-colors"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -167,22 +191,26 @@ function FolderDialog({
           <p className="text-xs leading-relaxed text-[#777]">
             When on, anyone with this folder&apos;s shared link can view the files inside it. When off, the link stops working.
           </p>
-          {folder && isPublic && folder.isPublic && (
-            <div className="flex items-center gap-2 pt-1">
-              <input readOnly value={shareUrl(folder.shareToken)} onFocus={(e) => e.currentTarget.select()} className="flex-1 min-w-0 rounded-lg border border-[#D0D0D0] bg-white px-3 py-2 text-xs text-[#555]" aria-label="Shared link" />
-              <button
-                type="button"
-                onClick={() => navigator.clipboard.writeText(shareUrl(folder.shareToken)).then(() => toast.success('Link copied', 'The shared link is on your clipboard.'))}
-                className="shrink-0 rounded-full border border-[#1a2030] px-3.5 py-1.5 text-xs font-semibold text-[#1a2030] hover:bg-[#1a2030] hover:text-white transition-all"
-              >
-                Copy
-              </button>
-            </div>
-          )}
-          {!folder && isPublic && <p className="text-xs text-[#777]">The link will be available as soon as the folder is created.</p>}
+          {/* Always the same height, whatever the toggle shows, so the dialog never resizes. */}
+          <div className="h-9 flex items-center">
+            {folder && isPublic && folder.isPublic ? (
+              <div className="flex w-full items-center gap-2">
+                <input readOnly value={shareUrl(folder.shareToken)} onFocus={(e) => e.currentTarget.select()} className="flex-1 min-w-0 rounded-lg border border-[#D0D0D0] bg-white px-3 py-2 text-xs text-[#555]" aria-label="Shared link" />
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard.writeText(shareUrl(folder.shareToken)).then(() => toast.success('Link copied', 'The shared link is on your clipboard.'))}
+                  className="shrink-0 rounded-full border border-[#1a2030] px-3.5 py-1.5 text-xs font-semibold text-[#1a2030] hover:bg-[#1a2030] hover:text-white transition-all"
+                >
+                  Copy
+                </button>
+              </div>
+            ) : isPublic ? (
+              <p className="text-xs text-[#777]">The shared link is created when you save.</p>
+            ) : null}
+          </div>
         </div>
 
-        {error && <p className="text-sm text-[#e05252]">{error}</p>}
+        <p className="h-5 text-sm text-[#e05252]">{error}</p>
 
         <div className="flex items-center justify-end gap-3 pt-1">
           <button type="button" onClick={onClose} disabled={saving} className="inline-flex items-center h-10 px-5 rounded-full border border-[#D0D0D0] text-[#555] text-sm font-medium hover:bg-[#F5F5F5] transition-colors disabled:opacity-50">
@@ -203,8 +231,10 @@ function EditFileDialog({ file, onClose }: { file: DeliverableRecord; onClose: (
   const toast = useToast();
   const [title, setTitle] = useState(file.title || file.fileName);
   const [description, setDescription] = useState(file.description ?? '');
+  const [watermark, setWatermark] = useState(file.watermark);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const watermarkable = canWatermarkName(file.fileName);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -215,7 +245,7 @@ function EditFileDialog({ file, onClose }: { file: DeliverableRecord; onClose: (
       const res = await fetch(`/api/admin/deliverables/${file.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description }),
+        body: JSON.stringify({ title, description, watermark: watermarkable ? watermark : false }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || 'Could not save.');
@@ -244,6 +274,12 @@ function EditFileDialog({ file, onClose }: { file: DeliverableRecord; onClose: (
           <label htmlFor="edit-file-description" className="text-sm font-medium text-[#555]">Description <span className="text-[#CCC] font-normal">— optional</span></label>
           <textarea id="edit-file-description" rows={3} maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} className={`${inputCls} resize-none`} />
         </div>
+        <div className="rounded-xl border border-[#E4E8F3] bg-[#F6F7FB] p-4 space-y-1.5">
+          <Toggle checked={watermarkable && watermark} onChange={setWatermark} label="Watermark" disabled={!watermarkable} />
+          <p className="text-xs leading-relaxed text-[#777]">
+            {watermarkable ? 'When on, a Dreamable.studio watermark is laid over this file for everyone who views it. Turn it off to remove the overlay.' : 'Watermarks can only be added to images (PNG, JPG) and PDFs.'}
+          </p>
+        </div>
         {error && <p className="text-sm text-[#e05252]">{error}</p>}
         <div className="flex items-center justify-end gap-3">
           <button type="button" onClick={onClose} disabled={saving} className="inline-flex items-center h-10 px-5 rounded-full border border-[#D0D0D0] text-[#555] text-sm font-medium hover:bg-[#F5F5F5] transition-colors disabled:opacity-50">Cancel</button>
@@ -254,53 +290,72 @@ function EditFileDialog({ file, onClose }: { file: DeliverableRecord; onClose: (
   );
 }
 
-/** Upload controls + files for one open folder. */
-function FolderBody({
-  folder,
-  files,
-  onPreview,
-}: {
-  folder: FolderRecord;
-  files: DeliverableRecord[];
-  onPreview: (file: PreviewFile) => void;
-}) {
+interface PendingFile {
+  file: File;
+  previewUrl: string;
+  title: string;
+  description: string;
+  watermark: boolean;
+}
+
+/** Choose files, review thumbnails, set each artifact's title / description / watermark, then upload. */
+function UploadSection({ folder }: { folder: FolderRecord }) {
   const router = useRouter();
   const toast = useToast();
-  const [picked, setPicked] = useState<File[]>([]);
-  const [titles, setTitles] = useState<string[]>([]);
-  const [descriptions, setDescriptions] = useState<string[]>([]);
-  const [editing, setEditing] = useState<DeliverableRecord | null>(null);
+  const [items, setItems] = useState<PendingFile[]>([]);
   const [inputKey, setInputKey] = useState(0);
-  const [wordmark, setWordmark] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const urlsRef = useRef<string[]>([]);
+
+  // Preview URLs are created when files are picked and released when they're removed or this section goes away.
+  useEffect(() => () => { urlsRef.current.forEach((u) => URL.revokeObjectURL(u)); }, []);
+
+  function addFiles(list: File[]) {
+    const added = list.map<PendingFile>((file) => {
+      const previewUrl = URL.createObjectURL(file);
+      urlsRef.current.push(previewUrl);
+      return { file, previewUrl, title: file.name.replace(/\.[^.]+$/, ''), description: '', watermark: false };
+    });
+    setItems((prev) => [...prev, ...added]);
+    setError('');
+  }
+
+  function removeItem(index: number) {
+    setItems((prev) => {
+      URL.revokeObjectURL(prev[index].previewUrl);
+      urlsRef.current = urlsRef.current.filter((u) => u !== prev[index].previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
+  }
+
+  const patch = (index: number, change: Partial<PendingFile>) =>
+    setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...change } : it)));
 
   async function upload() {
-    if (picked.length === 0) { setError('Choose at least one file.'); return; }
-    const missing = titles.findIndex((t) => !t.trim());
-    if (missing !== -1) { setError(`Add a title for ${picked[missing].name}.`); return; }
+    if (items.length === 0) { setError('Choose at least one file.'); return; }
+    const missing = items.findIndex((it) => !it.title.trim());
+    if (missing !== -1) { setError(`Add a title for ${items[missing].file.name}.`); return; }
+
     setUploading(true);
     setError('');
-    setNotice('');
     try {
       const body = new FormData();
       body.append('folderId', folder.id);
-      picked.forEach((f) => body.append('files', f));
-      body.append('titles', JSON.stringify(titles));
-      body.append('descriptions', JSON.stringify(descriptions));
-      body.append('watermark', wordmark ? '1' : '0');
+      items.forEach((it) => body.append('files', it.file));
+      body.append('titles', JSON.stringify(items.map((it) => it.title)));
+      body.append('descriptions', JSON.stringify(items.map((it) => it.description)));
+      body.append('watermarks', JSON.stringify(items.map((it) => it.watermark)));
       const res = await fetch('/api/admin/deliverables', { method: 'POST', body });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || 'Upload failed.');
       toast.success(
         data.count === 1 ? 'File uploaded' : 'Files uploaded',
-        `${data.count} ${data.count === 1 ? 'file was' : 'files were'} added to “${folder.name}”${wordmark ? ' with the wordmark' : ''}.`,
+        `${data.count} ${data.count === 1 ? 'file was' : 'files were'} added to “${folder.name}”.`,
       );
-      if (data.skipped?.length) setNotice(`Wordmark applies to images and PDFs only, so it was not added to: ${data.skipped.join(', ')}.`);
-      setPicked([]);
-      setTitles([]);
-      setDescriptions([]);
+      urlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+      urlsRef.current = [];
+      setItems([]);
       setInputKey((k) => k + 1);
       router.refresh();
     } catch (err) {
@@ -311,21 +366,14 @@ function FolderBody({
     }
   }
 
-  async function remove(file: DeliverableRecord) {
-    try {
-      const res = await fetch(`/api/admin/deliverables/${file.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error();
-      toast.success('File deleted', `${file.title || file.fileName} was removed from “${folder.name}”.`);
-      router.refresh();
-    } catch {
-      toast.error('Could not delete file', `${file.fileName} was not deleted. Please try again.`);
-    }
-  }
-
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-[#EBEBEB] bg-[#FAFAFA] p-4">
-        <div className="flex flex-wrap items-center gap-3">
+    <section className="rounded-2xl border border-[#E2E4EA] bg-[#FAFBFD] p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-[#1a1a1a]">Upload files</h3>
+          <p className="text-xs text-[#888]">Add artifacts to “{folder.name}”. Up to 10 files at a time, 25 MB each.</p>
+        </div>
+        <div className="flex items-center gap-3">
           <label className="inline-flex items-center h-10 px-5 rounded-full border border-[#1a2030] text-[#1a2030] text-sm font-medium cursor-pointer hover:bg-[#1a2030] hover:text-white transition-all">
             Choose files
             <input
@@ -333,100 +381,217 @@ function FolderBody({
               type="file"
               multiple
               className="sr-only"
-              onChange={(e) => {
-                const list = Array.from(e.target.files ?? []);
-                setPicked(list);
-                // Titles start as the file name (without its extension) so there's always a sensible default to edit.
-                setTitles(list.map((f) => f.name.replace(/\.[^.]+$/, '')));
-                setDescriptions(list.map(() => ''));
-                setError('');
-              }}
+              onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = ''; }}
             />
           </label>
-          <span className="text-sm text-[#888] truncate max-w-[260px]">
-            {picked.length === 0 ? 'No files selected' : picked.length === 1 ? picked[0].name : `${picked.length} files selected`}
-          </span>
-          <div className="ml-auto flex items-center gap-4">
-            <Toggle checked={wordmark} onChange={setWordmark} label="Wordmark" />
-            <button
-              type="button"
-              onClick={upload}
-              disabled={uploading || picked.length === 0}
-              className="inline-flex items-center h-10 px-6 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
-            >
-              {uploading ? 'Uploading…' : 'Upload'}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={upload}
+            disabled={uploading || items.length === 0}
+            className="inline-flex items-center h-10 px-6 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
+          >
+            {uploading ? 'Uploading…' : items.length > 1 ? `Upload ${items.length} files` : 'Upload'}
+          </button>
         </div>
+      </div>
 
-        {picked.length > 0 && (
-          <ul className="mt-4 space-y-3">
-            {picked.map((f, i) => (
-              <li key={`${f.name}-${i}`} className="rounded-xl border border-[#E4E8F3] bg-white p-3">
-                <p className="mb-2 text-xs text-[#888] truncate" title={f.name}>{f.name} · {formatBytes(f.size)}</p>
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr] gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label htmlFor={`file-title-${folder.id}-${i}`} className="text-xs font-medium text-[#555]">Title <span className="text-red-400">*</span></label>
-                    <input
-                      id={`file-title-${folder.id}-${i}`}
-                      type="text"
-                      value={titles[i] ?? ''}
-                      maxLength={200}
-                      onChange={(e) => { setTitles((prev) => prev.map((t, idx) => (idx === i ? e.target.value : t))); setError(''); }}
-                      placeholder="Primary wordmark"
-                      className="w-full bg-white rounded-xl px-3.5 py-2 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 transition-all"
-                    />
+      {items.length > 0 && (
+        <ul className="mt-4 space-y-3">
+          {items.map((it, i) => {
+            const watermarkable = canWatermarkName(it.file.name);
+            return (
+              <li key={it.previewUrl} className="flex gap-4 rounded-xl border border-[#E4E8F3] bg-white p-3">
+                <ArtifactThumb src={it.previewUrl} fileName={it.file.name} size={88} />
+                <div className="min-w-0 flex-1 space-y-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="min-w-0 truncate text-xs text-[#888]" title={it.file.name}>{it.file.name} · {formatBytes(it.file.size)}</p>
+                    <button type="button" onClick={() => removeItem(i)} className="shrink-0 text-xs font-medium text-[#999] hover:text-[#e05252] transition-colors">Remove</button>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label htmlFor={`file-description-${folder.id}-${i}`} className="text-xs font-medium text-[#555]">Description <span className="text-[#BBB] font-normal">— optional</span></label>
-                    <input
-                      id={`file-description-${folder.id}-${i}`}
-                      type="text"
-                      value={descriptions[i] ?? ''}
-                      maxLength={500}
-                      onChange={(e) => setDescriptions((prev) => prev.map((d, idx) => (idx === i ? e.target.value : d)))}
-                      placeholder="Where and how this should be used"
-                      className="w-full bg-white rounded-xl px-3.5 py-2 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 transition-all"
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr] gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label htmlFor={`file-title-${i}`} className="text-xs font-medium text-[#555]">Title <span className="text-red-400">*</span></label>
+                      <input
+                        id={`file-title-${i}`}
+                        type="text"
+                        value={it.title}
+                        maxLength={200}
+                        onChange={(e) => { patch(i, { title: e.target.value }); setError(''); }}
+                        placeholder="Primary wordmark"
+                        className="w-full bg-white rounded-xl px-3.5 py-2 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 transition-all"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label htmlFor={`file-description-${i}`} className="text-xs font-medium text-[#555]">Description <span className="text-[#BBB] font-normal">— optional</span></label>
+                      <input
+                        id={`file-description-${i}`}
+                        type="text"
+                        value={it.description}
+                        maxLength={500}
+                        onChange={(e) => patch(i, { description: e.target.value })}
+                        placeholder="Where and how this should be used"
+                        className="w-full bg-white rounded-xl px-3.5 py-2 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 transition-all"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Toggle checked={watermarkable && it.watermark} onChange={(v) => patch(i, { watermark: v })} label="Watermark" disabled={!watermarkable} />
+                    {!watermarkable && <span className="text-xs text-[#999]">Images and PDFs only</span>}
                   </div>
                 </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <p className="mt-3 h-5 text-sm text-[#e05252]">{error}</p>
+    </section>
+  );
+}
+
+/** One artifact in the folder, with its details and the comments left on it. */
+function ArtifactCard({
+  file,
+  comments,
+  folderName,
+  onPreview,
+}: {
+  file: DeliverableRecord;
+  comments: CommentRecord[];
+  folderName: string;
+  onPreview: (file: PreviewFile) => void;
+}) {
+  const router = useRouter();
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const url = `/api/deliverables/${file.id}`;
+  const label = file.title || file.fileName;
+  const watermarkable = canWatermarkName(file.fileName);
+
+  async function toggleWatermark(next: boolean) {
+    try {
+      const res = await fetch(`/api/admin/deliverables/${file.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ watermark: next }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error);
+      toast.success(next ? 'Watermark added' : 'Watermark removed', `“${label}” ${next ? 'now has' : 'no longer has'} a watermark overlay.`);
+      router.refresh();
+    } catch (err) {
+      toast.error('Could not update watermark', err instanceof Error && err.message ? err.message : undefined);
+    }
+  }
+
+  async function remove() {
+    try {
+      const res = await fetch(`/api/admin/deliverables/${file.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      toast.success('File deleted', `${label} was removed from “${folderName}”.`);
+      router.refresh();
+    } catch {
+      toast.error('Could not delete file', `${label} was not deleted. Please try again.`);
+    }
+  }
+
+  async function removeComment(c: CommentRecord) {
+    try {
+      const res = await fetch(`/api/admin/deliverable-comments/${c.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      toast.success('Comment deleted', `The comment from ${c.authorName} was removed.`);
+      router.refresh();
+    } catch {
+      toast.error('Could not delete comment', 'Please try again.');
+    }
+  }
+
+  return (
+    <li className="flex flex-col rounded-2xl border border-[#E2E4EA] bg-white shadow-sm">
+      <div className="flex gap-4 p-4">
+        <button
+          type="button"
+          onClick={() => onPreview({ url, fileName: file.fileName, size: file.size, title: file.title, description: file.description })}
+          className="shrink-0 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-300"
+          aria-label={`Open ${label}`}
+        >
+          <ArtifactThumb src={`${url}?inline=1`} fileName={file.fileName} size={96} className="hover:shadow-md transition-shadow" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-[#1a1a1a] truncate" title={label}>{label}</p>
+          <p className="text-xs text-[#888] truncate">{file.fileName} · {formatBytes(file.size)}</p>
+          {file.description && <p className="mt-1.5 text-sm leading-snug text-[#555] line-clamp-3">{file.description}</p>}
+          <div className="mt-2.5">
+            <Toggle checked={file.watermark} onChange={toggleWatermark} label="Watermark" disabled={!watermarkable} />
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col gap-1">
+          <button type="button" onClick={() => setEditing(true)} className="flex h-8 w-8 items-center justify-center rounded-full text-[#666] hover:bg-[#F1F2F7] transition-colors" title="Edit title and description" aria-label={`Edit ${label}`}>
+            <HugeiconsIcon icon={Edit02Icon} size={16} color="currentColor" strokeWidth={1.5} />
+          </button>
+          <button type="button" onClick={remove} className="flex h-8 w-8 items-center justify-center rounded-full text-[#e05252] hover:bg-red-50 transition-colors" title="Delete file" aria-label={`Delete ${label}`}>
+            <HugeiconsIcon icon={Delete02Icon} size={16} color="currentColor" strokeWidth={1.5} />
+          </button>
+        </div>
+      </div>
+
+      {/* Comments left on this artifact from the shared link */}
+      <div className="mx-4 mb-4 rounded-xl border border-[#E4E8F3] bg-[#F6F7FB] p-3">
+        <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-[#4a5368]">
+          <HugeiconsIcon icon={Message01Icon} size={14} color="currentColor" strokeWidth={1.75} />
+          Comments
+          <span className="rounded-full bg-white px-2 py-px text-[11px] font-semibold text-[#4f6df5]">{comments.length}</span>
+        </p>
+        {comments.length === 0 ? (
+          <p className="mt-2 text-xs text-[#888]">No comments yet. Comments from the shared link appear here.</p>
+        ) : (
+          <ul className="mt-2.5 space-y-2.5">
+            {comments.map((c) => (
+              <li key={c.id} className="group flex gap-2.5 rounded-lg border-l-2 border-[#7BB5F5] bg-white px-3 py-2.5">
+                <Avatar name={c.authorName} size={28} />
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-baseline gap-x-2 text-xs">
+                    <span className="font-semibold text-[#1a1a1a]">{c.authorName}</span>
+                    <span className="text-[#999]">{formatWhen(c.createdAt)}</span>
+                  </p>
+                  <p className="mt-0.5 text-sm leading-snug text-[#444] whitespace-pre-wrap break-words">{c.body}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeComment(c)}
+                  className="shrink-0 self-start text-[#ccc] hover:text-[#e05252] opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
+                  title="Delete comment"
+                  aria-label={`Delete comment from ${c.authorName}`}
+                >
+                  <HugeiconsIcon icon={Delete02Icon} size={15} color="currentColor" strokeWidth={1.5} />
+                </button>
               </li>
             ))}
           </ul>
         )}
-        {error && <p className="text-sm text-[#e05252] mt-3">{error}</p>}
-        {notice && <p className="text-sm text-[#888] mt-3">{notice}</p>}
       </div>
 
-      {files.length === 0 ? (
-        <p className="text-sm text-[#999]">No files in this folder yet.</p>
-      ) : (
-        <div className="flex flex-wrap gap-3">
-          {files.map((d) => (
-            <FileTile
-              key={d.id}
-              url={`/api/deliverables/${d.id}`}
-              fileName={d.fileName}
-              size={d.size}
-              title={d.title}
-              description={d.description}
-              onOpen={() => onPreview({ url: `/api/deliverables/${d.id}`, fileName: d.fileName, size: d.size, title: d.title, description: d.description })}
-              onEdit={() => setEditing(d)}
-              onDelete={() => remove(d)}
-            />
-          ))}
-        </div>
-      )}
-      {editing && <EditFileDialog file={editing} onClose={() => setEditing(null)} />}
-    </div>
+      {editing && <EditFileDialog file={file} onClose={() => setEditing(false)} />}
+    </li>
   );
 }
 
-/** Admin-side deliverables: files live inside named folders, and a folder can be shared through a public link. */
-export default function DeliverablesPanel({ targetType, targetId, service, folders, deliverables, onPreview }: Props) {
+function VisibilityBadge({ isPublic }: { isPublic: boolean }) {
+  return isPublic ? (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
+      <HugeiconsIcon icon={Globe02Icon} size={12} color="currentColor" strokeWidth={2} /> Public
+    </span>
+  ) : (
+    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#F1F2F5] px-2 py-0.5 text-[11px] font-semibold text-[#888]">
+      <HugeiconsIcon icon={LockIcon} size={12} color="currentColor" strokeWidth={2} /> Private
+    </span>
+  );
+}
+
+/** Admin-side deliverables: folder cards, and a dedicated group for each folder with uploads, artifacts and comments. */
+export default function DeliverablesPanel({ targetType, targetId, service, folders, deliverables, comments, openFolderId, onOpenFolder, onPreview }: Props) {
   const router = useRouter();
   const toast = useToast();
-  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
+  const [direction, setDirection] = useState(1);
   const [dialog, setDialog] = useState<{ mode: 'create' } | { mode: 'edit'; folder: FolderRecord } | null>(null);
   const [toDelete, setToDelete] = useState<FolderRecord | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -435,13 +600,13 @@ export default function DeliverablesPanel({ targetType, targetId, service, folde
   const allFiles = deliverables.filter((d) => (targetType === 'inquiry' ? d.inquiryId === targetId : d.projectId === targetId));
   const unfiled = allFiles.filter((d) => !d.folderId);
   const suggestions = getDeliverableCategories(service).filter((c) => c !== OTHER_CATEGORY);
+  const openFolder = mine.find((f) => f.id === openFolderId) ?? null;
 
-  const toggleOpen = (id: string) =>
-    setOpenIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const open = (id: string) => { setDirection(1); onOpenFolder(id); };
+  const back = () => { setDirection(-1); onOpenFolder(null); };
+
+  const copyLink = (folder: FolderRecord) =>
+    navigator.clipboard.writeText(shareUrl(folder.shareToken)).then(() => toast.success('Link copied', `The shared link for “${folder.name}” is on your clipboard.`));
 
   async function saveFolder(values: { name: string; description: string; isPublic: boolean }): Promise<string | null> {
     const editing = dialog?.mode === 'edit' ? dialog.folder : null;
@@ -463,7 +628,7 @@ export default function DeliverablesPanel({ targetType, targetId, service, folde
         toast.success('Folder updated', `“${values.name.trim()}” was saved${values.isPublic !== editing.isPublic ? (values.isPublic ? ' and is now publicly accessible.' : ' and is no longer publicly accessible.') : '.'}`);
       } else {
         toast.success('Folder created', `“${values.name.trim()}” was created${values.isPublic ? ' and is publicly accessible.' : '.'}`);
-        if (data.id) setOpenIds((prev) => new Set(prev).add(data.id));
+        if (data.id) open(data.id);
       }
       setDialog(null);
       router.refresh();
@@ -480,6 +645,7 @@ export default function DeliverablesPanel({ targetType, targetId, service, folde
       const res = await fetch(`/api/admin/deliverable-folders/${toDelete.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
       toast.success('Folder deleted', `“${toDelete.name}” and its files were permanently deleted.`);
+      if (openFolderId === toDelete.id) back();
       setToDelete(null);
       router.refresh();
     } catch {
@@ -493,152 +659,186 @@ export default function DeliverablesPanel({ targetType, targetId, service, folde
     try {
       const res = await fetch(`/api/admin/deliverables/${file.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
-      toast.success('File deleted', `${file.fileName} was removed.`);
+      toast.success('File deleted', `${file.title || file.fileName} was removed.`);
       router.refresh();
     } catch {
-      toast.error('Could not delete file', `${file.fileName} was not deleted. Please try again.`);
+      toast.error('Could not delete file', `${file.title || file.fileName} was not deleted. Please try again.`);
     }
   }
 
+  const folderFiles = openFolder ? allFiles.filter((d) => d.folderId === openFolder.id) : [];
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-[#666]">
-          {mine.length} {mine.length === 1 ? 'folder' : 'folders'}
-        </p>
-        <button
-          type="button"
-          onClick={() => setDialog({ mode: 'create' })}
-          className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
-        >
-          <HugeiconsIcon icon={FolderAddIcon} size={16} color="#ffffff" strokeWidth={1.5} />
-          New folder
-        </button>
-      </div>
+    <div>
+      <AnimatePresence mode="wait" initial={false} custom={direction}>
+        {!openFolder ? (
+          <motion.div
+            key="folders"
+            custom={direction}
+            variants={slide}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.22, ease: 'easeInOut' }}
+            className="space-y-4"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-[#666]">{mine.length} {mine.length === 1 ? 'folder' : 'folders'}</p>
+              <button
+                type="button"
+                onClick={() => setDialog({ mode: 'create' })}
+                className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
+              >
+                <HugeiconsIcon icon={FolderAddIcon} size={16} color="#ffffff" strokeWidth={1.5} />
+                New folder
+              </button>
+            </div>
 
-      {mine.length === 0 && unfiled.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-[#D0D4E0] px-6 py-10 text-center">
-          <p className="text-sm font-medium text-[#1a1a1a]">No folders yet</p>
-          <p className="mt-1 text-sm text-[#777]">Create a folder first — for example “Wordmark”, “Logo” or “Brand Kit” — then upload the files that belong in it.</p>
-        </div>
-      ) : (
-        <ul className="space-y-3">
-          {mine.map((folder) => {
-            const files = allFiles.filter((d) => d.folderId === folder.id);
-            const isOpen = openIds.has(folder.id);
-            return (
-              <li key={folder.id} className="rounded-xl border border-[#E2E4EA] bg-white">
-                <div className="flex items-center gap-3 px-4 py-3">
-                  <button
-                    type="button"
-                    aria-expanded={isOpen}
-                    onClick={() => toggleOpen(folder.id)}
-                    className="flex flex-1 min-w-0 items-center gap-3 text-left"
-                  >
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EEF2FF]">
-                      <HugeiconsIcon icon={Folder01Icon} size={20} color="#4f6df5" strokeWidth={1.5} />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-[#1a1a1a] truncate">{folder.name}</span>
-                        <span className="shrink-0 rounded-full bg-[#F1F2F5] px-2 py-0.5 text-[11px] font-semibold text-[#666]">{files.length} {files.length === 1 ? 'file' : 'files'}</span>
-                        {folder.isPublic ? (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700">
-                            <HugeiconsIcon icon={Globe02Icon} size={12} color="currentColor" strokeWidth={2} /> Public
-                          </span>
-                        ) : (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#F1F2F5] px-2 py-0.5 text-[11px] font-semibold text-[#888]">
-                            <HugeiconsIcon icon={LockIcon} size={12} color="currentColor" strokeWidth={2} /> Private
-                          </span>
-                        )}
-                      </span>
-                      {folder.description && <span className="block text-xs text-[#777] truncate">{folder.description}</span>}
-                    </span>
-                  </button>
-
-                  <div className="flex shrink-0 items-center gap-1">
-                    {folder.isPublic && (
-                      <button
-                        type="button"
-                        onClick={() => navigator.clipboard.writeText(shareUrl(folder.shareToken)).then(() => toast.success('Link copied', `The shared link for “${folder.name}” is on your clipboard.`))}
-                        className="inline-flex items-center gap-1.5 h-8 rounded-full px-3 text-xs font-semibold text-[#4f6df5] hover:bg-[#EEF2FF] transition-colors"
-                        title="Copy shared link"
+            {mine.length === 0 && unfiled.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-[#D0D4E0] px-6 py-10 text-center">
+                <p className="text-sm font-medium text-[#1a1a1a]">No folders yet</p>
+                <p className="mt-1 text-sm text-[#777]">Create a folder first — for example “Wordmark”, “Logo” or “Brand Kit” — then upload the files that belong in it.</p>
+              </div>
+            ) : (
+              <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {mine.map((folder) => {
+                  const files = allFiles.filter((d) => d.folderId === folder.id);
+                  const commentCount = comments.filter((c) => files.some((f) => f.id === c.deliverableId)).length;
+                  return (
+                    <li key={folder.id}>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => open(folder.id)}
+                        onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); open(folder.id); } }}
+                        aria-label={`Open folder ${folder.name}`}
+                        className="flex h-full min-h-[168px] cursor-pointer flex-col rounded-2xl border border-[#E2E4EA] bg-white p-4 shadow-sm hover:-translate-y-0.5 hover:shadow-md hover:border-[#7BB5F5] focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 transition-all"
                       >
-                        <HugeiconsIcon icon={Copy01Icon} size={14} color="currentColor" strokeWidth={1.75} />
-                        Copy link
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setDialog({ mode: 'edit', folder })}
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-[#666] hover:bg-[#F1F2F7] transition-colors"
-                      title="Edit folder"
-                      aria-label={`Edit ${folder.name}`}
-                    >
-                      <HugeiconsIcon icon={Edit02Icon} size={16} color="currentColor" strokeWidth={1.5} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setToDelete(folder)}
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-[#e05252] hover:bg-red-50 transition-colors"
-                      title="Delete folder"
-                      aria-label={`Delete ${folder.name}`}
-                    >
-                      <HugeiconsIcon icon={Delete02Icon} size={16} color="currentColor" strokeWidth={1.5} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => toggleOpen(folder.id)}
-                      className="flex h-8 w-8 items-center justify-center rounded-full text-[#666] hover:bg-[#F1F2F7] transition-colors"
-                      aria-label={isOpen ? `Collapse ${folder.name}` : `Expand ${folder.name}`}
-                    >
-                      <motion.span animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }} className="flex">
-                        <HugeiconsIcon icon={ArrowDown01Icon} size={16} color="currentColor" strokeWidth={1.75} />
-                      </motion.span>
-                    </button>
-                  </div>
-                </div>
-
-                <AnimatePresence initial={false}>
-                  {isOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0, overflow: 'hidden' }}
-                      animate={{ height: 'auto', opacity: 1, transitionEnd: { overflow: 'visible' } }}
-                      exit={{ height: 0, opacity: 0, overflow: 'hidden' }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <div className="border-t border-[#EEF0F4] p-4">
-                        <FolderBody folder={folder} files={files} onPreview={onPreview} />
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#EEF2FF]">
+                            <HugeiconsIcon icon={Folder01Icon} size={22} color="#4f6df5" strokeWidth={1.5} />
+                          </span>
+                          <VisibilityBadge isPublic={folder.isPublic} />
+                        </div>
+                        <p className="mt-3 text-sm font-semibold text-[#1a1a1a] truncate" title={folder.name}>{folder.name}</p>
+                        <p className="mt-0.5 text-xs leading-snug text-[#777] line-clamp-2 min-h-[2rem]">{folder.description || 'No description'}</p>
+                        <div className="mt-auto flex items-center justify-between gap-2 pt-3">
+                          <span className="text-xs font-medium text-[#666]">
+                            {files.length} {files.length === 1 ? 'file' : 'files'}
+                            {commentCount > 0 && <span className="text-[#4f6df5]"> · {commentCount} {commentCount === 1 ? 'comment' : 'comments'}</span>}
+                          </span>
+                          <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
+                            {folder.isPublic && (
+                              <button type="button" onClick={() => copyLink(folder)} className="flex h-8 w-8 items-center justify-center rounded-full text-[#4f6df5] hover:bg-[#EEF2FF] transition-colors" title="Copy shared link" aria-label={`Copy shared link for ${folder.name}`}>
+                                <HugeiconsIcon icon={Copy01Icon} size={15} color="currentColor" strokeWidth={1.75} />
+                              </button>
+                            )}
+                            <button type="button" onClick={() => setDialog({ mode: 'edit', folder })} className="flex h-8 w-8 items-center justify-center rounded-full text-[#666] hover:bg-[#F1F2F7] transition-colors" title="Edit folder" aria-label={`Edit ${folder.name}`}>
+                              <HugeiconsIcon icon={Edit02Icon} size={15} color="currentColor" strokeWidth={1.5} />
+                            </button>
+                            <button type="button" onClick={() => setToDelete(folder)} className="flex h-8 w-8 items-center justify-center rounded-full text-[#e05252] hover:bg-red-50 transition-colors" title="Delete folder" aria-label={`Delete ${folder.name}`}>
+                              <HugeiconsIcon icon={Delete02Icon} size={15} color="currentColor" strokeWidth={1.5} />
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
 
-      {unfiled.length > 0 && (
-        <div className="rounded-xl border border-[#E2E4EA] bg-white p-4">
-          <p className="text-sm font-semibold text-[#1a1a1a]">Unfiled files</p>
-          <p className="mb-3 text-xs text-[#777]">Uploaded before folders existed. Delete them and re-upload into a folder to organize them.</p>
-          <div className="flex flex-wrap gap-3">
-            {unfiled.map((d) => (
-              <FileTile
-                key={d.id}
-                url={`/api/deliverables/${d.id}`}
-                fileName={d.fileName}
-                size={d.size}
-                title={d.title}
-                description={d.description}
-                onOpen={() => onPreview({ url: `/api/deliverables/${d.id}`, fileName: d.fileName, size: d.size, title: d.title, description: d.description })}
-                onDelete={() => removeUnfiled(d)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+            {unfiled.length > 0 && (
+              <div className="rounded-xl border border-[#E2E4EA] bg-white p-4">
+                <p className="text-sm font-semibold text-[#1a1a1a]">Unfiled files</p>
+                <p className="mb-3 text-xs text-[#777]">Uploaded before folders existed. Delete them and re-upload into a folder to organize them.</p>
+                <ul className="flex flex-wrap gap-3">
+                  {unfiled.map((d) => (
+                    <li key={d.id} className="flex w-[220px] items-center gap-3 rounded-xl border border-[#EBEBEB] p-2">
+                      <button type="button" onClick={() => onPreview({ url: `/api/deliverables/${d.id}`, fileName: d.fileName, size: d.size, title: d.title, description: d.description })} aria-label={`Open ${d.title || d.fileName}`}>
+                        <ArtifactThumb src={`/api/deliverables/${d.id}?inline=1`} fileName={d.fileName} size={48} />
+                      </button>
+                      <span className="min-w-0 flex-1 truncate text-xs text-[#444]" title={d.title || d.fileName}>{d.title || d.fileName}</span>
+                      <button type="button" onClick={() => removeUnfiled(d)} className="shrink-0 text-[#e05252] hover:text-[#c03a3a]" aria-label={`Delete ${d.title || d.fileName}`}>
+                        <HugeiconsIcon icon={Delete02Icon} size={16} color="currentColor" strokeWidth={1.5} />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </motion.div>
+        ) : (
+          <motion.div
+            key={`folder-${openFolder.id}`}
+            custom={direction}
+            variants={slide}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ duration: 0.22, ease: 'easeInOut' }}
+            className="space-y-5"
+          >
+            <button type="button" onClick={back} className="inline-flex items-center gap-1 text-sm font-medium text-[#888] hover:text-[#1a2030] transition-colors">
+              <HugeiconsIcon icon={ArrowLeft01Icon} size={16} color="currentColor" strokeWidth={1.75} />
+              All folders
+            </button>
+
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#EEF2FF]">
+                  <HugeiconsIcon icon={Folder01Icon} size={24} color="#4f6df5" strokeWidth={1.5} />
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg font-semibold tracking-tight text-[#1a1a1a] break-words">{openFolder.name}</h3>
+                    <VisibilityBadge isPublic={openFolder.isPublic} />
+                  </div>
+                  {openFolder.description && <p className="mt-0.5 text-sm text-[#666] whitespace-pre-wrap">{openFolder.description}</p>}
+                  <p className="mt-1 text-xs text-[#999]">{folderFiles.length} {folderFiles.length === 1 ? 'file' : 'files'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {openFolder.isPublic && (
+                  <button type="button" onClick={() => copyLink(openFolder)} className="inline-flex items-center gap-1.5 h-9 rounded-full border border-[#D5D9E4] px-4 text-xs font-semibold text-[#4f6df5] hover:bg-[#EEF2FF] transition-colors">
+                    <HugeiconsIcon icon={Copy01Icon} size={14} color="currentColor" strokeWidth={1.75} />
+                    Copy link
+                  </button>
+                )}
+                <button type="button" onClick={() => setDialog({ mode: 'edit', folder: openFolder })} className="inline-flex items-center gap-1.5 h-9 rounded-full border border-[#D5D9E4] px-4 text-xs font-semibold text-[#444] hover:bg-[#F5F6FA] transition-colors">
+                  <HugeiconsIcon icon={Edit02Icon} size={14} color="currentColor" strokeWidth={1.5} />
+                  Edit
+                </button>
+                <button type="button" onClick={() => setToDelete(openFolder)} className="inline-flex items-center gap-1.5 h-9 rounded-full border border-red-200 px-4 text-xs font-semibold text-[#e05252] hover:bg-red-50 transition-colors">
+                  <HugeiconsIcon icon={Delete02Icon} size={14} color="currentColor" strokeWidth={1.5} />
+                  Delete
+                </button>
+              </div>
+            </div>
+
+            <UploadSection folder={openFolder} />
+
+            <section>
+              <h3 className="mb-3 text-sm font-semibold text-[#1a1a1a]">Files in this folder</h3>
+              {folderFiles.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-[#D0D4E0] px-6 py-8 text-center text-sm text-[#888]">No files in this folder yet. Upload your first one above.</p>
+              ) : (
+                <ul className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                  {folderFiles.map((file) => (
+                    <ArtifactCard
+                      key={file.id}
+                      file={file}
+                      folderName={openFolder.name}
+                      comments={comments.filter((c) => c.deliverableId === file.id)}
+                      onPreview={onPreview}
+                    />
+                  ))}
+                </ul>
+              )}
+            </section>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {dialog && (
         <FolderDialog
@@ -659,8 +859,8 @@ export default function DeliverablesPanel({ targetType, targetId, service, folde
               <h3 className="text-base font-semibold text-[#1a1a1a]">Delete this folder?</h3>
             </div>
             <p className="text-sm leading-relaxed text-[#555]">
-              This permanently deletes <span className="font-medium text-[#1a1a1a]">{toDelete.name}</span> and the{' '}
-              {allFiles.filter((d) => d.folderId === toDelete.id).length} file(s) inside it.{toDelete.isPublic ? ' Its shared link will stop working.' : ''} This can&apos;t be undone.
+              This permanently deletes <span className="font-medium text-[#1a1a1a]">{toDelete.name}</span>, the{' '}
+              {allFiles.filter((d) => d.folderId === toDelete.id).length} file(s) inside it, and their comments.{toDelete.isPublic ? ' Its shared link will stop working.' : ''} This can&apos;t be undone.
             </p>
             <div className="flex items-center justify-end gap-3 pt-1">
               <button type="button" onClick={() => setToDelete(null)} disabled={deleting} className="inline-flex items-center h-10 px-5 rounded-full border border-[#D0D0D0] text-[#555] text-sm font-medium hover:bg-[#F5F5F5] transition-colors disabled:opacity-50">

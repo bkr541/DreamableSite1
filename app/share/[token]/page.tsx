@@ -30,6 +30,15 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
 
   if (!folder) notFound();
 
+  // Comments are newer than the rest of the schema; an unmigrated database just shows none.
+  const comments = await prisma.deliverableComment
+    .findMany({
+      where: { deliverableId: { in: folder.deliverables.map((d) => d.id) } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, deliverableId: true, authorName: true, body: true, createdAt: true },
+    })
+    .catch(() => []);
+
   return (
     <SharedFolderView
       token={token}
@@ -37,6 +46,7 @@ export default async function SharedFolderPage({ params }: { params: Promise<{ t
       description={folder.description}
       projectName={folder.project?.name ?? null}
       files={folder.deliverables}
+      comments={comments.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() }))}
     />
   );
 }

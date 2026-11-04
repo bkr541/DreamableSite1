@@ -2,6 +2,7 @@ import { readFile } from 'fs/promises';
 import path from 'path';
 import sharp from 'sharp';
 import { PDFDocument, StandardFonts, degrees, rgb } from 'pdf-lib';
+import { canWatermarkName } from '@/lib/watermarkTypes';
 
 const IMAGE_EXT = ['png', 'jpg', 'jpeg'];
 const BRAND_TEXT = 'Dreamable.studio';
@@ -9,10 +10,7 @@ const BRAND_TEXT = 'Dreamable.studio';
 const ext = (fileName: string) => fileName.split('.').pop()?.toLowerCase() ?? '';
 
 /** Watermarking is supported for raster images and PDFs; other types are served untouched. */
-export function canWatermark(fileName: string) {
-  const e = ext(fileName);
-  return IMAGE_EXT.includes(e) || e === 'pdf';
-}
+export const canWatermark = canWatermarkName;
 
 const publicPath = (name: string) => path.join(process.cwd(), 'public', 'images', name);
 

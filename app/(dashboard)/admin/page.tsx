@@ -19,7 +19,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const view = one(sp.view);
   const initialView = (VIEWS as readonly string[]).includes(view ?? '') ? (view as (typeof VIEWS)[number]) : 'dashboard';
 
-  const [totalUsers, totalProjects, activeProjects, openInquiries, allInquiries, deliverables, folders, recentInquiries, recentUsers, clients, companies, services, projects, invoices, adminUser] =
+  const [totalUsers, totalProjects, activeProjects, openInquiries, allInquiries, deliverables, folders, comments, recentInquiries, recentUsers, clients, companies, services, projects, invoices, adminUser] =
     await Promise.all([
       prisma.user.count({ where: { admin: false } }),
       prisma.project.count(),
@@ -35,12 +35,22 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       }),
       prisma.deliverable.findMany({
         orderBy: { createdAt: 'asc' },
-        select: { id: true, inquiryId: true, projectId: true, folderId: true, title: true, description: true, fileName: true, size: true, createdAt: true },
+        select: { id: true, inquiryId: true, projectId: true, folderId: true, title: true, description: true, fileName: true, size: true, watermark: true, createdAt: true },
       }),
       prisma.deliverableFolder.findMany({
         orderBy: { createdAt: 'asc' },
         select: { id: true, inquiryId: true, projectId: true, name: true, description: true, isPublic: true, shareToken: true, createdAt: true },
       }),
+      // Comments are newer than the rest of the schema; an unmigrated database shows none instead of breaking the page.
+      prisma.deliverableComment
+        .findMany({
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, deliverableId: true, authorName: true, body: true, createdAt: true },
+        })
+        .catch((err) => {
+          console.error('[admin] could not load deliverable comments:', err);
+          return [];
+        }),
       prisma.inquiry.findMany({
         orderBy: { createdAt: 'desc' },
         take: 6,
@@ -113,6 +123,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       clients={clients.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() }))}
       companies={companies}
       services={services}
+      comments={comments.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() }))}
+      initialFolderId={one(sp.folder) ?? null}
       folders={folders.map((f) => ({ ...f, createdAt: f.createdAt.toISOString() }))}
       deliverables={deliverables.map((d) => ({ ...d, createdAt: d.createdAt.toISOString() }))}
       projects={projects.map((p) => ({ ...p, createdAt: p.createdAt.toISOString() }))}

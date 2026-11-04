@@ -15,7 +15,8 @@ export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
     const folderId = String(form.get('folderId') ?? '');
-    const wordmark = form.get('watermark') === '1';
+    // One flag per file, in the same order as `files`.
+    const watermarks: unknown = JSON.parse(String(form.get('watermarks') ?? '[]'));
     const descriptions: unknown = JSON.parse(String(form.get('descriptions') ?? '[]'));
     const titles: unknown = JSON.parse(String(form.get('titles') ?? '[]'));
     const files = form.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
         // Kept on the file too, so client-portal access checks don't need to look the folder up.
         inquiryId: folder.inquiryId,
         projectId: folder.projectId,
-        watermark: wordmark && canWatermark(f.name),
+        watermark: Array.isArray(watermarks) && watermarks[i] === true && canWatermark(f.name),
         // The title is the artifact's display name; it defaults to the file name.
         title: (Array.isArray(titles) && typeof titles[i] === 'string' ? titles[i].trim().slice(0, 200) : '') || f.name,
         description:
@@ -54,8 +55,7 @@ export async function POST(req: NextRequest) {
     );
     await prisma.deliverable.createMany({ data: rows });
 
-    const skipped = wordmark ? files.filter((f) => !canWatermark(f.name)).map((f) => f.name) : [];
-    return NextResponse.json({ ok: true, count: rows.length, skipped });
+    return NextResponse.json({ ok: true, count: rows.length });
   } catch (err) {
     console.error('[admin/deliverables POST]', err);
     return fail('Internal server error.', 500);

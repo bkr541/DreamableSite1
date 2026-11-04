@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { File02Icon, Folder01Icon } from '@hugeicons/core-free-icons';
+import { Cancel01Icon, File02Icon, Folder01Icon, Message01Icon } from '@hugeicons/core-free-icons';
+import ArtifactThumb from '@/components/ArtifactThumb';
+import { Avatar } from '@/components/RecordList';
 import FilePreviewModal, { PreviewFile, formatBytes, previewKind } from '@/components/FilePreviewModal';
 
 interface SharedFile {
@@ -14,16 +16,159 @@ interface SharedFile {
   description: string | null;
 }
 
+interface SharedComment {
+  id: string;
+  deliverableId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+const NAME_KEY = 'ds-share-commenter';
+
+const formatWhen = (iso: string) =>
+  new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+/** Dialog where anyone with the link can read and add comments about one file. */
+function CommentsDialog({
+  token,
+  file,
+  comments,
+  onPosted,
+  onClose,
+}: {
+  token: string;
+  file: SharedFile;
+  comments: SharedComment[];
+  onPosted: (c: SharedComment) => void;
+  onClose: () => void;
+}) {
+  // The dialog only mounts after a click, so reading localStorage here can't cause a hydration mismatch.
+  const [name, setName] = useState(() => {
+    try { return localStorage.getItem(NAME_KEY) ?? ''; } catch { return ''; }
+  });
+  const [text, setText] = useState('');
+  const [website, setWebsite] = useState(''); // honeypot
+  const [posting, setPosting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) { setError('Please enter your name.'); return; }
+    if (!text.trim()) { setError('Please write a comment.'); return; }
+    setPosting(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/share/${token}/files/${file.id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, body: text, website }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Could not post your comment.');
+      try { localStorage.setItem(NAME_KEY, name.trim()); } catch {}
+      if (data.comment) onPosted(data.comment);
+      setText('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not post your comment.');
+    } finally {
+      setPosting(false);
+    }
+  }
+
+  const label = file.title || file.fileName;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-label={`Comments on ${label}`} className="relative flex max-h-[90vh] w-full max-w-[560px] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-center gap-4 border-b border-[#F0F0F0] px-6 py-5">
+          <ArtifactThumb src={`/api/share/${token}/files/${file.id}?inline=1`} fileName={file.fileName} size={56} />
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-widest text-[#999]">Comments</p>
+            <p className="truncate text-base font-semibold text-[#1a1a1a]" title={label}>{label}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close comments" className="shrink-0 text-[#999] hover:text-[#333] transition-colors">
+            <HugeiconsIcon icon={Cancel01Icon} size={20} color="currentColor" strokeWidth={2} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {comments.length === 0 ? (
+            <p className="py-6 text-center text-sm text-[#888]">No comments yet. Be the first to leave one.</p>
+          ) : (
+            <ul className="space-y-3">
+              {comments.map((c) => (
+                <li key={c.id} className="flex gap-3 rounded-xl border-l-2 border-[#7BB5F5] bg-[#F6F7FB] px-3.5 py-3">
+                  <Avatar name={c.authorName} size={32} />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex flex-wrap items-baseline gap-x-2 text-xs">
+                      <span className="font-semibold text-[#1a1a1a]">{c.authorName}</span>
+                      <span className="text-[#999]">{formatWhen(c.createdAt)}</span>
+                    </p>
+                    <p className="mt-0.5 text-sm leading-snug text-[#444] whitespace-pre-wrap break-words">{c.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <form onSubmit={submit} noValidate className="space-y-3 border-t border-[#F0F0F0] bg-[#FAFBFD] px-6 py-5">
+          <input
+            type="text"
+            value={name}
+            maxLength={80}
+            onChange={(e) => { setName(e.target.value); setError(''); }}
+            placeholder="Your name"
+            aria-label="Your name"
+            className="w-full rounded-xl border border-[#D0D0D0] bg-white px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50"
+          />
+          <textarea
+            value={text}
+            maxLength={2000}
+            rows={3}
+            onChange={(e) => { setText(e.target.value); setError(''); }}
+            placeholder="Write a comment about this file…"
+            aria-label="Comment"
+            className="w-full resize-none rounded-xl border border-[#D0D0D0] bg-white px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-purple-200/50"
+          />
+          {/* Honeypot: hidden from people, filled in by bots */}
+          <div className="absolute -left-[9999px]" aria-hidden="true">
+            <input type="text" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <p className="min-h-5 text-sm text-[#e05252]">{error}</p>
+            <button type="submit" disabled={posting} className="shrink-0 inline-flex h-10 items-center rounded-full bg-[#1a2030] px-6 text-sm font-semibold text-white hover:-translate-y-0.5 hover:shadow-md transition-all disabled:opacity-50 disabled:hover:translate-y-0">
+              {posting ? 'Posting…' : 'Post comment'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   token: string;
   name: string;
   description: string | null;
   projectName: string | null;
   files: SharedFile[];
+  comments: SharedComment[];
 }
 
-export default function SharedFolderView({ token, name, description, projectName, files }: Props) {
+export default function SharedFolderView({ token, name, description, projectName, files, comments: initialComments }: Props) {
   const [preview, setPreview] = useState<PreviewFile | null>(null);
+  const [comments, setComments] = useState<SharedComment[]>(initialComments);
+  const [commentFileId, setCommentFileId] = useState<string | null>(null);
+  const commentFile = files.find((f) => f.id === commentFileId) ?? null;
   const urlFor = (id: string) => `/api/share/${token}/files/${id}`;
 
   return (
@@ -104,6 +249,14 @@ export default function SharedFolderView({ token, name, description, projectName
                           View
                         </button>
                         <a href={url} className="text-sm font-medium text-[#555] hover:text-[#1a2030] transition-colors">Download</a>
+                        <button
+                          type="button"
+                          onClick={() => setCommentFileId(f.id)}
+                          className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-[#555] hover:text-[#1a2030] transition-colors"
+                        >
+                          <HugeiconsIcon icon={Message01Icon} size={16} color="currentColor" strokeWidth={1.75} />
+                          {comments.filter((c) => c.deliverableId === f.id).length || 'Comment'}
+                        </button>
                       </div>
                     </div>
                   </li>
@@ -117,6 +270,16 @@ export default function SharedFolderView({ token, name, description, projectName
       </div>
 
       <FilePreviewModal file={preview} onClose={() => setPreview(null)} />
+
+      {commentFile && (
+        <CommentsDialog
+          token={token}
+          file={commentFile}
+          comments={comments.filter((c) => c.deliverableId === commentFile.id)}
+          onPosted={(c) => setComments((prev) => [...prev, c])}
+          onClose={() => setCommentFileId(null)}
+        />
+      )}
     </main>
   );
 }

@@ -11,7 +11,7 @@ import { useToast } from '@/components/Toast';
 import RecordList, { Avatar, StatusDot } from '@/components/RecordList';
 import DatePicker from '@/components/DatePicker';
 import CustomSelect from '@/components/CustomSelect';
-import DeliverablesPanel, { DeliverableRecord, FolderRecord } from '@/components/DeliverablesPanel';
+import DeliverablesPanel, { CommentRecord, DeliverableRecord, FolderRecord } from '@/components/DeliverablesPanel';
 import FilePreviewModal, { PreviewFile, previewKind, formatBytes } from '@/components/FilePreviewModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -143,6 +143,8 @@ interface Props {
   inquiries: OpenInquiry[];
   deliverables: DeliverableRecord[];
   folders: FolderRecord[];
+  comments: CommentRecord[];
+  initialFolderId: string | null;
   recentUsers: User[];
   clients: ClientRecord[];
   companies: Company[];
@@ -292,7 +294,7 @@ function getDefaultInvoiceForm() {
   };
 }
 
-export default function AdminDashboardClient({ session, initialView, initialInquiryId, initialProjectId, initialTab, initialBilling, stats, recentInquiries, inquiries, deliverables, folders, recentUsers, clients, companies, services, projects, invoices, adminCompany }: Props) {
+export default function AdminDashboardClient({ session, initialView, initialInquiryId, initialProjectId, initialTab, initialBilling, stats, recentInquiries, inquiries, deliverables, folders, comments, initialFolderId, recentUsers, clients, companies, services, projects, invoices, adminCompany }: Props) {
   const router = useRouter();
   const [activeView, setActiveView] = useState<ViewId>(initialView);
   const [billingSubView, setBillingSubView] = useState<'invoices' | null>(initialBilling);
@@ -300,6 +302,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
   function openProject(id: string) {
     setProjectDirection(1);
     setDetailTab('info');
+    setSelectedFolderId(null);
     setSelectedProjectId(id);
   }
 
@@ -309,6 +312,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
   }
 
   const [detailTab, setDetailTab] = useState<DetailTab>(initialTab);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(initialFolderId);
   const [inquiryToDelete, setInquiryToDelete] = useState<OpenInquiry | null>(null);
   const [deletingInquiry, setDeletingInquiry] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -328,14 +332,16 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
     if (activeView === 'inquiries' && selectedInquiryId) {
       params.set('inquiry', selectedInquiryId);
       if (detailTab !== 'info') params.set('tab', detailTab);
+      if (detailTab === 'deliverables' && selectedFolderId) params.set('folder', selectedFolderId);
     }
     if (activeView === 'projects' && selectedProjectId) {
       params.set('project', selectedProjectId);
       if (detailTab !== 'info') params.set('tab', detailTab);
+      if (detailTab === 'deliverables' && selectedFolderId) params.set('folder', selectedFolderId);
     }
     const qs = params.toString();
     window.history.replaceState(window.history.state, '', qs ? `?${qs}` : window.location.pathname);
-  }, [activeView, billingSubView, selectedInquiryId, selectedProjectId, detailTab]);
+  }, [activeView, billingSubView, selectedInquiryId, selectedProjectId, detailTab, selectedFolderId]);
   const filteredInquiries = inquiries.filter(i => {
     if (inquiryFilter.search) {
       const q = inquiryFilter.search.toLowerCase();
@@ -379,6 +385,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
   function openInquiry(id: string) {
     setInquiryDirection(1);
     setDetailTab('info');
+    setSelectedFolderId(null);
     setSelectedInquiryId(id);
   }
 
@@ -812,7 +819,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               return (
                 <button
                   key={id}
-                  onClick={() => { setActiveView(id); setBillingSubView(null); setSelectedInquiryId(null); setSelectedProjectId(null); }}
+                  onClick={() => { setActiveView(id); setBillingSubView(null); setSelectedInquiryId(null); setSelectedProjectId(null); setSelectedFolderId(null); }}
                   title={label}
                   className={
                     isActive
@@ -1034,7 +1041,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   </div>
                   <Badge status={selectedInquiry.status} />
                 </div>
-                <DetailTabs tab={detailTab} onChange={setDetailTab} />
+                <DetailTabs tab={detailTab} onChange={(t) => { setDetailTab(t); if (t !== 'deliverables') setSelectedFolderId(null); }} />
                 <div className="px-6 py-4 space-y-3">
                   {detailTab === 'info' ? (
                   <div className="grid grid-cols-1 lg:grid-cols-[7fr_3fr] gap-x-8 gap-y-3 items-start">
@@ -1134,6 +1141,9 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                       service={selectedInquiry.service}
                       folders={folders}
                       deliverables={deliverables}
+                      comments={comments}
+                      openFolderId={selectedFolderId}
+                      onOpenFolder={setSelectedFolderId}
                       onPreview={setPreviewFile}
                     />
                   </InquirySection>
@@ -1309,12 +1319,19 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 <div className="mx-6 mb-5 rounded-xl bg-[#F3F5FB] border border-[#E4E8F3] p-4">
                   <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {clientProjects.map(p => (
-                      <li key={p.id} className="flex items-center justify-between gap-3 rounded-lg bg-white border border-[#E8E8EC] px-4 py-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-[#1a1a1a] truncate">{p.name}</p>
-                          <p className="text-xs text-[#777] truncate">{p.service}</p>
-                        </div>
-                        <Badge status={p.status} />
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          onClick={() => { setActiveView('projects'); openProject(p.id); }}
+                          className="w-full flex items-center justify-between gap-3 rounded-lg bg-white border border-[#E8E8EC] px-4 py-3 text-left hover:border-[#1a2030]/30 hover:shadow-sm transition-all"
+                          aria-label={`Open project ${p.name}`}
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-[#1a1a1a] truncate">{p.name}</p>
+                            <p className="text-xs text-[#777] truncate">{p.service}</p>
+                          </div>
+                          <Badge status={p.status} />
+                        </button>
                       </li>
                     ))}
                   </ul>
@@ -1442,7 +1459,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   </div>
                   <Badge status={selectedProject.status} />
                 </div>
-                <DetailTabs tab={detailTab} onChange={setDetailTab} />
+                <DetailTabs tab={detailTab} onChange={(t) => { setDetailTab(t); if (t !== 'deliverables') setSelectedFolderId(null); }} />
                 <div className="px-6 py-4 space-y-3">
                   {detailTab === 'info' ? (
                   <InquirySection icon={Briefcase06Icon} label="Project">
@@ -1468,6 +1485,9 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                       service={selectedProject.service}
                       folders={folders}
                       deliverables={deliverables}
+                      comments={comments}
+                      openFolderId={selectedFolderId}
+                      onOpenFolder={setSelectedFolderId}
                       onPreview={setPreviewFile}
                     />
                   </InquirySection>
