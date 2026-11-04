@@ -1,6 +1,5 @@
 'use client';
 
-import { motion } from 'motion/react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Search01Icon } from '@hugeicons/core-free-icons';
 
@@ -142,7 +141,7 @@ export default function RecordList<T>({
       <div className="overflow-x-auto">
         <div className="min-w-[880px]">
           {/* Column headings stay visible even when there are no records */}
-          <div style={gridStyle} className="grid gap-4 px-6 py-3.5 bg-[#EEF0F6] border-y border-[#E2E4EA]">
+          <div style={gridStyle} className="grid gap-2 px-6 py-3.5 bg-[#EEF0F6] border-y border-[#E2E4EA]">
             {headers.map((h, i) => (
               <p key={i} className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#4a5368]">
                 {h.icon && <HugeiconsIcon icon={h.icon} size={15} color="currentColor" strokeWidth={1.75} className="shrink-0" />}
@@ -176,7 +175,8 @@ export default function RecordList<T>({
                             }
                           : undefined
                       }
-                      className={`grid gap-4 px-6 py-5 items-center text-left transition-colors ${clickable ? 'cursor-pointer hover:bg-[#F3F5FB] focus:outline-none focus-visible:bg-[#F3F5FB]' : ''}`}
+                      // The 2px left border is always reserved (transparent) so hovering only recolors it and slides the content 6px right.
+                      className={`grid gap-2 border-l-2 border-transparent pl-[22px] pr-6 py-5 items-center text-left transition-all duration-150 ${clickable ? 'cursor-pointer hover:border-[#9CA3AF] hover:pl-[28px] focus:outline-none focus-visible:border-[#9CA3AF] focus-visible:pl-[28px]' : ''}`}
                     >
                       {columns.map((c) => (
                         <div key={c.key} className="min-w-0">{c.render(row)}</div>
@@ -201,14 +201,5 @@ export default function RecordList<T>({
         </div>
       </div>
     </div>
-  );
-}
-
-/** Rotating chevron for rows that expand; drop it into a `trailing` cell. */
-export function ExpandChevron({ open, children }: { open: boolean; children: React.ReactNode }) {
-  return (
-    <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }} className="flex h-8 w-8 items-center justify-center rounded-full bg-[#F1F2F7]">
-      {children}
-    </motion.span>
   );
 }

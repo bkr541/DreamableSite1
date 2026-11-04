@@ -8,7 +8,7 @@ import { generateInvoicePDF, previewInvoicePDF } from '@/lib/generateInvoice';
 import { useRouter } from 'next/navigation';
 import { SessionPayload } from '@/lib/session';
 import { useToast } from '@/components/Toast';
-import RecordList, { Avatar, ExpandChevron, StatusDot } from '@/components/RecordList';
+import RecordList, { Avatar, StatusDot } from '@/components/RecordList';
 import CustomSelect from '@/components/CustomSelect';
 import DeliverablesPanel, { DeliverableRecord } from '@/components/DeliverablesPanel';
 import FilePreviewModal, { PreviewFile, previewKind, formatBytes } from '@/components/FilePreviewModal';
@@ -648,6 +648,8 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
     description: '', budgetRange: '', timeline: '',
     status: 'ONBOARDING', startDate: '', targetEndDate: '',
   });
+  const [projectForClient, setProjectForClient] = useState<ClientRecord | null>(null);
+  const [newCompanyName, setNewCompanyName] = useState('');
   const [projectFieldError, setProjectFieldError] = useState<{ field: string; message: string } | null>(null);
   const [projectError, setProjectError] = useState('');
   const [projectSubmitting, setProjectSubmitting] = useState(false);
@@ -660,6 +662,16 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
     });
     setProjectFieldError(null);
     setProjectError('');
+    setProjectForClient(null);
+    setNewCompanyName('');
+  }
+
+  /** Opens the Create Project dialog already tied to one client (and that client's company). */
+  function openProjectForClient(c: ClientRecord) {
+    resetProjectForm();
+    setProjectForClient(c);
+    setProjectForm(f => ({ ...f, companyId: c.company?.id ?? '', primaryUserId: c.id }));
+    setShowCreateProject(true);
   }
 
   async function handleCreateProject(e: React.FormEvent) {
@@ -668,7 +680,9 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
     setProjectError('');
 
     if (!projectForm.name.trim()) { setProjectFieldError({ field: 'name', message: 'Project name is required.' }); return; }
-    if (!projectForm.companyId) { setProjectFieldError({ field: 'companyId', message: 'Company is required.' }); return; }
+    if (projectForClient && !projectForClient.company) {
+      if (!newCompanyName.trim()) { setProjectFieldError({ field: 'newCompanyName', message: 'Company name is required.' }); return; }
+    } else if (!projectForm.companyId) { setProjectFieldError({ field: 'companyId', message: 'Company is required.' }); return; }
     if (!projectForm.service) { setProjectFieldError({ field: 'service', message: 'Service is required.' }); return; }
     if (!projectForm.description.trim()) { setProjectFieldError({ field: 'description', message: 'Description is required.' }); return; }
 
@@ -677,11 +691,17 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
       const res = await fetch('/api/admin/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(projectForm),
+        body: JSON.stringify({ ...projectForm, newCompanyName: projectForClient && !projectForClient.company ? newCompanyName.trim() : undefined }),
       });
       const data = await res.json();
       if (!res.ok) { setProjectError(data.error || 'Something went wrong.'); return; }
-      toast.success('Project created', `“${projectForm.name.trim()}” was created${companies.find(c => c.id === projectForm.companyId) ? ` for ${companies.find(c => c.id === projectForm.companyId)?.name}` : ''}.`);
+      const forCompany = companies.find(c => c.id === projectForm.companyId)?.name ?? projectForClient?.company?.name ?? (newCompanyName.trim() || null);
+      toast.success(
+        'Project created',
+        projectForClient
+          ? `“${projectForm.name.trim()}” was created and linked to ${projectForClient.name}${forCompany ? ` (${forCompany})` : ''}.`
+          : `“${projectForm.name.trim()}” was created${forCompany ? ` for ${forCompany}` : ''}.`,
+      );
       setShowCreateProject(false);
       resetProjectForm();
       router.refresh();
@@ -1253,11 +1273,17 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               },
             ]}
             trailing={{
-              width: '36px',
+              label: 'Actions', icon: MoreHorizontalCircle01Icon, width: '80px', interactive: true,
               render: (c) => (
-                <ExpandChevron open={expandedClientIds.has(c.id)}>
-                  <HugeiconsIcon icon={ArrowDown01Icon} size={16} color="currentColor" strokeWidth={1.75} className="text-[#555]" />
-                </ExpandChevron>
+                <button
+                  type="button"
+                  onClick={() => openProjectForClient(c)}
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-[#7c3aed] hover:bg-purple-50 transition-colors"
+                  title={`Create a project for ${c.name}`}
+                  aria-label={`Create a project for ${c.name}`}
+                >
+                  <HugeiconsIcon icon={Briefcase06Icon} size={19} color="currentColor" strokeWidth={1.5} />
+                </button>
               ),
             }}
             expanded={(c) => expandedClientIds.has(c.id)}
@@ -1743,7 +1769,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               <form onSubmit={handleCreateProject} className="p-8 space-y-5" noValidate>
                 <div className="flex items-center gap-3">
                   <HugeiconsIcon icon={Briefcase06Icon} size={28} color="#1a2030" strokeWidth={2} />
-                  <p className="text-xl font-semibold text-[#1a1a1a]">Create Project</p>
+                  <p className="text-xl font-semibold text-[#1a1a1a]">{projectForClient ? `Create Project for ${projectForClient.name}` : 'Create Project'}</p>
                 </div>
 
                 {/* Project Details */}
@@ -1760,6 +1786,36 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                     {projectFieldError?.field === 'name' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
                   </div>
 
+                  {projectForClient ? (
+                    <div className="rounded-xl border border-[#E4E8F3] bg-[#F6F7FB] p-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={projectForClient.name} size={40} />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-[#1a1a1a] truncate">{projectForClient.name}</p>
+                          <p className="text-xs text-[#666] truncate">{projectForClient.email}</p>
+                        </div>
+                        <span className="ml-auto shrink-0 rounded-full bg-[#EEF2FF] px-3 py-1 text-xs font-semibold text-[#4f6df5]">Client</span>
+                      </div>
+                      {projectForClient.company ? (
+                        <p className="flex items-center gap-2 text-sm text-[#444]">
+                          <HugeiconsIcon icon={Building01Icon} size={16} color="#7a869f" strokeWidth={1.5} />
+                          {projectForClient.company.name}
+                        </p>
+                      ) : (
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-sm font-medium text-[#555]">Company name <span className="text-red-400">*</span></label>
+                          <input
+                            value={newCompanyName}
+                            onChange={e => { setNewCompanyName(e.target.value); setProjectFieldError(null); }}
+                            placeholder="This client has no company yet — enter one"
+                            className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${projectFieldError?.field === 'newCompanyName' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
+                          />
+                          {projectFieldError?.field === 'newCompanyName' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
+                          <p className="text-xs text-[#888]">The company is created and linked to this client with the project.</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Company <span className="text-red-400">*</span></label>
@@ -1782,6 +1838,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               />
                     </div>
                   </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
