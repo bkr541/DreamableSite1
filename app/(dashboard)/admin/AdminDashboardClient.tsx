@@ -7,6 +7,7 @@ import PasswordInput from '@/components/PasswordInput';
 import { generateInvoicePDF, previewInvoicePDF } from '@/lib/generateInvoice';
 import { useRouter } from 'next/navigation';
 import { SessionPayload } from '@/lib/session';
+import { useToast } from '@/components/Toast';
 import CustomSelect from '@/components/CustomSelect';
 import DeliverablesPanel, { DeliverableRecord } from '@/components/DeliverablesPanel';
 import FilePreviewModal, { PreviewFile, previewKind, formatBytes } from '@/components/FilePreviewModal';
@@ -127,6 +128,11 @@ interface ProjectRecord {
 
 interface Props {
   session: SessionPayload;
+  initialView: ViewId;
+  initialInquiryId: string | null;
+  initialProjectId: string | null;
+  initialTab: DetailTab;
+  initialBilling: 'invoices' | null;
   stats: { totalUsers: number; totalProjects: number; activeProjects: number; openInquiries: number };
   recentInquiries: Inquiry[];
   inquiries: OpenInquiry[];
@@ -352,10 +358,10 @@ function getDefaultInvoiceForm() {
   };
 }
 
-export default function AdminDashboardClient({ session, stats, recentInquiries, inquiries, deliverables, recentUsers, clients, companies, services, projects, invoices, adminCompany }: Props) {
+export default function AdminDashboardClient({ session, initialView, initialInquiryId, initialProjectId, initialTab, initialBilling, stats, recentInquiries, inquiries, deliverables, recentUsers, clients, companies, services, projects, invoices, adminCompany }: Props) {
   const router = useRouter();
-  const [activeView, setActiveView] = useState<ViewId>('dashboard');
-  const [billingSubView, setBillingSubView] = useState<'invoices' | null>(null);
+  const [activeView, setActiveView] = useState<ViewId>(initialView);
+  const [billingSubView, setBillingSubView] = useState<'invoices' | null>(initialBilling);
   const [inquiryFilter, setInquiryFilter] = useState({ search: '', status: '', service: '' });
   function openProject(id: string) {
     setProjectDirection(1);
@@ -368,17 +374,34 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
     setSelectedProjectId(null);
   }
 
-  const [detailTab, setDetailTab] = useState<DetailTab>('info');
+  const [detailTab, setDetailTab] = useState<DetailTab>(initialTab);
   const [inquiryToDelete, setInquiryToDelete] = useState<OpenInquiry | null>(null);
   const [deletingInquiry, setDeletingInquiry] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId);
   const [projectDirection, setProjectDirection] = useState(1);
   const selectedProject = projects.find(p => p.id === selectedProjectId) ?? null;
-  const [selectedInquiryId, setSelectedInquiryId] = useState<string | null>(null);
+  const [selectedInquiryId, setSelectedInquiryId] = useState<string | null>(initialInquiryId);
   const [inquiryDirection, setInquiryDirection] = useState(1);
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
   const selectedInquiry = inquiries.find(i => i.id === selectedInquiryId) ?? null;
+
+  // Mirror the open screen into the URL (without navigating) so a data refresh or reload returns to it.
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (activeView !== 'dashboard') params.set('view', activeView);
+    if (activeView === 'billing' && billingSubView) params.set('billing', billingSubView);
+    if (activeView === 'inquiries' && selectedInquiryId) {
+      params.set('inquiry', selectedInquiryId);
+      if (detailTab !== 'info') params.set('tab', detailTab);
+    }
+    if (activeView === 'projects' && selectedProjectId) {
+      params.set('project', selectedProjectId);
+      if (detailTab !== 'info') params.set('tab', detailTab);
+    }
+    const qs = params.toString();
+    window.history.replaceState(window.history.state, '', qs ? `?${qs}` : window.location.pathname);
+  }, [activeView, billingSubView, selectedInquiryId, selectedProjectId, detailTab]);
   const filteredInquiries = inquiries.filter(i => {
     if (inquiryFilter.search) {
       const q = inquiryFilter.search.toLowerCase();
@@ -397,12 +420,25 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
       const res = await fetch(`/api/admin/inquiries/${inquiryToDelete.id}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || 'Could not delete this inquiry.');
+      toast.success('Inquiry deleted', `The inquiry from ${inquiryToDelete.name} was permanently deleted.`);
       setInquiryToDelete(null);
       router.refresh();
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Could not delete this inquiry.');
+      toast.error('Could not delete inquiry', err instanceof Error ? err.message : undefined);
     } finally {
       setDeletingInquiry(false);
+    }
+  }
+
+  async function deleteProject(p: ProjectRecord) {
+    try {
+      const res = await fetch(`/api/admin/projects/${p.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      toast.success('Project deleted', `“${p.name}” was permanently deleted.`);
+      router.refresh();
+    } catch {
+      toast.error('Could not delete project', `“${p.name}” was not deleted. Please try again.`);
     }
   }
 
@@ -466,16 +502,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
   const [profileError, setProfileError] = useState('');
   const [profileSubmitting, setProfileSubmitting] = useState(false);
 
-  const [toast, setToast] = useState('');
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function showToast(message: string) {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast(message);
-    toastTimer.current = setTimeout(() => setToast(''), 3000);
-  }
-
-  useEffect(() => () => { if (toastTimer.current) clearTimeout(toastTimer.current); }, []);
+  const toast = useToast();
 
   function resetInvoiceForm() {
     setInvoiceForm(getDefaultInvoiceForm());
@@ -554,6 +581,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
       });
       const data = await res.json();
       if (!res.ok) { setEditInvError(data.error || 'Failed to update invoice.'); return; }
+      toast.success('Invoice updated', `Invoice ${payload.invoiceNumber} for ${payload.clientName} was saved.`);
       setShowEditInvoice(false);
       router.refresh();
     } catch {
@@ -671,8 +699,10 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
         dueDate: formatDate(payload.dueDate),
       });
 
+      toast.success('Invoice created', `Invoice ${payload.invoiceNumber} for ${payload.clientName} was saved and the PDF was downloaded.`);
       setShowInvoice(false);
       resetInvoiceForm();
+      router.refresh();
     } catch {
       setInvoiceError('Unable to connect. Please try again.');
     } finally {
@@ -719,6 +749,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
       });
       const data = await res.json();
       if (!res.ok) { setProjectError(data.error || 'Something went wrong.'); return; }
+      toast.success('Project created', `“${projectForm.name.trim()}” was created${companies.find(c => c.id === projectForm.companyId) ? ` for ${companies.find(c => c.id === projectForm.companyId)?.name}` : ''}.`);
       setShowCreateProject(false);
       resetProjectForm();
       router.refresh();
@@ -752,6 +783,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
       });
       const data = await res.json();
       if (!res.ok) { setAddError(data.error || 'Something went wrong.'); return; }
+      toast.success('Client added', `${addForm.name.trim()} was added as ${addForm.role.toLowerCase()} with status ${addForm.status.toLowerCase()}.`);
       setShowAddClient(false);
       resetAddForm();
       router.refresh();
@@ -799,7 +831,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
         return;
       }
       initialProfile.current = { ...profileForm };
-      showToast('Profile updated successfully.');
+      toast.success('Profile updated', 'Your account details were saved.');
       router.refresh();
     } catch {
       setProfileError('Unable to connect. Please try again.');
@@ -1473,10 +1505,7 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
                                 <HugeiconsIcon icon={Invoice03Icon} size={19} color="currentColor" strokeWidth={1.5} />
                               </button>
                               <button
-                                onClick={async () => {
-                                  await fetch(`/api/admin/projects/${p.id}`, { method: 'DELETE' });
-                                  router.refresh();
-                                }}
+                                onClick={() => deleteProject(p)}
                                 className="flex h-9 w-9 items-center justify-center rounded-full text-[#e05252] hover:bg-red-50 transition-colors"
                                 title="Delete project"
                                 aria-label={`Delete ${p.name}`}
@@ -2661,21 +2690,6 @@ export default function AdminDashboardClient({ session, stats, recentInquiries, 
               </div>
             </motion.div>
           </div>
-        )}
-      </AnimatePresence>
-
-      {/* Toast */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 16 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-full bg-[#1a2030] text-white text-sm font-medium shadow-xl whitespace-nowrap"
-          >
-            {toast}
-          </motion.div>
         )}
       </AnimatePresence>
     </div>

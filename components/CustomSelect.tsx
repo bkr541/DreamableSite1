@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -47,6 +47,7 @@ export default function CustomSelect({
   className = '',
 }: CustomSelectProps) {
   const items = options.map(normalize);
+  const optionCount = options.length;
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [pos, setPos] = useState<{ left: number; top: number; width: number; above: boolean } | null>(null);
@@ -58,35 +59,30 @@ export default function CustomSelect({
   const selected = selectedIndex >= 0 ? items[selectedIndex] : null;
 
   // The list is portalled to <body> and positioned against the trigger, so dialogs and scroll areas can't clip it.
-  const place = useCallback(() => {
-    const el = triggerRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const needed = Math.min(256, items.length * 40 + 12);
-    const above = window.innerHeight - r.bottom < needed + 16 && r.top > needed + 16;
-    setPos({ left: r.left, top: above ? r.top - 8 : r.bottom + 8, width: r.width, above });
-  }, [items.length]);
-
   useLayoutEffect(() => {
-    if (open) place();
-  }, [open, place]);
-
-  useEffect(() => {
     if (!open) return;
+    const place = () => {
+      const el = triggerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const needed = Math.min(256, optionCount * 40 + 12);
+      const above = window.innerHeight - r.bottom < needed + 16 && r.top > needed + 16;
+      setPos({ left: r.left, top: above ? r.top - 8 : r.bottom + 8, width: r.width, above });
+    };
     const onPointerDown = (e: MouseEvent) => {
       const t = e.target as Node;
       if (!triggerRef.current?.contains(t) && !listRef.current?.contains(t)) setOpen(false);
     };
-    const onMove = () => place();
+    place();
     document.addEventListener('mousedown', onPointerDown);
-    window.addEventListener('resize', onMove);
-    window.addEventListener('scroll', onMove, true);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
     return () => {
       document.removeEventListener('mousedown', onPointerDown);
-      window.removeEventListener('resize', onMove);
-      window.removeEventListener('scroll', onMove, true);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
     };
-  }, [open, place]);
+  }, [open, optionCount]);
 
   const openList = () => {
     if (disabled) return;

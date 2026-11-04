@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/components/Toast';
 import CustomSelect from '@/components/CustomSelect';
 import FileTile from '@/components/FileTile';
 import { PreviewFile } from '@/components/FilePreviewModal';
@@ -29,6 +30,7 @@ interface Props {
 /** Admin-side: upload deliverables into a project-type-specific category and manage what's been delivered. */
 export default function DeliverablesPanel({ targetType, targetId, service, deliverables, onPreview }: Props) {
   const router = useRouter();
+  const toast = useToast();
   const categories = getDeliverableCategories(service);
   const [category, setCategory] = useState(categories[0]);
   const [files, setFiles] = useState<File[]>([]);
@@ -62,20 +64,31 @@ export default function DeliverablesPanel({ targetType, targetId, service, deliv
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || 'Upload failed.');
       if (data.skipped?.length) setNotice(`Wordmark applies to images and PDFs only, so it was not added to: ${data.skipped.join(', ')}.`);
+      toast.success(
+        data.count === 1 ? 'Deliverable uploaded' : 'Deliverables uploaded',
+        `${data.count} ${data.count === 1 ? 'file was' : 'files were'} added to ${category}${wordmark ? ' with the wordmark' : ''}.`,
+      );
       setFiles([]);
       setDescriptions([]);
       setInputKey((k) => k + 1);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.');
+      toast.error('Upload failed', err instanceof Error ? err.message : undefined);
     } finally {
       setUploading(false);
     }
   }
 
-  async function remove(id: string) {
-    await fetch(`/api/admin/deliverables/${id}`, { method: 'DELETE' });
-    router.refresh();
+  async function remove(id: string, fileName: string) {
+    try {
+      const res = await fetch(`/api/admin/deliverables/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error();
+      toast.success('Deliverable deleted', `${fileName} was removed.`);
+      router.refresh();
+    } catch {
+      toast.error('Could not delete deliverable', `${fileName} was not deleted. Please try again.`);
+    }
   }
 
   return (
@@ -163,7 +176,7 @@ export default function DeliverablesPanel({ targetType, targetId, service, deliv
                   size={d.size}
                   description={d.description}
                   onOpen={() => onPreview({ url: `/api/deliverables/${d.id}`, fileName: d.fileName, size: d.size, description: d.description })}
-                  onDelete={() => remove(d.id)}
+                  onDelete={() => remove(d.id, d.fileName)}
                 />
               ))}
             </div>

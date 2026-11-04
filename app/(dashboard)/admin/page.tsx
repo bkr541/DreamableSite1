@@ -2,10 +2,22 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 import AdminDashboardClient from './AdminDashboardClient';
+import { ToastProvider } from '@/components/Toast';
 
-export default async function AdminPage() {
+type SearchParams = Record<string, string | string[] | undefined>;
+
+const VIEWS = ['dashboard', 'inquiries', 'clients', 'projects', 'workspace', 'billing', 'notifications', 'profile'] as const;
+
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+
+export default async function AdminPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const session = await getSession();
   if (!session || !session.admin) redirect('/portal');
+
+  // The open screen lives in the URL, so refreshing the data after an add/edit keeps the admin where they were.
+  const sp = await searchParams;
+  const view = one(sp.view);
+  const initialView = (VIEWS as readonly string[]).includes(view ?? '') ? (view as (typeof VIEWS)[number]) : 'dashboard';
 
   const [totalUsers, totalProjects, activeProjects, openInquiries, allInquiries, deliverables, recentInquiries, recentUsers, clients, companies, services, projects, invoices, adminUser] =
     await Promise.all([
@@ -79,8 +91,14 @@ export default async function AdminPage() {
     ]);
 
   return (
+    <ToastProvider>
     <AdminDashboardClient
       session={session}
+      initialView={initialView}
+      initialInquiryId={one(sp.inquiry) ?? null}
+      initialProjectId={one(sp.project) ?? null}
+      initialTab={one(sp.tab) === 'deliverables' ? 'deliverables' : 'info'}
+      initialBilling={one(sp.billing) === 'invoices' ? 'invoices' : null}
       stats={{ totalUsers, totalProjects, activeProjects, openInquiries }}
       inquiries={allInquiries.map(({ metadata, createdAt, ...i }) => {
         const meta = (metadata ?? {}) as { phone?: string; projectName?: string };
@@ -96,5 +114,6 @@ export default async function AdminPage() {
       invoices={invoices.map((inv) => ({ ...inv, createdAt: inv.createdAt.toISOString() }))}
       adminCompany={adminUser?.company ?? null}
     />
+    </ToastProvider>
   );
 }
