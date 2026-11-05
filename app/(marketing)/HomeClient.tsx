@@ -8,6 +8,7 @@ import SplineBackground from '@/components/SplineBackground';
 import HeroRibbons from '@/components/HeroRibbons';
 import { LazyCubePuzzle, LazyInteractiveElement } from '@/components/LazyIllustrations';
 import { formatPhone } from '@/lib/utils';
+import { ModalCloseButton } from '@/components/ModalParts';
 import { intakeOptions } from '@/lib/services';
 import { pool, putFile } from '@/lib/clientUpload';
 import CustomSelect from '@/components/CustomSelect';
@@ -630,13 +631,7 @@ export default function Home() {
             className="relative bg-[#fcfeff] rounded-[32px] w-full max-w-[420px] shadow-2xl overflow-hidden flex flex-col items-center"
           >
             {/* Close button */}
-            <button
-              onClick={() => setSubmitStatus('idle')}
-              className="absolute top-5 right-5 z-20 text-[#888] hover:text-[#333] transition-colors"
-              aria-label="Close modal"
-            >
-              <HugeiconsIcon icon={Cancel01Icon} size={20} color="currentColor" strokeWidth={2} />
-            </button>
+            <ModalCloseButton onClick={() => setSubmitStatus('idle')} label="Close modal" />
 
             {/* Hero Image Area */}
             <div className="w-full bg-[#f0fcf6] pt-14 pb-8 px-4 flex justify-center items-center relative overflow-hidden h-[240px]">

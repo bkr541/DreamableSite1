@@ -25,6 +25,7 @@ import { PreviewFile, formatBytes } from '@/components/FilePreviewModal';
 import { getDeliverableCategories, OTHER_CATEGORY } from '@/lib/deliverables';
 import { pool, putFile } from '@/lib/clientUpload';
 import DialogFocus from '@/components/DialogFocus';
+import { MODAL_CANCEL_CLASS } from '@/components/ModalParts';
 
 export interface FolderRecord {
   id: string;
@@ -213,7 +214,7 @@ function FolderDialog({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="folder-description" className="text-sm font-medium text-[#555]">Description <span className="text-[#CCC] font-normal">— optional</span></label>
+          <label htmlFor="folder-description" className="text-sm font-medium text-[#555]">Description</label>
           <textarea
             id="folder-description"
             rows={3}
@@ -269,7 +270,7 @@ function FolderDialog({
         <p className="h-5 text-sm text-[#e05252]">{error}</p>
 
         <div className="flex items-center justify-end gap-3 pt-1">
-          <button type="button" onClick={onClose} disabled={saving} className="inline-flex items-center h-10 px-5 rounded-full border border-[#D0D0D0] text-[#555] text-sm font-medium hover:bg-[#F5F5F5] transition-colors disabled:opacity-50">
+          <button type="button" onClick={onClose} disabled={saving} className={MODAL_CANCEL_CLASS}>
             Cancel
           </button>
           <button type="submit" disabled={saving} className="inline-flex items-center h-10 px-6 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all disabled:opacity-50 disabled:hover:translate-y-0">
@@ -327,7 +328,7 @@ function EditFileDialog({ file, onClose }: { file: DeliverableRecord; onClose: (
           <input id="edit-file-title" value={title} maxLength={200} autoFocus onChange={(e) => { setTitle(e.target.value); setError(''); }} className={inputCls} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="edit-file-description" className="text-sm font-medium text-[#555]">Description <span className="text-[#CCC] font-normal">— optional</span></label>
+          <label htmlFor="edit-file-description" className="text-sm font-medium text-[#555]">Description</label>
           <textarea id="edit-file-description" rows={3} maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} className={`${inputCls} resize-none`} />
         </div>
         <div className="rounded-xl border border-[#E4E8F3] bg-[#F6F7FB] p-4 space-y-1.5">
@@ -338,7 +339,7 @@ function EditFileDialog({ file, onClose }: { file: DeliverableRecord; onClose: (
         </div>
         {error && <p className="text-sm text-[#e05252]">{error}</p>}
         <div className="flex items-center justify-end gap-3">
-          <button type="button" onClick={onClose} disabled={saving} className="inline-flex items-center h-10 px-5 rounded-full border border-[#D0D0D0] text-[#555] text-sm font-medium hover:bg-[#F5F5F5] transition-colors disabled:opacity-50">Cancel</button>
+          <button type="button" onClick={onClose} disabled={saving} className={MODAL_CANCEL_CLASS}>Cancel</button>
           <button type="submit" disabled={saving} className="inline-flex items-center h-10 px-6 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all disabled:opacity-50 disabled:hover:translate-y-0">{saving ? 'Saving…' : 'Save changes'}</button>
         </div>
       </form>
@@ -552,7 +553,7 @@ function UploadSection({ folder }: { folder: FolderRecord }) {
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <label htmlFor={`file-description-${i}`} className="text-xs font-medium text-[#555]">Description <span className="text-[#BBB] font-normal">— optional</span></label>
+                      <label htmlFor={`file-description-${i}`} className="text-xs font-medium text-[#555]">Description</label>
                       <input
                         id={`file-description-${i}`}
                         type="text"
@@ -1018,7 +1019,7 @@ export default function DeliverablesPanel({ targetType, targetId, service, folde
               {allFiles.filter((d) => d.folderId === toDelete.id).length} file(s) inside it, and their comments.{toDelete.isPublic ? ' Its shared link will stop working.' : ''} This can&apos;t be undone.
             </p>
             <div className="flex items-center justify-end gap-3 pt-1">
-              <button type="button" onClick={() => setToDelete(null)} disabled={deleting} className="inline-flex items-center h-10 px-5 rounded-full border border-[#D0D0D0] text-[#555] text-sm font-medium hover:bg-[#F5F5F5] transition-colors disabled:opacity-50">
+              <button type="button" onClick={() => setToDelete(null)} disabled={deleting} className={MODAL_CANCEL_CLASS}>
                 Cancel
               </button>
               <button type="button" onClick={deleteFolder} disabled={deleting} className="inline-flex items-center h-10 px-5 rounded-full bg-[#e05252] text-white text-sm font-semibold hover:bg-[#c93f3f] transition-colors disabled:opacity-50">

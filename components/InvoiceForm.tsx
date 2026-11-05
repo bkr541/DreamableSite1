@@ -1,7 +1,8 @@
 'use client';
 
 import { HugeiconsIcon } from '@hugeicons/react';
-import { CancelCircleIcon, Invoice03Icon } from '@hugeicons/core-free-icons';
+import { Briefcase06Icon, CancelCircleIcon, Invoice03Icon, ListViewIcon, User02Icon } from '@hugeicons/core-free-icons';
+import { ModalSectionHeader, MODAL_CANCEL_CLASS } from '@/components/ModalParts';
 import Dropdown from '@/components/dropdowns/Dropdown';
 import { statusOptions } from '@/components/dropdowns/options';
 import DatePicker from '@/components/DatePicker';
@@ -73,7 +74,6 @@ export function invoicePayload(f: InvoiceFormState) {
 const input = 'w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all disabled:bg-[#F6F7FB] disabled:text-[#777]';
 const border = (bad: boolean) => (bad ? 'border-[#e05252]' : 'border-[#D0D0D0]');
 const label = 'text-sm font-medium text-[#555]';
-const section = 'text-[10px] font-semibold uppercase tracking-widest text-[#AAA]';
 
 interface Props {
   title: string;
@@ -152,7 +152,7 @@ export default function InvoiceForm({ title, mode, form, setForm, clients, proje
       )}
 
       <div className="space-y-3">
-        <p className={section}>Invoice Details</p>
+        <ModalSectionHeader icon={Invoice03Icon}>Invoice Details</ModalSectionHeader>
         <div className="grid grid-cols-3 gap-4">
           <div className="flex flex-col gap-1.5">
             <label htmlFor="inv-number" className={label}>Invoice #</label>
@@ -180,7 +180,7 @@ export default function InvoiceForm({ title, mode, form, setForm, clients, proje
       </div>
 
       <div className="space-y-3">
-        <p className={section}>Client</p>
+        <ModalSectionHeader icon={User02Icon}>Client</ModalSectionHeader>
         <div className="flex flex-col gap-1.5">
           <label className={label}>Client account <span className="text-red-400">*</span></label>
           <Dropdown
@@ -209,7 +209,7 @@ export default function InvoiceForm({ title, mode, form, setForm, clients, proje
       </div>
 
       <div className="space-y-3">
-        <p className={section}>Project</p>
+        <ModalSectionHeader icon={Briefcase06Icon}>Project</ModalSectionHeader>
         <div className="grid grid-cols-[1fr_1fr_110px_130px] gap-4">
           <div className="flex flex-col gap-1.5">
             <label className={label}>Linked project</label>
@@ -241,7 +241,7 @@ export default function InvoiceForm({ title, mode, form, setForm, clients, proje
       </div>
 
       <div className="space-y-3">
-        <p className={section}>Line Items</p>
+        <ModalSectionHeader icon={ListViewIcon}>Line Items</ModalSectionHeader>
         <div className="grid grid-cols-[1fr_84px_110px_96px_36px] gap-3 px-1">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-[#CCC]">Description</p>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-[#CCC] text-center">Qty</p>
@@ -287,8 +287,8 @@ export default function InvoiceForm({ title, mode, form, setForm, clients, proje
 
       {formError && <p className="text-sm text-[#e05252]" role="alert">{formError}</p>}
 
-      <div className="flex items-center justify-between pt-2">
-        <button type="button" onClick={onCancel} className="text-sm text-[#AAAAAA] hover:text-[#000] transition-colors">Cancel</button>
+      <div className="flex items-center justify-end gap-3 pt-2">
+        <button type="button" onClick={onCancel} className={MODAL_CANCEL_CLASS}>Cancel</button>
         <button type="submit" disabled={submitting} className="px-8 py-3 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none">
           {submitting ? 'Saving…' : submitLabel}
         </button>

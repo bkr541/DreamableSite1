@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { CancelCircleIcon } from '@hugeicons/core-free-icons';
 import DialogFocus from '@/components/DialogFocus';
+import { ModalCloseButton } from '@/components/ModalParts';
 
 export interface PreviewFile {
   url: string;
@@ -88,14 +87,7 @@ export default function FilePreviewModal({ file, onClose }: { file: PreviewFile 
                   >
                     Download
                   </a>
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    aria-label="Close preview"
-                    className="text-[#888] hover:text-[#333] transition-colors"
-                  >
-                    <HugeiconsIcon icon={CancelCircleIcon} size={22} color="currentColor" strokeWidth={1.5} />
-                  </button>
+                  <ModalCloseButton inline onClick={onClose} label="Close preview" />
                 </div>
               </div>
               <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 flex items-center justify-center min-h-[240px]">

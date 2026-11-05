@@ -5,6 +5,8 @@ import { ToastProvider } from '@/components/Toast';
 import { dispatchOutbox } from '@/lib/dispatch';
 import { invitationState, type InvitationState } from '@/lib/invitations';
 import { canonicalServiceLabel } from '@/lib/services';
+import { buildClientNotices, type ClientNotice } from '@/lib/clientNotices';
+import { EVENT_LABELS, type EmailEvent } from '@/lib/emailOutbox';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -72,7 +74,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         where: { admin: false },
         orderBy: { createdAt: 'desc' },
         select: {
-          id: true, name: true, email: true, role: true, status: true, admin: true, createdAt: true,
+          id: true, name: true, email: true, role: true, status: true, admin: true, createdAt: true, invitedAt: true, lastLoginAt: true,
           company: { select: { id: true, name: true, website: true, status: true } },
         },
       }),
@@ -91,7 +93,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       prisma.project.findMany({
         orderBy: { createdAt: 'desc' },
         select: {
-          id: true, name: true, service: true, status: true, createdAt: true,
+          id: true, name: true, service: true, status: true, createdAt: true, startDate: true, targetEndDate: true,
           company: { select: { id: true, name: true } },
           primaryUser: { select: { id: true, name: true, email: true } },
         },
@@ -120,7 +122,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const invited = [...clients, ...allInquiries.map((i) => i.user).filter((u) => !!u) as { id: string; status: string }[]].filter((u) => u.status === 'INVITED');
   const jobs = invited.length
     ? await prisma.emailOutbox
-        .findMany({ where: { eventType: 'client.invitation', entityId: { in: invited.map((u) => u.id) } }, orderBy: { createdAt: 'desc' }, select: { entityId: true, status: true, sentAt: true, createdAt: true } })
+        .findMany({ where: { eventType: 'client.invitation', entityId: { in: invited.map((u) => u.id) } }, orderBy: { createdAt: 'desc' }, select: { entityId: true, status: true, sentAt: true, createdAt: true, attempts: true, lastError: true } })
         .catch(() => [])
     : [];
   const invitations: Record<string, { state: InvitationState; at: string | null }> = {};
@@ -128,6 +130,33 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     const latest = jobs.find((j) => j.entityId === u.id) ?? null;
     const { state, at } = invitationState(u, latest);
     invitations[u.id] = { state, at: at?.toISOString() ?? null };
+  }
+
+  // Everything worth telling the admin about each client (the "Notices" screen). Other emails to a client (password
+  // resets, confirmations) are matched by address; a database without the outbox table simply shows none.
+  const addresses = [...new Set(clients.flatMap((c) => [c.email, c.email.toLowerCase()]))];
+  const otherEmails = addresses.length
+    ? await prisma.emailOutbox
+        .findMany({
+          where: { recipient: { in: addresses }, eventType: { not: 'client.invitation' }, status: { in: ['DEAD', 'SUPPRESSED', 'RETRY'] } },
+          orderBy: { createdAt: 'desc' }, take: 300,
+          select: { id: true, eventType: true, recipient: true, status: true, attempts: true, lastError: true, createdAt: true },
+        })
+        .catch(() => [])
+    : [];
+  const clientNotices: Record<string, ClientNotice[]> = {};
+  for (const c of clients) {
+    const job = jobs.find((j) => j.entityId === c.id) ?? null;
+    clientNotices[c.id] = buildClientNotices({
+      user: { id: c.id, status: c.status, createdAt: c.createdAt.toISOString(), invitedAt: c.invitedAt?.toISOString() ?? null, lastLoginAt: c.lastLoginAt?.toISOString() ?? null, hasCompany: !!c.company },
+      invitation: invitations[c.id] ?? { state: c.status === 'ACTIVE' ? 'accepted' : 'none', at: null },
+      invitationJob: job && { status: job.status, attempts: job.attempts, lastError: job.lastError, sentAt: job.sentAt?.toISOString() ?? null, createdAt: job.createdAt.toISOString() },
+      emails: otherEmails
+        .filter((e) => e.recipient.toLowerCase() === c.email.toLowerCase())
+        .map((e) => ({ id: e.id, label: EVENT_LABELS[e.eventType as EmailEvent] ?? e.eventType, status: e.status, attempts: e.attempts, lastError: e.lastError, createdAt: e.createdAt.toISOString() })),
+      projects: projects.filter((p) => p.primaryUser?.id === c.id).map((p) => ({ id: p.id, name: p.name, status: p.status, targetEndDate: p.targetEndDate?.toISOString() ?? null })),
+      invoices: invoices.filter((i) => i.clientUserId === c.id).map((i) => ({ id: i.id, invoiceNumber: i.invoiceNumber, status: i.status, dueDate: i.dueDate, numberConflict: i.numberConflict })),
+    });
   }
 
   // Whenever staff open the admin, anything queued and due (e.g. after a mail outage) gets another try.
@@ -156,7 +185,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       initialFolderId={one(sp.folder) ?? null}
       folders={folders.map((f) => ({ ...f, shareRotatedAt: f.shareRotatedAt?.toISOString() ?? null, createdAt: f.createdAt.toISOString() }))}
       deliverables={deliverables.map((d) => ({ ...d, createdAt: d.createdAt.toISOString() }))}
-      projects={projects.map((p) => ({ ...p, service: canonicalServiceLabel(p.service), createdAt: p.createdAt.toISOString() }))}
+      projects={projects.map((p) => ({ ...p, service: canonicalServiceLabel(p.service), createdAt: p.createdAt.toISOString(), startDate: p.startDate?.toISOString() ?? null, targetEndDate: p.targetEndDate?.toISOString() ?? null }))}
       invoices={invoices.map(({ lineItems, taxRate, createdAt, ...inv }) => ({
         ...inv,
         createdAt: createdAt.toISOString(),
@@ -167,6 +196,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       adminCompany={adminUser?.company ?? null}
       unreadNotifications={unreadNotifications}
       invitations={invitations}
+      clientNotices={clientNotices}
     />
     </ToastProvider>
   );

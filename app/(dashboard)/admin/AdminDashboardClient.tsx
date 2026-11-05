@@ -22,6 +22,11 @@ import FilePreviewModal, { PreviewFile, previewKind, formatBytes } from '@/compo
 import { motion, AnimatePresence } from 'motion/react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import DialogFocus from '@/components/DialogFocus';
+import ProjectCard from '@/components/ProjectCard';
+import { ModalCloseButton, ModalSectionHeader, MODAL_CANCEL_CLASS } from '@/components/ModalParts';
+import ClientNoticesScreen from '@/components/ClientNotices';
+import SearchSelect from '@/components/dropdowns/SearchSelect';
+import { noticeAlertLevel, type ClientNotice } from '@/lib/clientNotices';
 import {
   ChartRoseIcon,
   UserGroup02Icon,
@@ -30,7 +35,10 @@ import {
   ComplaintIcon,
   Invoice03Icon,
   UserAdd02Icon,
-  CancelCircleIcon,
+  User02Icon,
+  Notification03Icon,
+  Building03Icon,
+  Flag01Icon,
   Delete04Icon,
   Archive02Icon,
   ArchiveArrowUpIcon,
@@ -146,6 +154,8 @@ interface ProjectRecord {
   service: string;
   status: string;
   createdAt: string;
+  startDate: string | null;
+  targetEndDate: string | null;
   company: { id: string; name: string } | null;
   primaryUser: { id: string; name: string; email: string } | null;
 }
@@ -174,6 +184,8 @@ interface Props {
   unreadNotifications: number;
   /** Where each invited client stands, keyed by user id. */
   invitations: Record<string, { state: InvitationState; at: string | null }>;
+  /** Everything worth knowing about each client, keyed by user id (see lib/clientNotices.ts). */
+  clientNotices: Record<string, ClientNotice[]>;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -298,7 +310,7 @@ const VIEW_META: Record<ViewId, { title: string; subtitle: string }> = {
   profile:       { title: 'User Information', subtitle: 'Your account details' },
 };
 
-export default function AdminDashboardClient({ session, initialView, initialInquiryId, initialProjectId, initialTab, initialBilling, stats, recentInquiries, inquiries, deliverables, folders, comments, initialFolderId, recentUsers, clients, companies, services, projects, invoices, adminCompany, unreadNotifications, invitations }: Props) {
+export default function AdminDashboardClient({ session, initialView, initialInquiryId, initialProjectId, initialTab, initialBilling, stats, recentInquiries, inquiries, deliverables, folders, comments, initialFolderId, recentUsers, clients, companies, services, projects, invoices, adminCompany, unreadNotifications, invitations, clientNotices }: Props) {
   const router = useRouter();
   const [activeView, setActiveView] = useState<ViewId>(initialView);
   const [unread, setUnread] = useState(unreadNotifications);
@@ -460,6 +472,9 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
     setSelectedInquiryId(null);
   }
   const [expandedClientIds, setExpandedClientIds] = useState<Set<string>>(new Set());
+  // The client whose Notices screen is open (replaces the Clients list while set).
+  const [noticesClientId, setNoticesClientId] = useState<string | null>(null);
+  const noticesClient = noticesClientId ? clients.find((c) => c.id === noticesClientId) ?? null : null;
   const [clientFilter, setClientFilter] = useState({ search: '', status: '' });
   const [projectFilter, setProjectFilter] = useState({ search: '', status: '', service: '' });
   const [invoiceFilter, setInvoiceFilter] = useState({ search: '', status: '' });
@@ -852,7 +867,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               return (
                 <button
                   key={id}
-                  onClick={() => { setActiveView(id); setBillingSubView(null); setSelectedInquiryId(null); setSelectedProjectId(null); setSelectedFolderId(null); }}
+                  onClick={() => { setActiveView(id); setNoticesClientId(null); setBillingSubView(null); setSelectedInquiryId(null); setSelectedProjectId(null); setSelectedFolderId(null); }}
                   title={label}
                   className={
                     isActive
@@ -1021,7 +1036,6 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 key: 'inquiry', label: 'Inquiry', width: 'minmax(0,2.2fr)',
                 render: (inq) => (
                   <div className="flex items-center gap-4 min-w-0">
-                    <Avatar name={inq.name} size={32} />
                     <div className="min-w-0">
                       <p className="record-title text-sm font-semibold text-[#1a1a1a] truncate">{inq.projectName || inq.service}</p>
                       <p className="text-xs text-[#666] truncate">{inq.name}{inq.company ? ` · ${inq.company}` : ''}</p>
@@ -1316,7 +1330,20 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
           <NotificationsPanel onOpen={openLink} onUnreadChange={setUnread} />
         )}
 
-        {activeView === 'clients' && (
+        {activeView === 'clients' && noticesClient && (
+          <ClientNoticesScreen
+            client={noticesClient}
+            notices={clientNotices[noticesClient.id] ?? []}
+            onBack={() => setNoticesClientId(null)}
+            onAction={(n) => {
+              if (n.action?.kind === 'resend-invite') resendInvite(noticesClient.id, noticesClient.name);
+              else if (n.action?.kind === 'open-billing') { setNoticesClientId(null); setActiveView('billing'); }
+              else if (n.action?.kind === 'open-project' && n.action.projectId) { setNoticesClientId(null); setActiveView('projects'); openProject(n.action.projectId); }
+            }}
+          />
+        )}
+
+        {activeView === 'clients' && !noticesClient && (
           <RecordList
             rows={visibleClients}
             rowKey={(c) => c.id}
@@ -1337,7 +1364,6 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 key: 'client', label: 'Client', width: 'minmax(0,2.2fr)',
                 render: (c) => (
                   <div className="flex items-center gap-4 min-w-0">
-                    <Avatar name={c.name} size={32} />
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="record-title text-sm font-semibold text-[#1a1a1a] truncate">{c.name}</p>
@@ -1366,11 +1392,6 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 render: (c) => (
                   <>
                     <StatusDot status={c.status} />
-                    {c.status === 'INVITED' && (
-                      <p className={`text-[11px] truncate mt-0.5 ${invitations[c.id]?.state === 'failed' || invitations[c.id]?.state === 'expired' ? 'text-[#e05252] font-medium' : 'text-[#999]'}`}>
-                        {INVITATION_LABEL[invitations[c.id]?.state ?? 'none']}
-                      </p>
-                    )}
                   </>
                 ),
               },
@@ -1410,6 +1431,21 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 >
                   <HugeiconsIcon icon={Briefcase06Icon} size={19} color="currentColor" strokeWidth={1.5} />
                 </button>
+                {(() => {
+                  const level = noticeAlertLevel(clientNotices[c.id] ?? []);
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setNoticesClientId(c.id)}
+                      className="relative flex h-8 w-8 items-center justify-center rounded-full text-[#4b5260] hover:bg-[#F1F2F5] transition-colors"
+                      title={`Notices and information about ${c.name}`}
+                      aria-label={level ? `Notices for ${c.name}: ${level === 'error' ? 'needs attention' : 'has warnings'}` : `Notices for ${c.name}`}
+                    >
+                      <HugeiconsIcon icon={Notification03Icon} size={19} color="currentColor" strokeWidth={1.5} />
+                      {level && <span className={`absolute right-1 top-1 h-2.5 w-2.5 rounded-full ring-2 ring-white ${level === 'error' ? 'bg-[#e05252]' : 'bg-[#f5a524]'}`} aria-hidden="true" />}
+                    </button>
+                  );
+                })()}
                 </div>
               ),
             }}
@@ -1420,21 +1456,16 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 <p className="px-6 pb-6 pt-1 text-center text-sm text-[#666]">There are currently no projects for {c.name}.</p>
               ) : (
                 <div className="mx-6 mb-5 rounded-xl bg-[#F3F5FB] border border-[#E4E8F3] p-4">
-                  <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {clientProjects.map(p => (
                       <li key={p.id}>
-                        <button
-                          type="button"
-                          onClick={() => { setActiveView('projects'); openProject(p.id); }}
-                          className="w-full flex items-center justify-between gap-3 rounded-lg bg-white border border-[#E8E8EC] px-4 py-3 text-left hover:border-[#1a2030]/30 hover:shadow-sm transition-all"
-                          aria-label={`Open project ${p.name}`}
-                        >
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold text-[#1a1a1a] truncate">{p.name}</p>
-                            <p className="text-xs text-[#777] truncate">{p.service}</p>
-                          </div>
-                          <Badge status={p.status} />
-                        </button>
+                        <ProjectCard
+                          project={p}
+                          statusBadge={<Badge status={p.status} />}
+                          files={deliverables.filter(d => d.projectId === p.id).length}
+                          invoices={invoices.filter(inv => inv.projectId === p.id).length}
+                          onOpen={() => { setActiveView('projects'); openProject(p.id); }}
+                        />
                       </li>
                     ))}
                   </ul>
@@ -1485,7 +1516,6 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 key: 'project', label: 'Project', width: 'minmax(0,2.2fr)',
                 render: (p) => (
                   <div className="flex items-center gap-4 min-w-0">
-                    <Avatar name={p.name} size={32} />
                     <div className="min-w-0">
                       <p className="record-title text-sm font-semibold text-[#1a1a1a] truncate">{p.name}</p>
                       <p className="text-xs text-[#666] truncate">{p.service}</p>
@@ -1497,10 +1527,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               {
                 key: 'client', label: 'Client', width: 'minmax(0,1.4fr)',
                 render: (p) => p.primaryUser ? (
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <Avatar name={p.primaryUser.name} size={28} />
-                    <span className="text-[13px] text-[#333] truncate">{p.primaryUser.name}</span>
-                  </div>
+                  <span className="text-[13px] text-[#333] truncate">{p.primaryUser.name}</span>
                 ) : <span className="text-sm text-[#999]">—</span>,
               },
               { key: 'status', label: 'Status', width: '104px', render: (p) => <StatusDot status={p.status} /> },
@@ -1880,13 +1907,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               transition={{ duration: 0.22, ease: 'easeOut' }}
               className="relative w-full max-w-[720px] rounded-3xl bg-white shadow-xl border border-[#F0F0F0] max-h-[90vh] overflow-y-auto"
             >
-              <button
-                type="button"
-                onClick={() => { setShowCreateProject(false); resetProjectForm(); }}
-                className="absolute top-5 right-5 text-[#CCCCCC] hover:text-[#555] transition-colors z-10"
-              >
-                <HugeiconsIcon icon={CancelCircleIcon} size={22} color="currentColor" strokeWidth={1.5} />
-              </button>
+              <ModalCloseButton onClick={() => { setShowCreateProject(false); resetProjectForm(); }} />
               <form onSubmit={handleCreateProject} className="p-8 space-y-5" noValidate>
                 <div className="flex items-center gap-3">
                   <HugeiconsIcon icon={Briefcase06Icon} size={28} color="#1a2030" strokeWidth={2} />
@@ -1896,7 +1917,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 {/* Client (when launched from the Clients screen) */}
                 {projectForClient && (
                   <div className="space-y-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Client</p>
+                    <ModalSectionHeader icon={UserCircleIcon}>Client</ModalSectionHeader>
                     <div className="rounded-xl border border-[#D0D0D0] bg-white px-4 py-3 space-y-3">
                       <div className="flex items-center gap-3">
                         <Avatar name={projectForClient.name} size={40} />
@@ -1929,7 +1950,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
 
                 {/* Project Details */}
                 <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Project Details</p>
+                  <ModalSectionHeader icon={Briefcase06Icon}>Project Details</ModalSectionHeader>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-sm font-medium text-[#555]">Project Name <span className="text-red-400">*</span></label>
                     <input
@@ -1945,24 +1966,24 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Company <span className="text-red-400">*</span></label>
-                      <Dropdown
+                      <SearchSelect
                 label="Company"
+                placeholder="Search companies…"
                 value={projectForm.companyId}
                 onChange={(v) => { setProjectForm(f => ({ ...f, companyId: v, primaryUserId: '' })); setProjectFieldError(null); }}
-                options={[{ value: '', label: 'Select a company…' }, ...companies.map(c => ({ value: c.id, label: c.name }))]}
-                width="w-full"
+                options={companies.map(c => ({ value: c.id, label: c.name }))}
                 invalid={projectFieldError?.field === 'companyId'}
               />
                       {projectFieldError?.field === 'companyId' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Primary Contact <span className="text-[#CCC] font-normal normal-case">— optional</span></label>
-                      <Dropdown
+                      <label className="text-sm font-medium text-[#555]">Primary Contact</label>
+                      <SearchSelect
                 label="Primary contact"
+                placeholder="Search contacts…"
                 value={projectForm.primaryUserId}
                 onChange={(v) => setProjectForm(f => ({ ...f, primaryUserId: v }))}
-                options={[{ value: '', label: 'None' }, ...clients.filter(c => !projectForm.companyId || c.company?.id === projectForm.companyId).map(c => ({ value: c.id, label: c.name }))]}
-                width="w-full"
+                options={clients.filter(c => !projectForm.companyId || c.company?.id === projectForm.companyId).map(c => ({ value: c.id, label: c.name, description: c.email }))}
               />
                     </div>
                   </div>
@@ -1982,7 +2003,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                       {projectFieldError?.field === 'service' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
                     </div>
                     <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Sub-Category <span className="text-[#CCC] font-normal normal-case">— optional</span></label>
+                      <label className="text-sm font-medium text-[#555]">Sub-Category</label>
                       <Dropdown
                 label="Sub-category"
                 value={projectForm.subCategory}
@@ -2009,7 +2030,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
 
                 {/* Scope & Timeline */}
                 <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Scope & Timeline <span className="normal-case text-[#CCC] font-normal">— optional</span></p>
+                  <ModalSectionHeader icon={Calendar03Icon}>Scope &amp; Timeline</ModalSectionHeader>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Budget Range</label>
@@ -2052,7 +2073,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
 
                 {/* Status */}
                 <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Status</p>
+                  <ModalSectionHeader icon={Flag01Icon}>Status</ModalSectionHeader>
                   <div className="flex flex-col gap-1.5">
                     <Dropdown
                 label="Status"
@@ -2066,11 +2087,11 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
 
                 {projectError && <p className="text-sm text-[#e05252]">{projectError}</p>}
 
-                <div className="flex items-center justify-between pt-2">
+                <div className="flex items-center justify-end gap-3 pt-2">
                   <button
                     type="button"
                     onClick={() => { setShowCreateProject(false); resetProjectForm(); }}
-                    className="text-sm text-[#AAAAAA] hover:text-[#000] transition-colors"
+                    className={MODAL_CANCEL_CLASS}
                   >
                     Cancel
                   </button>
@@ -2107,13 +2128,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               transition={{ duration: 0.22, ease: 'easeOut' }}
               className="relative w-full max-w-[720px] rounded-3xl bg-white shadow-xl border border-[#F0F0F0] max-h-[90vh] overflow-y-auto"
             >
-              <button
-                type="button"
-                onClick={closeNewInvoice}
-                className="absolute top-5 right-5 text-[#CCCCCC] hover:text-[#555] transition-colors z-10"
-              >
-                <HugeiconsIcon icon={CancelCircleIcon} size={22} color="currentColor" strokeWidth={1.5} />
-              </button>
+              <ModalCloseButton onClick={closeNewInvoice} />
               <InvoiceForm
                 title="Generate Invoice" mode="create" submitLabel="Generate Invoice"
                 form={invoiceForm} setForm={setInvoiceForm} clients={invoiceClients} projects={invoiceProjects}
@@ -2144,13 +2159,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               transition={{ duration: 0.22, ease: 'easeOut' }}
               className="relative w-full max-w-[720px] rounded-3xl bg-white shadow-xl border border-[#F0F0F0]"
             >
-              <button
-                type="button"
-                onClick={() => { setShowAddClient(false); resetAddForm(); }}
-                className="absolute top-5 right-5 text-[#CCCCCC] hover:text-[#555] transition-colors"
-              >
-                <HugeiconsIcon icon={CancelCircleIcon} size={22} color="currentColor" strokeWidth={1.5} />
-              </button>
+              <ModalCloseButton onClick={() => { setShowAddClient(false); resetAddForm(); }} />
               <form onSubmit={handleAddClient} className="p-8 space-y-5" noValidate>
                 <div className="flex items-center gap-3">
                   <HugeiconsIcon icon={UserAdd02Icon} size={28} color="#1a2030" strokeWidth={2} />
@@ -2159,7 +2168,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
 
                 {/* User information */}
                 <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">User Information</p>
+                  <ModalSectionHeader icon={User02Icon}>User Information</ModalSectionHeader>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
@@ -2193,7 +2202,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
 
                 {/* Company information */}
                 <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Company Information <span className="normal-case text-[#CCC] font-normal">— optional</span></p>
+                  <ModalSectionHeader icon={Building03Icon}>Company Information</ModalSectionHeader>
 
                   {companies.length > 0 && (
                     <div className="flex flex-col gap-1.5">
@@ -2245,11 +2254,11 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
 
                 {addError && <p className="text-sm text-[#e05252]">{addError}</p>}
 
-                <div className="flex items-center justify-between pt-2">
+                <div className="flex items-center justify-end gap-3 pt-2">
                   <button
                     type="button"
                     onClick={() => { setShowAddClient(false); resetAddForm(); }}
-                    className="text-sm text-[#AAAAAA] hover:text-[#000] transition-colors"
+                    className={MODAL_CANCEL_CLASS}
                   >
                     Cancel
                   </button>
@@ -2284,13 +2293,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               transition={{ duration: 0.22, ease: 'easeOut' }}
               className="relative w-full max-w-[720px] rounded-3xl bg-white shadow-xl border border-[#F0F0F0] max-h-[90vh] overflow-y-auto"
             >
-              <button
-                type="button"
-                onClick={() => setShowEditInvoice(false)}
-                className="absolute top-5 right-5 text-[#CCCCCC] hover:text-[#555] transition-colors z-10"
-              >
-                <HugeiconsIcon icon={CancelCircleIcon} size={22} color="currentColor" strokeWidth={1.5} />
-              </button>
+              <ModalCloseButton onClick={() => setShowEditInvoice(false)} />
               <InvoiceForm
                 title="Edit Invoice" mode="edit" submitLabel="Save Changes"
                 form={editInvForm} setForm={setEditInvForm} clients={invoiceClients} projects={invoiceProjects}
@@ -2336,12 +2339,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                       Download
                     </a>
                   )}
-                  <button
-                    onClick={closePreview}
-                    className="text-[#CCCCCC] hover:text-[#555] transition-colors"
-                  >
-                    <HugeiconsIcon icon={CancelCircleIcon} size={22} color="currentColor" strokeWidth={1.5} />
-                  </button>
+                  <ModalCloseButton inline onClick={closePreview} label="Close preview" />
                 </div>
               </div>
 

@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Cancel01Icon, File02Icon, Folder01Icon, Message01Icon } from '@hugeicons/core-free-icons';
+import { File02Icon, Folder01Icon, Message01Icon } from '@hugeicons/core-free-icons';
 import ArtifactThumb from '@/components/ArtifactThumb';
 import { Avatar } from '@/components/RecordList';
 import FilePreviewModal, { PreviewFile, formatBytes, previewKind } from '@/components/FilePreviewModal';
 import DialogFocus from '@/components/DialogFocus';
+import { ModalCloseButton } from '@/components/ModalParts';
 
 interface SharedFile {
   id: string;
@@ -120,9 +121,7 @@ function CommentsDialog({
             <p className="text-xs font-semibold uppercase tracking-widest text-[#999]">Comments</p>
             <p className="truncate text-base font-semibold text-[#1a1a1a]" title={label}>{label}</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close comments" className="shrink-0 text-[#999] hover:text-[#333] transition-colors">
-            <HugeiconsIcon icon={Cancel01Icon} size={20} color="currentColor" strokeWidth={2} />
-          </button>
+          <ModalCloseButton inline onClick={onClose} label="Close comments" />
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4">

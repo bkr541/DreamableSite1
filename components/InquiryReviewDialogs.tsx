@@ -8,6 +8,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { Cancel01Icon, Tick02Icon, UserCheck01Icon } from '@hugeicons/core-free-icons';
 import { useToast } from '@/components/Toast';
 import DialogFocus from '@/components/DialogFocus';
+import { MODAL_CANCEL_CLASS } from '@/components/ModalParts';
 
 export interface ReviewTarget {
   id: string;
@@ -46,7 +47,7 @@ function Shell({ title, icon, tone, onClose, busy, children }: { title: string; 
   );
 }
 
-const cancelCls = 'inline-flex items-center h-10 px-5 rounded-full border border-[#D0D0D0] text-[#555] text-sm font-medium hover:bg-[#F5F5F5] transition-colors disabled:opacity-50';
+const cancelCls = MODAL_CANCEL_CLASS;
 
 /** Confirms an approval, shows exactly what it will create, and calls the secured approve endpoint once. */
 export function ApproveInquiryDialog({ inquiry, onClose }: { inquiry: ReviewTarget; onClose: () => void }) {
@@ -133,7 +134,7 @@ export function RejectInquiryDialog({ inquiry, onClose }: { inquiry: ReviewTarge
       <p className="text-sm text-[#555] leading-relaxed">
         The inquiry from <span className="font-medium text-[#1a1a1a]">{inquiry.name}</span> will be closed. No client or project is created, nothing is deleted, and <span className="font-medium">no email is sent</span>. You can reopen it later.
       </p>
-      <label htmlFor="reject-reason" className="block text-sm font-medium text-[#555] mt-4 mb-1.5">Internal note <span className="text-[#BBB] font-normal">— optional, only staff see this</span></label>
+      <label htmlFor="reject-reason" className="block text-sm font-medium text-[#555] mt-4 mb-1.5">Internal note</label>
       <textarea
         id="reject-reason" rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} disabled={busy}
         placeholder="Why is this being declined?"
