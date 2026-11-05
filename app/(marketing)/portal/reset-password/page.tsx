@@ -15,7 +15,6 @@ function ResetPasswordContent() {
   const token = searchParams.get('token') ?? '';
 
   const [status, setStatus] = useState<TokenStatus>('validating');
-  const [tokenEmail, setTokenEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -32,7 +31,7 @@ function ResetPasswordContent() {
       .then((r) => r.json())
       .then((data) => {
         if (data.expired) { setStatus('expired'); return; }
-        if (data.valid) { setTokenEmail(data.email ?? ''); setStatus('valid'); return; }
+        if (data.valid) { setStatus('valid'); return; }
         setStatus('invalid');
       })
       .catch(() => setStatus('invalid'));
@@ -87,7 +86,7 @@ function ResetPasswordContent() {
         <div>
           <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-2">Set your password</p>
           <p className="text-sm text-[#888] mb-8">
-            Setting password for <span className="font-medium text-[#1a1a1a]">{tokenEmail}</span>
+            Choose a new password for your account. This link can only be used once.
           </p>
 
           <form onSubmit={handleSetPassword} className="space-y-6" noValidate>

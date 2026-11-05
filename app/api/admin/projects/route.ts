@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest } from '@/lib/session';
+import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 
 export async function POST(req: NextRequest) {
-  const session = getSessionFromRequest(req);
-  if (!session?.admin) return fail('Unauthorized.', 401);
+  const auth = await requireAdmin(req);
+  if (!auth.ok) return auth.response;
 
   const {
     name, companyId, newCompanyName, primaryUserId, service, subCategory, description,

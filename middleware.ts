@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { validateAuthSecrets } from '@/lib/secretPolicy.mjs';
 
 const COOKIE_NAME = 'ds_session';
 
@@ -49,7 +50,14 @@ async function verifySession(token: string, secret: string): Promise<SessionPayl
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get(COOKIE_NAME)?.value;
-  const secret = process.env.SESSION_SECRET ?? 'change-me-in-production';
+  // Early navigation gate only. It trusts nothing it cannot verify, and pages/APIs re-check the database
+  // (lib/authz.ts), so a stale `admin` claim here never grants data access.
+  const config = validateAuthSecrets({ SESSION_SECRET: process.env.SESSION_SECRET, RESET_SECRET: process.env.RESET_SECRET });
+  if (!config.ok) {
+    console.error('[middleware] Server configuration error:', config.problems.join(' '));
+    return new NextResponse('Service temporarily unavailable.', { status: 503 });
+  }
+  const secret = process.env.SESSION_SECRET as string;
   const session = token ? await verifySession(token, secret) : null;
 
   if (pathname.startsWith('/admin')) {

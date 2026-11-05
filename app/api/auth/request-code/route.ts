@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/prisma';
+import { canUsePasswordFlow } from '@/lib/accountStatus';
 
 function generateCode(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     const normalized = email.toLowerCase().trim();
     const user = await prisma.user.findUnique({ where: { email: normalized } });
 
-    if (user) {
+    if (user && canUsePasswordFlow(user.status)) {
       const code = generateCode();
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
       await prisma.user.update({

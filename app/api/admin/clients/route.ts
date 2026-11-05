@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
-import { getSessionFromRequest } from '@/lib/session';
+import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
+import { isUserStatus } from '@/lib/accountStatus';
 
 function generateSecurePassword(): string {
   // 24-char random password — strong enough that the client should reset via forgot-password
@@ -10,13 +11,15 @@ function generateSecurePassword(): string {
 }
 
 export async function POST(req: NextRequest) {
-  const session = getSessionFromRequest(req);
-  if (!session?.admin) {
-    return NextResponse.json({ ok: false, error: 'Unauthorized.' }, { status: 401 });
-  }
+  const auth = await requireAdmin(req);
+  if (!auth.ok) return auth.response;
 
   const { name, email, role = 'CLIENT', status = 'INVITED', companyName, companyWebsite } =
     await req.json();
+
+  if (role !== 'CLIENT' || !isUserStatus(status)) {
+    return NextResponse.json({ ok: false, error: 'Invalid role or status.' }, { status: 400 });
+  }
 
   if (!name?.trim() || !email?.trim()) {
     return NextResponse.json(

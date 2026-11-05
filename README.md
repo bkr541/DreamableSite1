@@ -70,15 +70,17 @@ Each of `companies`, `users`, and `projects` carries a unique `inquiry_id` forei
 
 ### Approval flow
 
-When `POST /api/inquiries/:id/approve` is called:
+`POST /api/inquiries/:id/approve` is **admin-only**. The caller must have a valid session *and* be a currently active administrator in the database (401 if signed out or revoked, 403 if not an admin); nothing is looked up or written for anyone else. When called:
 
 1. The inquiry is validated — `name`, `email`, `service`, and `description` must be present.
-2. A single Prisma `$transaction` runs:
-   - `inquiries.status` → `APPROVED`, `approved_at` → now
+2. A single Prisma `$transaction` runs. It first locks the inquiry row (`SELECT … FOR UPDATE`) so two simultaneous approvals cannot duplicate records, then:
+   - `inquiries.status` → `APPROVED`, `approved_at` → now, `approved_by_id` → the approving admin
    - Creates one `companies` record (name defaults to `inquiry.company ?? inquiry.name`)
    - Creates one `users` record linked to that company, `status = INVITED`
    - Creates one `projects` record linked to both company and user, `status = ONBOARDING`
-3. The endpoint is idempotent — if all three records already exist it returns them immediately without re-running the transaction.
+   - Writes an `audit_logs` row (`inquiry.approve`) — if any step fails, nothing is kept.
+3. The endpoint is idempotent — if all three records already exist it returns them without writing anything.
+4. The response contains only an allowlisted set of fields (see `lib/approvalDto.ts`); password hashes, login codes and tokens are never returned.
 
 **Error responses**
 
@@ -106,6 +108,8 @@ Copy `.env.example` to `.env.local` and fill in all values.
 | `INQUIRY_TO_EMAIL` | For email | Address that receives new inquiry notifications |
 | `INQUIRY_FROM_EMAIL` | No | From address (defaults to `SMTP_USER`) |
 | `APP_URL` | No | Canonical URL of the deployed site |
+| `SESSION_SECRET` | **Yes** | Signs session cookies. ≥ 32 random chars. `openssl rand -hex 32` |
+| `RESET_SECRET` | **Yes** | Keys the stored hash of password-reset links. ≥ 32 random chars, different from `SESSION_SECRET`. |
 
 Email sending is **optional** — if SMTP vars are missing the app logs a warning and continues normally.
 
@@ -145,3 +149,41 @@ npx prisma migrate dev # create & apply a new migration (local)
 npx prisma migrate deploy  # apply pending migrations (CI/production)
 npx prisma studio      # open Prisma Studio GUI
 ```
+
+---
+
+## Authentication & Security
+
+### Secrets
+`SESSION_SECRET` and `RESET_SECRET` have **no fallback**. Each must be set, at least 32 characters, not a placeholder, and different from the other (`lib/secretPolicy.mjs`). If they are not, sign-in, password reset and every protected request fail closed (503/500 with a configuration message; values are never logged). Startup logs the problem (names only), and `npm run build` fails on Vercel/CI (`scripts/check-secrets.mjs`); locally it only warns.
+
+```bash
+openssl rand -hex 32   # run twice: once per secret
+```
+
+**Rotation** (do this at once if any deployment ever ran with the old `change-me-in-production` default, or a secret/cookie was exposed):
+1. Generate two new values and set them in the host's environment (Vercel → Settings → Environment Variables, Production and Preview).
+2. Redeploy. Rotating `SESSION_SECRET` signs everyone out. Rotating `RESET_SECRET` invalidates every outstanding reset link (they are stored as a keyed hash).
+3. Cookies issued before this release have no session version and are also rejected, so the first deploy forces everyone to sign in again.
+
+### Authorization
+A signed cookie is only a *claim*. `lib/authz.ts` (`requireUser`, `requireAdmin`, `requireAdminPage`, `requireClientPage`) re-reads the user row on every protected request and requires: user exists, `status = ACTIVE`, `session_version` matches the cookie, and (for admin) `admin = true`. Demoting, suspending or deleting someone takes effect on their very next request. `middleware.ts` is only an early navigation gate. 401 = not signed in / session no longer valid; 403 = signed in but not allowed. Any new route must call one of these helpers (`tests/routeGuards.test.ts` enforces it for admin routes).
+
+### Account states (`users.status`)
+| Status | Sign in | Password link/code | Notes |
+|---|---|---|---|
+| `INVITED` | no | yes — completing it activates the account | Created by inquiry approval or "Add client" |
+| `ACTIVE` | yes | yes (stays `ACTIVE`) | |
+| `SUSPENDED` | no | **no** — never reactivated by a reset | Only an admin action changes it |
+| anything else | no | no | Fails closed |
+
+Admin controls: `PATCH /api/admin/users/:id` (`{status: "ACTIVE"|"SUSPENDED", admin?: boolean}`) and `POST /api/admin/users/:id/revoke-sessions`. Both bump the user's session version, write an audit row, and refuse to act on the caller's own account. (API only — no UI yet.)
+
+### Session revocation
+`users.session_version` is stored in the cookie and compared on every request. It is incremented on password change/reset, suspension, role change and revoke-all, so old cookies stop working on every device. Cookie lifetime is unchanged: 1 day, or 30 days with "remember me". Logout clears the cookie.
+
+### Password reset
+Links are random 32-byte tokens; only an HMAC (keyed with `RESET_SECRET`) is stored in `password_reset_tokens`. A link is single use (claimed with a conditional update inside the same transaction that changes the password), expires after 1 hour, and is retired when a newer one is requested or the password changes. `verify-reset-token` is read-only and returns no account details. The emailed-code flow (`request-code` → `update-password`) follows the same account-state rules and is also single use.
+
+### Tests
+`npm test` runs the Vitest suite in `tests/` (secret policy, denial matrix, approval, reset links, login, route guards). Database calls are mocked, so these prove the application logic, not the real Postgres locking.

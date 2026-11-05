@@ -6,7 +6,7 @@ import { useState, useEffect, useRef } from 'react';
 import PasswordInput from '@/components/PasswordInput';
 import { generateInvoicePDF, previewInvoicePDF } from '@/lib/generateInvoice';
 import { useRouter } from 'next/navigation';
-import { SessionPayload } from '@/lib/session';
+import type { SessionPayload } from '@/lib/session';
 import { useToast } from '@/components/Toast';
 import RecordList, { Avatar, StatusDot } from '@/components/RecordList';
 import DatePicker from '@/components/DatePicker';
@@ -133,7 +133,7 @@ interface ProjectRecord {
 }
 
 interface Props {
-  session: SessionPayload;
+  session: Pick<SessionPayload, 'userId' | 'name' | 'email' | 'admin'>;
   initialView: ViewId;
   initialInquiryId: string | null;
   initialProjectId: string | null;
@@ -161,6 +161,7 @@ const STATUS_COLORS: Record<string, string> = {
   REJECTED: 'bg-red-100 text-red-700',
   ACTIVE: 'bg-blue-100 text-blue-700',
   INVITED: 'bg-purple-100 text-purple-700',
+  SUSPENDED: 'bg-red-100 text-red-700',
   ONBOARDING: 'bg-sky-100 text-sky-700',
   COMPLETED: 'bg-gray-100 text-gray-600',
   Unsent: 'bg-gray-100 text-gray-500',
@@ -1270,7 +1271,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 label="Status"
                 value={clientFilter.status}
                 onChange={(v) => setClientFilter(f => ({ ...f, status: v }))}
-                options={statusOptions([{ value: '', label: 'All statuses' }, { value: 'INVITED', label: 'Invited' }, { value: 'ACTIVE', label: 'Active' }, { value: 'ONBOARDING', label: 'Onboarding' }, { value: 'COMPLETED', label: 'Completed' }])}
+                options={statusOptions([{ value: '', label: 'All statuses' }, { value: 'INVITED', label: 'Invited' }, { value: 'ACTIVE', label: 'Active' }, { value: 'SUSPENDED', label: 'Suspended' }])}
                 width="w-[164px]"
               />
             }
@@ -2323,7 +2324,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 label="Status"
                 value={addForm.status}
                 onChange={(v) => setAddForm(f => ({ ...f, status: v }))}
-                options={statusOptions([{ value: 'INVITED', label: 'Invited' }, { value: 'ACTIVE', label: 'Active' }, { value: 'ONBOARDING', label: 'Onboarding' }, { value: 'COMPLETED', label: 'Completed' }])}
+                options={statusOptions([{ value: 'INVITED', label: 'Invited' }, { value: 'ACTIVE', label: 'Active' }, { value: 'SUSPENDED', label: 'Suspended' }])}
                 width="w-full"
               />
                       </div>

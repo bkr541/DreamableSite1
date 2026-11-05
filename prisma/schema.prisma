@@ -24,8 +24,9 @@ model Inquiry {
   budgetRange String? @map("budget_range")
   timeline    String?
 
-  status     String    @default("INQUIRY")
-  approvedAt DateTime? @map("approved_at") @db.Timestamptz()
+  status       String    @default("INQUIRY")
+  approvedAt   DateTime? @map("approved_at") @db.Timestamptz()
+  approvedById String?   @map("approved_by_id") @db.Uuid
 
   source      String?
   utmSource   String? @map("utm_source")
@@ -144,6 +145,9 @@ model User {
   status       String  @default("INVITED")
   admin        Boolean @default(false)
 
+  // Bumped to revoke every outstanding session cookie for this user (password change, suspension, role change, revoke-all).
+  sessionVersion Int @default(0) @map("session_version")
+
   templogincode          String?   @map("templogincode")
   tempLoginCodeExpiresAt DateTime? @map("temp_login_code_expires_at") @db.Timestamptz()
 
@@ -153,11 +157,43 @@ model User {
   inquiry  Inquiry?  @relation(fields: [inquiryId], references: [id])
   company  Company?  @relation(fields: [companyId], references: [id])
   projects Project[] @relation("ProjectPrimaryUser")
+  passwordResetTokens PasswordResetToken[]
 
   @@index([companyId])
   @@index([email])
   @@index([status])
   @@map("users")
+}
+
+// One row per emailed reset/setup link. Only a keyed hash of the token is stored.
+model PasswordResetToken {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  userId     String    @map("user_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz()
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// Append-only trail of privileged actions (approvals, status/role changes, session revocation).
+model AuditLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String
+  targetType String   @map("target_type")
+  targetId   String?  @map("target_id")
+  metadata   Json?
+
+  @@index([createdAt(sort: Desc)])
+  @@index([targetType, targetId])
+  @@index([actorId])
+  @@map("audit_logs")
 }
 
 model Company {

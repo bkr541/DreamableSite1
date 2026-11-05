@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { SessionPayload } from '@/lib/session';
+import type { SessionPayload } from '@/lib/session';
 import FileTile from '@/components/FileTile';
 import FilePreviewModal, { PreviewFile } from '@/components/FilePreviewModal';
 
@@ -49,7 +49,7 @@ interface UserData {
 }
 
 interface Props {
-  session: SessionPayload;
+  session: Pick<SessionPayload, 'userId' | 'name' | 'email' | 'admin'>;
   user: UserData;
   deliverables: Deliverable[];
   folders: Folder[];

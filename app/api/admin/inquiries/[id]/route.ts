@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest } from '@/lib/session';
+import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 
 // Attachments and deliverables are removed with the inquiry (cascade); linked users/projects/companies are kept.
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = getSessionFromRequest(req);
-  if (!session?.admin) {
-    return NextResponse.json({ ok: false, error: 'Unauthorized.' }, { status: 401 });
-  }
+  const auth = await requireAdmin(req);
+  if (!auth.ok) return auth.response;
 
   const { id } = await params;
 

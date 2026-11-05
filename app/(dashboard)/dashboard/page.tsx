@@ -1,12 +1,11 @@
 import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
+import { requireClientPage } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import CustomerDashboardClient from './CustomerDashboardClient';
 
 export default async function DashboardPage() {
-  const session = await getSession();
-  if (!session) redirect('/portal');
-  if (session.admin) redirect('/admin');
+  const current = await requireClientPage();
+  const session = { userId: current.id, name: current.name, email: current.email, admin: current.admin };
 
   const user = await prisma.user.findUnique({
     where: { id: session.userId },

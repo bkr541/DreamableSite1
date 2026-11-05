@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest } from '@/lib/session';
+import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { DELIVERABLE_MAX_BYTES, DELIVERABLE_MAX_FILES } from '@/lib/deliverables';
 import { UPLOAD_EXT } from '@/lib/serveFile';
@@ -9,8 +9,8 @@ const fail = (error: string, status: number) => NextResponse.json({ ok: false, e
 
 // Uploads files into an existing folder. A folder is required; files can't be added loose.
 export async function POST(req: NextRequest) {
-  const session = getSessionFromRequest(req);
-  if (!session?.admin) return fail('Unauthorized.', 401);
+  const auth = await requireAdmin(req);
+  if (!auth.ok) return auth.response;
 
   try {
     const form = await req.formData();

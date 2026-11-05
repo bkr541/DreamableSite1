@@ -1,36 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { lookupResetToken } from '@/lib/resetTokens';
+import { canUsePasswordFlow } from '@/lib/accountStatus';
 
+// Read-only: tells the reset page whether to show the form. Never consumes the token and never returns account details.
 export async function POST(req: NextRequest) {
   try {
     const { token } = await req.json();
-    if (!token || typeof token !== 'string') {
+    const found = await lookupResetToken(token);
+    if (found.state === 'expired') return NextResponse.json({ valid: false, expired: true });
+    if (found.state !== 'valid' || !canUsePasswordFlow(found.user.status)) {
       return NextResponse.json({ valid: false, expired: false });
     }
-
-    const secret = process.env.RESET_SECRET ?? 'change-me-in-production';
-    const parts = token.split('.');
-    if (parts.length !== 2) return NextResponse.json({ valid: false, expired: false });
-
-    const [payload, sig] = parts;
-
-    // Verify signature using timing-safe comparison.
-    const expected = createHmac('sha256', secret).update(payload).digest('base64url');
-    let sigMatch = false;
-    try {
-      sigMatch = timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
-    } catch {
-      return NextResponse.json({ valid: false, expired: false });
-    }
-
-    if (!sigMatch) return NextResponse.json({ valid: false, expired: false });
-
-    // Decode payload and check expiry.
-    const { email, exp } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    if (Date.now() > exp) return NextResponse.json({ valid: false, expired: true });
-
-    return NextResponse.json({ valid: true, expired: false, email });
-  } catch {
+    return NextResponse.json({ valid: true, expired: false });
+  } catch (err) {
+    console.error('[verify-reset-token] error:', err);
     return NextResponse.json({ valid: false, expired: false });
   }
 }

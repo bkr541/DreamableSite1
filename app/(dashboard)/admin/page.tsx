@@ -1,5 +1,4 @@
-import { redirect } from 'next/navigation';
-import { getSession } from '@/lib/session';
+import { requireAdminPage } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import AdminDashboardClient from './AdminDashboardClient';
 import { ToastProvider } from '@/components/Toast';
@@ -11,8 +10,8 @@ const VIEWS = ['dashboard', 'inquiries', 'clients', 'projects', 'workspace', 'bi
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 export default async function AdminPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  const session = await getSession();
-  if (!session || !session.admin) redirect('/portal');
+  const admin = await requireAdminPage();
+  const session = { userId: admin.id, name: admin.name, email: admin.email, admin: admin.admin };
 
   // The open screen lives in the URL, so refreshing the data after an add/edit keeps the admin where they were.
   const sp = await searchParams;

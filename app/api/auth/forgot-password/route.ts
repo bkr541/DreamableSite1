@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createHmac, randomBytes } from 'crypto';
 import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/prisma';
-
-function buildToken(email: string): string {
-  const secret = process.env.RESET_SECRET ?? 'change-me-in-production';
-  const exp = Date.now() + 60 * 60 * 1000; // 1 hour
-  const payload = Buffer.from(JSON.stringify({ email, exp, nonce: randomBytes(8).toString('hex') })).toString('base64url');
-  const sig = createHmac('sha256', secret).update(payload).digest('base64url');
-  return `${payload}.${sig}`;
-}
+import { issueResetToken } from '@/lib/resetTokens';
+import { canUsePasswordFlow } from '@/lib/accountStatus';
 
 async function sendResetEmail(to: string, resetUrl: string) {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, INQUIRY_FROM_EMAIL } = process.env;
@@ -34,7 +27,7 @@ async function sendResetEmail(to: string, resetUrl: string) {
         <h2 style="font-size:22px;font-weight:600;margin-bottom:16px;">Reset your password</h2>
         <p style="color:#555;line-height:1.6;margin-bottom:28px;">
           We received a request to reset the password for your Dreamable.studio account.
-          Click the button below to choose a new password. This link expires in 1 hour.
+          Click the button below to choose a new password. This link works once and expires in 1 hour.
         </p>
         <a href="${resetUrl}"
            style="display:inline-block;padding:14px 32px;background:#1a2030;color:#fff;border-radius:999px;text-decoration:none;font-size:14px;font-weight:500;">
@@ -57,19 +50,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Email is required.' }, { status: 400 });
     }
 
-    // Look up the user — but always return 200 to avoid exposing which emails exist.
+    // Always answer ok so the response never reveals which emails exist or what state they are in.
+    // Suspended / unknown-status accounts silently get no link.
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
 
-    if (user) {
-      const token = buildToken(user.email);
+    if (user && canUsePasswordFlow(user.status)) {
+      const token = await issueResetToken(user.id); // also retires any earlier unused links
       const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
-      const resetUrl = `${appUrl}/portal/reset-password?token=${token}`;
+      const resetUrl = `${appUrl}/portal/reset-password?token=${encodeURIComponent(token)}`;
 
       try {
         await sendResetEmail(user.email, resetUrl);
       } catch (mailErr) {
         console.error('[forgot-password] email failed:', mailErr);
-        // Don't surface SMTP errors to the client — always return ok.
       }
     }
 

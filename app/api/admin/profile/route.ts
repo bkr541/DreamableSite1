@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSessionFromRequest, createSessionToken, setSessionCookie } from '@/lib/session';
+import { requireAdmin } from '@/lib/authz';
+import { createSessionToken, setSessionCookie } from '@/lib/session';
 import { prisma } from '@/lib/prisma';
 
 export async function PUT(req: NextRequest) {
-  const session = getSessionFromRequest(req);
-  if (!session?.admin) {
-    return NextResponse.json({ ok: false, error: 'Unauthorized.' }, { status: 401 });
-  }
+  const auth = await requireAdmin(req);
+  if (!auth.ok) return auth.response;
 
   const { name, email, companyName, companyWebsite } = await req.json();
 
@@ -19,7 +18,7 @@ export async function PUT(req: NextRequest) {
 
   try {
     const currentUser = await prisma.user.findUnique({
-      where: { id: session.userId },
+      where: { id: auth.user.id },
       select: { companyId: true },
     });
 
@@ -41,7 +40,7 @@ export async function PUT(req: NextRequest) {
           },
         });
         await prisma.user.update({
-          where: { id: session.userId },
+          where: { id: auth.user.id },
           data: { companyId: company.id },
         });
       }
@@ -54,15 +53,15 @@ export async function PUT(req: NextRequest) {
     }
 
     const user = await prisma.user.update({
-      where: { id: session.userId },
+      where: { id: auth.user.id },
       data: { name: name.trim(), email: email.toLowerCase().trim() },
     });
 
     // Re-issue the session cookie so the header reflects the new name/email immediately.
     // Preserve the original remember-me duration if the session has more than 2 days remaining.
-    const rememberMe = session.exp - Date.now() > 2 * 24 * 60 * 60 * 1000;
+    const rememberMe = auth.claims.exp - Date.now() > 2 * 24 * 60 * 60 * 1000;
     const token = createSessionToken(
-      { userId: user.id, name: user.name, email: user.email, admin: user.admin },
+      { userId: user.id, name: user.name, email: user.email, admin: user.admin, sv: user.sessionVersion },
       rememberMe,
     );
     const res = NextResponse.json({ ok: true });
