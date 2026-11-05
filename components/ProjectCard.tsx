@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { HugeiconsIcon } from '@hugeicons/react';
+import ServiceArt from '@/components/ServiceArt';
 import { dueBadge } from '@/lib/projectDue';
 import { File01Icon, Invoice01Icon, Calendar03Icon } from '@hugeicons/core-free-icons';
 
@@ -43,8 +44,10 @@ export default function ProjectCard({
       type="button"
       onClick={onOpen}
       aria-label={`Open project ${project.name}`}
-      className="group flex h-full w-full flex-col gap-4 rounded-2xl border border-[#E8E8EC] bg-white p-5 text-left transition-all hover:-translate-y-0.5 hover:border-[#1a2030]/30 hover:shadow-md focus-visible:outline-2 focus-visible:outline-[#4f6df5]"
+      className="group flex h-full w-full items-start gap-4 rounded-2xl border border-[#E8E8EC] bg-white p-5 text-left transition-all hover:-translate-y-0.5 hover:border-[#1a2030]/30 hover:shadow-md focus-visible:outline-2 focus-visible:outline-[#4f6df5]"
     >
+      <ServiceArt service={project.service} size={56} className="shrink-0" />
+      <div className="flex h-full min-w-0 flex-1 flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
         <span className="inline-flex max-w-[60%] items-center truncate rounded-full bg-[#EEF2FF] px-2.5 py-0.5 text-[11px] font-semibold text-[#4f6df5]">{project.service}</span>
         {statusBadge}
@@ -80,6 +83,7 @@ export default function ProjectCard({
             {invoices} {invoices === 1 ? 'invoice' : 'invoices'}
           </span>
         </div>
+      </div>
       </div>
     </button>
   );

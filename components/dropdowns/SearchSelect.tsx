@@ -38,10 +38,13 @@ function Highlight({ text, query }: { text: string; query: string }) {
   return <>{parts.map((p, i) => (p.on ? <strong key={i} className="font-semibold text-[#1a2030]">{p.t}</strong> : <Fragment key={i}>{p.t}</Fragment>))}</>;
 }
 
+/** How many characters must be typed before any matches are shown. Clicking into the box shows nothing. */
+export const MIN_SEARCH_CHARS = 2;
+
 /**
- * A search box with a list of matches. Click it (or start typing) and the list shows the options that match what you
- * typed; pick one with the mouse or with ↑ ↓ and Enter. Esc closes the list; leaving the box without picking puts the
- * current choice back, so free text is never saved by accident. The ✕ clears the choice.
+ * A search box with a list of matches. Nothing is listed until at least two characters have been typed; then the list
+ * shows the options that match, and you pick one with the mouse or with ↑ ↓ and Enter. Esc closes the list; leaving the
+ * box without picking puts the current choice back, so free text is never saved by accident. The ✕ clears the choice.
  */
 export default function SearchSelect({ id, value, options, onChange, label, placeholder, disabled = false, invalid = false }: Props) {
   const listId = useId();
@@ -51,7 +54,8 @@ export default function SearchSelect({ id, value, options, onChange, label, plac
   const [typed, setTyped] = useState(false);
 
   const selected = options.find((o) => o.value === value) ?? null;
-  const matches = filterOptions(options, typed ? query : '');
+  const enough = typed && query.trim().length >= MIN_SEARCH_CHARS;
+  const matches = filterOptions(options, enough ? query : '');
 
   const d = useDropdown({
     triggerRef: inputRef,
@@ -68,33 +72,31 @@ export default function SearchSelect({ id, value, options, onChange, label, plac
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d.activeIndex, d.open]);
 
-  const shown = d.open && typed ? query : selected?.label ?? '';
+  const listed = d.open && enough;
+  const shown = typed ? query : selected?.label ?? '';
 
-  const show = () => {
-    if (disabled || d.open) return;
-    setTyped(false);
-    setQuery('');
-    d.openList();
-  };
+  /** Clicking or tabbing in only selects the current text (so typing replaces it); it never opens a list. */
+  const reset = () => { setTyped(false); setQuery(''); d.setOpen(false); };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!listed) return;
       e.preventDefault();
-      if (!d.open) { show(); return; }
       const n = matches.length;
       if (n) d.setActiveIndex((i) => (e.key === 'ArrowDown' ? (i + 1) % n : (i - 1 + n) % n));
     } else if (e.key === 'Enter') {
       e.preventDefault(); // never submit the surrounding form from here
-      if (!d.open) show();
-      else if (matches[d.activeIndex]) d.pick(d.activeIndex);
+      if (listed && matches[d.activeIndex]) d.pick(d.activeIndex);
     } else if (e.key === 'Escape') {
-      if (d.open) { e.preventDefault(); e.stopPropagation(); d.setOpen(false); setTyped(false); setQuery(''); }
+      if (listed) { e.preventDefault(); e.stopPropagation(); reset(); }
     } else if (e.key === 'Tab') {
       d.setOpen(false);
+    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey && !typed && selected) {
+      e.currentTarget.select(); // the next character replaces the current choice instead of being added to it
     }
   };
 
-  const border = invalid ? 'border-[#e05252]' : d.open ? 'border-[#4f6df5]' : 'border-[#D0D0D0] hover:border-[#B3B8C6]';
+  const border = invalid ? 'border-[#e05252]' : listed ? 'border-[#4f6df5]' : 'border-[#D0D0D0] hover:border-[#B3B8C6]';
 
   return (
     <div className="relative">
@@ -106,24 +108,30 @@ export default function SearchSelect({ id, value, options, onChange, label, plac
         role="combobox"
         aria-label={label}
         aria-autocomplete="list"
-        aria-expanded={d.open}
+        aria-expanded={listed}
         aria-controls={listId}
-        aria-activedescendant={d.open && matches[d.activeIndex] ? optionId(d.activeIndex) : undefined}
+        aria-activedescendant={listed && matches[d.activeIndex] ? optionId(d.activeIndex) : undefined}
         aria-invalid={invalid || undefined}
         autoComplete="off"
         disabled={disabled}
         value={shown}
         placeholder={placeholder ?? `Search ${label.toLowerCase()}…`}
-        onFocus={(e) => { show(); e.currentTarget.select(); }}
-        onClick={(e) => { show(); if (!typed) e.currentTarget.select(); }}
-        onChange={(e) => { setTyped(true); setQuery(e.target.value); d.setActiveIndex(0); if (!d.open) d.setOpen(true); }}
+        onFocus={(e) => { if (!typed) e.currentTarget.select(); }}
+        onBlur={reset} // leaving the box without picking puts the current choice back
+        onChange={(e) => {
+          const text = e.target.value;
+          setTyped(true);
+          setQuery(text);
+          d.setActiveIndex(0);
+          d.setOpen(text.trim().length >= MIN_SEARCH_CHARS);
+        }}
         onKeyDown={onKeyDown}
         className={`w-full rounded-xl border bg-white py-2.5 pl-10 text-sm text-[#1a1a1a] placeholder:text-[#8a90a0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all disabled:opacity-40 ${selected ? 'pr-10 font-medium' : 'pr-4'} ${border}`}
       />
       {selected && !disabled && (
         <button
           type="button"
-          onClick={() => { onChange(''); setTyped(false); setQuery(''); inputRef.current?.focus(); }}
+          onClick={() => { onChange(''); reset(); inputRef.current?.focus(); }}
           aria-label={`Clear ${label.toLowerCase()}`}
           className="absolute right-3 top-1/2 flex h-[18px] w-[18px] -translate-y-1/2 items-center justify-center rounded-full bg-[#E3E5EB] text-black transition-colors hover:bg-[#D2D6DF]"
         >
@@ -134,7 +142,7 @@ export default function SearchSelect({ id, value, options, onChange, label, plac
       {typeof document !== 'undefined' &&
         createPortal(
           <AnimatePresence>
-            {d.open && d.pos && (
+            {listed && d.pos && (
               <motion.div
                 ref={popRef}
                 initial={{ opacity: 0, y: d.pos.above ? 6 : -6 }}
@@ -166,8 +174,8 @@ export default function SearchSelect({ id, value, options, onChange, label, plac
                         className={`relative cursor-pointer rounded-lg py-2 pl-4 pr-3 transition-colors ${active ? 'bg-[#F3F5FB]' : ''}`}
                       >
                         <span className={`absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full bg-gradient-to-b from-[#3DD9C8] via-[#7BB5F5] to-[#B87AF5] transition-opacity ${active || isSelected ? 'opacity-100' : 'opacity-0'}`} />
-                        <p className={`truncate text-sm ${isSelected ? 'font-semibold text-[#1a2030]' : 'text-[#555]'}`}><Highlight text={o.label} query={typed ? query : ''} /></p>
-                        {o.description && <p className="truncate text-xs text-[#8a90a0]"><Highlight text={o.description} query={typed ? query : ''} /></p>}
+                        <p className={`truncate text-sm ${isSelected ? 'font-semibold text-[#1a2030]' : 'text-[#555]'}`}><Highlight text={o.label} query={query} /></p>
+                        {o.description && <p className="truncate text-xs text-[#8a90a0]"><Highlight text={o.description} query={query} /></p>}
                       </li>
                     );
                   })}
