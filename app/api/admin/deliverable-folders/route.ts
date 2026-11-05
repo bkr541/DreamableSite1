@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
 import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { newShareToken } from '@/lib/shareLinks';
 
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 
@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.response;
 
   try {
-    const { targetType, targetId, name, description, isPublic } = await req.json();
+    const { targetType, targetId, name, description, isPublic, commentsEnabled, commentsModerated } = await req.json();
 
     if (targetType !== 'inquiry' && targetType !== 'project') return fail('Invalid target.');
     if (!targetId || typeof targetId !== 'string') return fail('Invalid target.');
@@ -29,8 +29,10 @@ export async function POST(req: NextRequest) {
         name: name.trim(),
         description: typeof description === 'string' && description.trim() ? description.trim().slice(0, 1000) : null,
         isPublic: isPublic === true,
-        // Unguessable link token; generated up front so turning sharing on later never changes the URL.
-        shareToken: randomBytes(18).toString('base64url'),
+        commentsEnabled: commentsEnabled !== false,
+        commentsModerated: commentsModerated === true,
+        // Unguessable link token. Turning sharing on later issues a fresh one (see lib/shareLinks.ts).
+        shareToken: newShareToken(),
       },
       select: { id: true },
     });

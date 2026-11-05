@@ -3,6 +3,10 @@ import { randomBytes } from 'crypto';
 import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/prisma';
 import { canUsePasswordFlow } from '@/lib/accountStatus';
+import { getClientIp } from '@/lib/clientIp';
+import { RULES, check, consume, firstDenied, tooManyRequests } from '@/lib/rateLimit';
+import { logRef, logSecurity } from '@/lib/securityLog';
+import { hashRecoveryCode } from '@/lib/recoveryCode';
 
 function generateCode(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -54,6 +58,19 @@ export async function POST(req: NextRequest) {
     }
 
     const normalized = email.toLowerCase().trim();
+
+    // One budget per mailbox and per source, shared by "email me a link" and "email me a code", so neither
+    // route can be used to flood someone's inbox. The answer never depends on whether the account exists.
+    const ip = getClientIp(req.headers);
+    const sendBlocked = firstDenied(
+      await consume(RULES.recoveryEmailIp, ip),
+      await consume(RULES.recoveryEmail, normalized),
+    );
+    if (sendBlocked) {
+      logSecurity('recovery.send_throttled', { ref: logRef(normalized), ip: logRef(ip) });
+      return tooManyRequests(sendBlocked, 'reset requests for this account');
+    }
+
     const user = await prisma.user.findUnique({ where: { email: normalized } });
 
     if (user && canUsePasswordFlow(user.status)) {
@@ -61,7 +78,7 @@ export async function POST(req: NextRequest) {
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
       await prisma.user.update({
         where: { id: user.id },
-        data: { templogincode: code, tempLoginCodeExpiresAt: expiresAt },
+        data: { templogincode: hashRecoveryCode(user.email, code), tempLoginCodeExpiresAt: expiresAt },
       });
 
       try {

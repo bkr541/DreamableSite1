@@ -30,6 +30,8 @@ export async function POST(
       const inquiry = await tx.inquiry.findUnique({ where: { id }, include: INCLUDE });
       if (!inquiry) return { kind: 'not_found' as const };
 
+      if (inquiry.archivedAt && !(inquiry.companyRecord && inquiry.user && inquiry.project)) return { kind: 'archived' as const };
+
       const missing = REQUIRED_FIELDS.filter((f) => !inquiry[f]);
       if (missing.length) return { kind: 'missing' as const, missing };
 
@@ -78,6 +80,7 @@ export async function POST(
       return { kind: 'ok' as const, body: toApprovalResponse({ ...approved, companyRecord: company, user, project }) };
     });
 
+    if (result.kind === 'archived') return NextResponse.json({ ok: false, error: 'Restore this inquiry before approving it.' }, { status: 409 });
     if (result.kind === 'not_found') return NextResponse.json({ ok: false, error: 'Inquiry not found.' }, { status: 404 });
     if (result.kind === 'missing') {
       return NextResponse.json({ ok: false, error: `Missing required fields: ${result.missing.join(', ')}.` }, { status: 422 });

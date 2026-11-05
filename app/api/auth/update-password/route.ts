@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 import { statusAfterPasswordFlow } from '@/lib/accountStatus';
+import { getClientIp } from '@/lib/clientIp';
+import { RULES, check, consume, firstDenied, tooManyRequests } from '@/lib/rateLimit';
+import { logRef, logSecurity } from '@/lib/securityLog';
+import { recoveryCodeMatches } from '@/lib/recoveryCode';
 
 const INVALID_CODE = { ok: false, error: 'Invalid or expired code.' };
 
@@ -18,16 +22,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Password must be at least 8 characters.' }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
-    const submitted = code.toUpperCase().trim();
+    const normalizedEmail = email.toLowerCase().trim();
+    const ip = getClientIp(req.headers);
+
+    // Same code-guessing budget as verify-code: this route accepts the code too.
+    const blocked = firstDenied(
+      await consume(RULES.codeIp, ip),
+      await check(RULES.codeIpEmail, ip, normalizedEmail),
+      await check(RULES.codeEmail, normalizedEmail),
+    );
+    if (blocked) {
+      logSecurity('recovery.code_throttled', { ref: logRef(normalizedEmail), ip: logRef(ip) });
+      return tooManyRequests(blocked, 'code attempts');
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
 
     if (
       !user ||
-      !user.templogincode ||
-      user.templogincode.toUpperCase() !== submitted ||
+      !recoveryCodeMatches(normalizedEmail, code, user.templogincode) ||
       !user.tempLoginCodeExpiresAt ||
       user.tempLoginCodeExpiresAt < new Date()
     ) {
+      await consume(RULES.codeIpEmail, ip, normalizedEmail);
+      await consume(RULES.codeEmail, normalizedEmail);
       return NextResponse.json(INVALID_CODE, { status: 400 });
     }
 
@@ -42,7 +60,7 @@ export async function POST(req: NextRequest) {
     const { count } = await prisma.user.updateMany({
       where: {
         id: user.id,
-        templogincode: user.templogincode,
+        templogincode: user.templogincode, // the stored hash: only matches while this exact code is still outstanding
         tempLoginCodeExpiresAt: { gt: new Date() },
         status: { in: ['ACTIVE', 'INVITED'] },
       },

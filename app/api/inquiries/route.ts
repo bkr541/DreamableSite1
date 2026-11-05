@@ -2,185 +2,111 @@ import { after, NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import nodemailer from 'nodemailer';
 import { Prisma } from '@prisma/client';
+import { getClientIp } from '@/lib/clientIp';
+import { RULES, consume, firstDenied, tooManyRequests } from '@/lib/rateLimit';
+import { logRef, logSecurity } from '@/lib/securityLog';
+import { safeEmailAddress } from '@/lib/html';
+import { INQUIRY_EXT, safeFileName } from '@/lib/fileTypes';
+import { validateUpload } from '@/lib/fileValidation';
+import { storageConfigured } from '@/lib/storage';
+import { INQUIRY_UPLOAD_MAX_FILES, verifyInquiryUploads } from '@/lib/uploadFlow';
+import { buildAdminInquiryEmail, buildConfirmationEmail, type InquiryEmailData } from '@/lib/inquiryEmails';
 
-/* ── In-memory rate limiter (best-effort, per-instance) ──────────────────────
-   This is per-instance and not suitable for distributed production.
-   To scale, replace isRateLimited() with a Redis/Upstash-backed implementation
-   that shares state across instances, e.g. @upstash/ratelimit + KV store.     */
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT = 5;       // max requests per window
-const RATE_WINDOW = 60_000; // 60-second window
+/* ── Email delivery ───────────────────────────────────────────────────────────
+   Bodies and headers are built (and escaped) in lib/inquiryEmails.ts; this only talks to SMTP.        */
+type InquiryPayload = InquiryEmailData & { attachments: { filename: string; content: Buffer; contentType: string }[] };
 
-function isRateLimited(ip: string): boolean {
-    const now = Date.now();
-    const entry = rateLimitMap.get(ip);
-    if (!entry || now > entry.resetAt) {
-        rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_WINDOW });
-        return false;
-    }
-    entry.count++;
-    return entry.count > RATE_LIMIT;
-}
-
-/* ── Email notification ───────────────────────────────────────────────────── */
-interface InquiryPayload {
-    inquiryId: string;
-    name: string;
-    email: string;
-    company: string | null;
-    website: string | null;
-    service: string;
-    description: string;
-    budgetRange: string | null;
-    timeline: string | null;
-    phone: string | null;
-    projectName: string | null;
-    utmSource: string | null;
-    utmMedium: string | null;
-    utmCampaign: string | null;
-    utmTerm: string | null;
-    utmContent: string | null;
-    referrer: string | null;
-    attachments: { filename: string; content: Buffer; contentType: string }[];
+function transport() {
+    const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, INQUIRY_TO_EMAIL, INQUIRY_FROM_EMAIL } = process.env;
+    if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
+    const port = Number(SMTP_PORT) || 587;
+    return {
+        mailer: nodemailer.createTransport({ host: SMTP_HOST, port, secure: port === 465, auth: { user: SMTP_USER, pass: SMTP_PASS } }),
+        from: { name: 'Dreamable.studio', address: INQUIRY_FROM_EMAIL || SMTP_USER },
+        to: INQUIRY_TO_EMAIL,
+    };
 }
 
 async function sendInquiryEmail(inquiry: InquiryPayload): Promise<void> {
-    const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, INQUIRY_TO_EMAIL, INQUIRY_FROM_EMAIL } =
-        process.env;
-
-    if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS || !INQUIRY_TO_EMAIL) {
+    const t = transport();
+    if (!t || !t.to) {
         console.warn('[sendInquiryEmail] SMTP not fully configured — skipping email notification.');
         return;
     }
-
-    const port = Number(SMTP_PORT) || 587;
-    const transporter = nodemailer.createTransport({
-        host: SMTP_HOST,
-        port,
-        secure: port === 465,
-        auth: { user: SMTP_USER, pass: SMTP_PASS },
-    });
-
-    const row = (label: string, value: string | null | undefined) =>
-        value
-            ? `<tr>
-                 <td style="padding:8px 12px;font-weight:600;color:#555;white-space:nowrap;vertical-align:top;border-bottom:1px solid #eee;">${label}</td>
-                 <td style="padding:8px 12px;border-bottom:1px solid #eee;">${value}</td>
-               </tr>`
-            : '';
-
-    const html = `
-      <h2 style="font-family:sans-serif;margin-bottom:16px;">New Inquiry — Dreamable.studio</h2>
-      <table style="border-collapse:collapse;font-family:sans-serif;font-size:14px;max-width:640px;width:100%;">
-        ${row('Inquiry ID', inquiry.inquiryId)}
-        ${row('Name', inquiry.name)}
-        ${row('Email', `<a href="mailto:${inquiry.email}">${inquiry.email}</a>`)}
-        ${row('Phone', inquiry.phone)}
-        ${row('Project Name', inquiry.projectName)}
-        ${row('Company', inquiry.company)}
-        ${row('Website', inquiry.website)}
-        ${row('Service', inquiry.service)}
-        ${row('Budget', inquiry.budgetRange)}
-        ${row('Timeline', inquiry.timeline)}
-        ${row('UTM Source', inquiry.utmSource)}
-        ${row('UTM Medium', inquiry.utmMedium)}
-        ${row('UTM Campaign', inquiry.utmCampaign)}
-        ${row('UTM Term', inquiry.utmTerm)}
-        ${row('UTM Content', inquiry.utmContent)}
-        ${row('Referrer', inquiry.referrer)}
-      </table>
-      <h3 style="font-family:sans-serif;margin-top:24px;margin-bottom:8px;">Description</h3>
-      <p style="font-family:sans-serif;font-size:14px;white-space:pre-wrap;background:#f9f9f9;padding:12px;border-radius:4px;max-width:640px;">${inquiry.description}</p>
-      <p style="font-family:sans-serif;font-size:12px;color:#999;margin-top:24px;">Sent from Dreamable.studio contact form</p>
-    `;
-
-    const from = INQUIRY_FROM_EMAIL || SMTP_USER;
-
-    await transporter.sendMail({
-        from: `"Dreamable.studio" <${from}>`,
-        to: INQUIRY_TO_EMAIL,
-        replyTo: inquiry.email,
-        subject: `New Inquiry: ${inquiry.name} — ${inquiry.service}`,
-        html,
-        attachments: inquiry.attachments,
+    const mail = buildAdminInquiryEmail(inquiry);
+    await t.mailer.sendMail({
+        from: t.from,
+        to: t.to,
+        replyTo: mail.replyTo,
+        subject: mail.subject,
+        html: mail.html,
+        text: mail.text,
+        attachments: inquiry.attachments.map(({ filename, content, contentType }) => ({ filename, content, contentType })),
     });
 }
 
-/* ── Confirmation email to the person who submitted the inquiry ───────────── */
-const escapeHtml = (v: string) =>
-    v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
 async function sendConfirmationEmail(to: string, name: string, projectName: string | null): Promise<void> {
-    const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, INQUIRY_FROM_EMAIL } = process.env;
-
-    if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
-        console.warn('[sendConfirmationEmail] SMTP not configured — skipping confirmation email.');
+    const t = transport();
+    const address = safeEmailAddress(to);
+    if (!t || !address) {
+        console.warn('[sendConfirmationEmail] SMTP not configured or address unusable — skipping confirmation email.');
         return;
     }
-
-    const port = Number(SMTP_PORT) || 587;
-    const transporter = nodemailer.createTransport({
-        host: SMTP_HOST,
-        port,
-        secure: port === 465,
-        auth: { user: SMTP_USER, pass: SMTP_PASS },
-    });
-
-    const from = INQUIRY_FROM_EMAIL || SMTP_USER;
-    const firstName = escapeHtml(name.split(' ')[0]);
-    const project = projectName ? ` for <strong>${escapeHtml(projectName)}</strong>` : '';
-
-    await transporter.sendMail({
-        from: `"Dreamable.studio" <${from}>`,
-        to,
-        subject: 'We received your inquiry — Dreamable.studio',
-        html: `
-      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1a1a1a;">
-        <h2 style="font-size:22px;font-weight:600;margin-bottom:16px;">Thanks, ${firstName}!</h2>
-        <p style="color:#555;line-height:1.6;">
-          We received your inquiry${project}. Our team will review it and get back to you within 24 hours.
-          Once it's approved, you'll receive a code to log into the client portal.
-        </p>
-        <p style="color:#aaa;font-size:12px;line-height:1.6;margin-top:28px;">
-          You're receiving this because this email address was used on dreamable.studio.
-        </p>
-      </div>
-    `,
-    });
+    const mail = buildConfirmationEmail(name, projectName);
+    await t.mailer.sendMail({ from: t.from, to: address, subject: mail.subject, html: mail.html, text: mail.text });
 }
 
 /* ── Helpers ── */
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_DESC = 5_000;
+// Generous caps: real input is far smaller, and anything longer is trimmed rather than rejected.
+const MAX_SHORT = 200;
+const MAX_URLISH = 500;
+const MAX_JSON_BODY = 64 * 1024;
 const MAX_FILES = 5;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const ALLOWED_EXT = /\.(pdf|docx?|png|jpe?g|gif|svg|sketch|fig|xd|mp4|mov|webm|txt|md|csv)$/i;
+const MAX_MULTIPART_BYTES = MAX_FILES * MAX_FILE_BYTES + 512 * 1024;
+const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
 
-function trim(val: unknown): string {
-    return typeof val === 'string' ? val.trim() : '';
+function trim(val: unknown, max = MAX_URLISH): string {
+    return typeof val === 'string' ? val.trim().slice(0, max) : '';
+}
+
+/** Cheap spam hints. They never block a visitor; they are stored with the inquiry and logged as counts. */
+function spamSignals(description: string): string[] {
+    const signals: string[] = [];
+    if ((description.match(/https?:\/\//gi) ?? []).length >= 6) signals.push('many-links');
+    if (/(.)\1{30,}/.test(description)) signals.push('repeated-characters');
+    return signals;
 }
 
 /* ── POST /api/inquiries ── */
 export async function POST(req: NextRequest) {
     try {
-        // Rate limit by IP
-        const ip =
-            req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-        if (isRateLimited(ip)) {
-            return NextResponse.json(
-                { ok: false, message: 'Too many requests. Please wait a moment.' },
-                { status: 429 }
-            );
+        // Cheapest checks first, before the body is read. The IP comes from the trusted proxy configuration
+        // (lib/clientIp.ts), so a spoofed forwarding header does not buy a fresh bucket.
+        const ip = getClientIp(req.headers);
+        const ipDecision = await consume(RULES.inquiryIp, ip);
+        if (!ipDecision.allowed) return tooManyRequests(ipDecision, 'requests');
+
+        const declaredBytes = Number(req.headers.get('content-length') ?? 0);
+        const isMultipart = !!req.headers.get('content-type')?.includes('multipart/form-data');
+        if (declaredBytes > (isMultipart ? MAX_MULTIPART_BYTES : MAX_JSON_BODY)) {
+            return NextResponse.json({ ok: false, message: 'That submission is too large.' }, { status: 413 });
         }
 
         let body: Record<string, unknown>;
         let files: File[] = [];
-        if (req.headers.get('content-type')?.includes('multipart/form-data')) {
-            const form = await req.formData();
-            body = JSON.parse(String(form.get('payload') ?? '{}'));
-            files = form.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
-        } else {
-            body = await req.json();
+        try {
+            if (isMultipart) {
+                const form = await req.formData();
+                body = JSON.parse(String(form.get('payload') ?? '{}'));
+                files = form.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
+            } else {
+                body = await req.json();
+            }
+            if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('bad body');
+        } catch {
+            return NextResponse.json({ ok: false, message: 'We could not read that submission. Please try again.' }, { status: 400 });
         }
 
         // Honeypot: if filled, silently succeed without inserting
@@ -189,32 +115,40 @@ export async function POST(req: NextRequest) {
         }
 
         // Extract and normalize fields
-        const name = trim(body.name);
-        const email = trim(body.email);
-        const service = trim(body.service);
-        const description = trim(body.description).slice(0, MAX_DESC);
-        const company = trim(body.company) || null;
+        const name = trim(body.name, 120);
+        const email = trim(body.email, 254);
+        const service = trim(body.service, MAX_SHORT);
+        const description = trim(body.description, MAX_DESC);
+        const company = trim(body.company, MAX_SHORT) || null;
         const website = trim(body.website) || null;
-        const budgetRange = trim(body.budget_range) || null;
-        const timeline = trim(body.timeline) || null;
-        const source = trim(body.source) || null;
+        const budgetRange = trim(body.budget_range, MAX_SHORT) || null;
+        const timeline = trim(body.timeline, MAX_SHORT) || null;
+        const source = trim(body.source, MAX_SHORT) || null;
         const utmSource = trim(body.utm_source) || null;
         const utmMedium = trim(body.utm_medium) || null;
         const utmCampaign = trim(body.utm_campaign) || null;
         const utmTerm = trim(body.utm_term) || null;
         const utmContent = trim(body.utm_content) || null;
         const referrer = trim(body.referrer) || null;
-        const phone = trim(body.phone) || null;
-        const projectName = trim(body.project_name) || null;
+        const phone = trim(body.phone, MAX_SHORT) || null;
+        const projectName = trim(body.project_name, MAX_SHORT) || null;
         const extra = { ...(phone && { phone }), ...(projectName && { projectName }) };
+        const signals = spamSignals(description);
+        // Client-supplied metadata is kept only when it is a small plain object.
+        const clientMeta =
+            body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata) && JSON.stringify(body.metadata).length <= 2000
+                ? (body.metadata as Record<string, unknown>)
+                : {};
         const metadata =
-            body.metadata || Object.keys(extra).length ? { ...(body.metadata ?? {}), ...extra } : null;
+            Object.keys(clientMeta).length || Object.keys(extra).length || signals.length
+                ? { ...clientMeta, ...extra, ...(signals.length && { spamSignals: signals }) }
+                : null;
 
         // Validate required fields
         if (!name) {
             return NextResponse.json({ ok: false, message: 'Name is required.' }, { status: 400 });
         }
-        if (!email || !EMAIL_RE.test(email)) {
+        if (!email || !safeEmailAddress(email)) {
             return NextResponse.json(
                 { ok: false, message: 'A valid email is required.' },
                 { status: 400 }
@@ -246,53 +180,99 @@ export async function POST(req: NextRequest) {
                     { status: 400 }
                 );
             }
-            if (!ALLOWED_EXT.test(f.name)) {
+            if (!INQUIRY_EXT.test(f.name)) {
                 return NextResponse.json(
                     { ok: false, message: `${f.name} is not a supported file type.` },
                     { status: 400 }
                 );
             }
         }
-        const attachments = await Promise.all(
-            files.map(async (f) => ({
-                filename: f.name,
-                contentType: f.type || 'application/octet-stream',
-                content: Buffer.from(await f.arrayBuffer()),
-            }))
-        );
+        // Files sent with the form itself (used when object storage isn't configured). Their real bytes are checked.
+        const attachments: { filename: string; content: Buffer; contentType: string; sha256: string }[] = [];
+        for (const f of files) {
+            const bytes = new Uint8Array(await f.arrayBuffer());
+            const checked = await validateUpload({ fileName: safeFileName(f.name), declaredType: f.type, bytes });
+            if (!checked.ok) return NextResponse.json({ ok: false, message: checked.error }, { status: 400 });
+            attachments.push({ filename: safeFileName(f.name), content: Buffer.from(bytes), contentType: checked.contentType, sha256: checked.sha256 });
+        }
+
+        // Files uploaded straight to storage beforehand are referenced by id (see /api/inquiries/uploads).
+        const uploadIds: string[] = Array.isArray(body.uploadIds)
+            ? [...new Set(body.uploadIds.filter((v): v is string => typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v)))]
+            : [];
+        if (uploadIds.length && !storageConfigured()) {
+            return NextResponse.json({ ok: false, message: 'Attachments are unavailable right now. Please try again.' }, { status: 400 });
+        }
+        if (files.length + uploadIds.length > INQUIRY_UPLOAD_MAX_FILES) {
+            return NextResponse.json({ ok: false, message: `You can attach up to ${INQUIRY_UPLOAD_MAX_FILES} files.` }, { status: 400 });
+        }
+
+        // The same address can't be used to bury the inbox, and an accidental double-submit or a retry after a
+        // dropped connection is answered with the original inquiry instead of creating (and emailing) a copy.
+        if (process.env.DATABASE_URL) {
+            const existing = await prisma.inquiry.findFirst({
+                where: { email, description, createdAt: { gt: new Date(Date.now() - DUPLICATE_WINDOW_MS) } },
+                select: { id: true },
+            });
+            if (existing) return NextResponse.json({ ok: true, inquiryId: existing.id });
+        }
+        const emailDecision = await consume(RULES.inquiryEmail, email);
+        if (!emailDecision.allowed) return tooManyRequests(emailDecision, 'requests for this email address');
+
+        if (signals.length) logSecurity('inquiry.spam_signal', { signals: signals.join(','), ref: logRef(ip) });
+
+        // Verify pre-uploaded files before anything is saved: if one is not what it claims to be, nothing is attached.
+        let claimed: Awaited<ReturnType<typeof verifyInquiryUploads>> = { ok: true, files: [] };
+        if (uploadIds.length) {
+            claimed = await verifyInquiryUploads(uploadIds);
+            if (!claimed.ok) return NextResponse.json({ ok: false, message: claimed.error }, { status: 400 });
+        }
+        const storedFiles = claimed.ok ? claimed.files : [];
 
         // Persist to database
         let inquiryId = 'demo-' + Date.now();
 
         if (process.env.DATABASE_URL) {
-            const inquiry = await prisma.inquiry.create({
-                data: {
-                    name,
-                    email,
-                    company,
-                    website,
-                    service,
-                    description,
-                    budgetRange,
-                    timeline,
-                    source,
-                    utmSource,
-                    utmMedium,
-                    utmCampaign,
-                    utmTerm,
-                    utmContent,
-                    referrer,
-                    metadata: metadata as Prisma.InputJsonValue | undefined,
-                    attachments: {
-                        create: attachments.map((a) => ({
-                            fileName: a.filename,
-                            contentType: a.contentType,
-                            size: a.content.length,
-                            data: new Uint8Array(a.content),
-                        })),
+            const inquiry = await prisma.$transaction(async (tx) => {
+                const created = await tx.inquiry.create({
+                    data: {
+                        name,
+                        email,
+                        company,
+                        website,
+                        service,
+                        description,
+                        budgetRange,
+                        timeline,
+                        source,
+                        utmSource,
+                        utmMedium,
+                        utmCampaign,
+                        utmTerm,
+                        utmContent,
+                        referrer,
+                        metadata: metadata as Prisma.InputJsonValue | undefined,
+                        attachments: {
+                            create: attachments.map((a) => ({
+                                fileName: a.filename,
+                                contentType: a.contentType,
+                                size: a.content.length,
+                                sha256: a.sha256,
+                                data: new Uint8Array(a.content),
+                            })),
+                        },
                     },
-                },
-                select: { id: true },
+                    select: { id: true },
+                });
+                // Claim the pre-uploaded files in the same transaction: they become visible only if the inquiry is saved.
+                for (const f of storedFiles) {
+                    const { count } = await tx.inquiryAttachment.updateMany({
+                        where: { id: f.id, status: 'PENDING', inquiryId: null },
+                        data: { inquiryId: created.id, status: 'READY', size: f.size, sha256: f.sha256, contentType: f.contentType },
+                    });
+                    if (count !== 1) throw new Error('attachment was no longer available');
+                }
+                return created;
             });
             inquiryId = inquiry.id;
         } else if (process.env.NODE_ENV === 'production') {
@@ -331,6 +311,7 @@ export async function POST(req: NextRequest) {
             utmContent,
             referrer,
             attachments,
+            storedAttachments: storedFiles.map((f) => ({ name: f.fileName, size: f.size })),
             }).catch((err) => {
                 console.error('[sendInquiryEmail] Failed to send notification:', err);
             });

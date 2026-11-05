@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NoopStore } from './pg';
+import { setRateLimitStore } from '@/lib/rateLimit';
 import { req, setSecrets } from './helpers';
 
 const db = vi.hoisted(() => ({ user: null as any }));
@@ -14,7 +16,7 @@ import { prisma } from '@/lib/prisma';
 const login = (password = 'right-password') => POST(req('/x', { body: { email: 'a@x.com', password } }));
 const u = (status: string) => ({ id: 'u1', name: 'A', email: 'a@x.com', admin: false, status, passwordHash: 'h', sessionVersion: 4 });
 
-beforeEach(() => { setSecrets(); vi.clearAllMocks(); });
+beforeEach(() => { setRateLimitStore(new NoopStore()); setSecrets(); vi.clearAllMocks(); });
 
 describe('login honours account status', () => {
   it('ACTIVE signs in and the cookie carries the current session version', async () => {

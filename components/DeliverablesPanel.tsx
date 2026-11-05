@@ -23,6 +23,7 @@ import { Avatar } from '@/components/RecordList';
 import { canWatermarkName } from '@/lib/watermarkTypes';
 import { PreviewFile, formatBytes } from '@/components/FilePreviewModal';
 import { getDeliverableCategories, OTHER_CATEGORY } from '@/lib/deliverables';
+import { pool, putFile } from '@/lib/clientUpload';
 
 export interface FolderRecord {
   id: string;
@@ -32,6 +33,10 @@ export interface FolderRecord {
   description: string | null;
   isPublic: boolean;
   shareToken: string;
+  commentsEnabled: boolean;
+  commentsModerated: boolean;
+  /** When the link was last replaced (rotated, or sharing turned off/on). */
+  shareRotatedAt: string | null;
   createdAt: string;
 }
 
@@ -53,6 +58,8 @@ export interface CommentRecord {
   deliverableId: string;
   authorName: string;
   body: string;
+  /** APPROVED = public, PENDING = waiting for review, HIDDEN = removed from the public link. */
+  status: string;
   createdAt: string;
 }
 
@@ -110,6 +117,8 @@ function Dialog({ title, onClose, children, busy = false }: { title: string; onC
   );
 }
 
+export interface FolderValues { name: string; description: string; isPublic: boolean; commentsEnabled: boolean; commentsModerated: boolean }
+
 /** Create / edit folder form. */
 function FolderDialog({
   folder,
@@ -120,21 +129,49 @@ function FolderDialog({
   folder: FolderRecord | null;
   suggestions: string[];
   onClose: () => void;
-  onSave: (v: { name: string; description: string; isPublic: boolean }) => Promise<string | null>;
+  onSave: (v: FolderValues) => Promise<string | null>;
 }) {
   const toast = useToast();
+  const router = useRouter();
   const [name, setName] = useState(folder?.name ?? '');
   const [description, setDescription] = useState(folder?.description ?? '');
   const [isPublic, setIsPublic] = useState(folder?.isPublic ?? false);
+  const [commentsEnabled, setCommentsEnabled] = useState(folder?.commentsEnabled ?? true);
+  const [commentsModerated, setCommentsModerated] = useState(folder?.commentsModerated ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [armed, setArmed] = useState(false);
+  const [rotating, setRotating] = useState(false);
+
+  // Rotating breaks every copy of the old link, so it takes two deliberate clicks.
+  async function rotateLink() {
+    if (!folder) return;
+    if (!armed) { setArmed(true); setTimeout(() => setArmed(false), 5000); return; }
+    setRotating(true);
+    setArmed(false);
+    try {
+      const res = await fetch(`/api/admin/deliverable-folders/${folder.id}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rotate' }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Could not replace the link.');
+      toast.success('Link replaced', 'The old link no longer works. Copy the new one to share it.');
+      router.refresh();
+    } catch (err) {
+      toast.error('Could not replace the link', err instanceof Error ? err.message : undefined);
+    } finally {
+      setRotating(false);
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) { setError('Folder name is required.'); return; }
     setSaving(true);
     setError('');
-    const err = await onSave({ name, description, isPublic });
+    const err = await onSave({ name, description, isPublic, commentsEnabled, commentsModerated });
     setSaving(false);
     if (err) setError(err);
   }
@@ -189,7 +226,7 @@ function FolderDialog({
         <div className="rounded-xl border border-[#E4E8F3] bg-[#F6F7FB] p-4 space-y-2">
           <Toggle checked={isPublic} onChange={setIsPublic} label="Publicly accessible" id="folder-public" />
           <p className="text-xs leading-relaxed text-[#777]">
-            When on, anyone with this folder&apos;s shared link can view the files inside it. When off, the link stops working.
+            When on, anyone with this folder&apos;s shared link can view the files inside it. Turning it off stops the link working straight away, and turning it on again creates a brand-new link — the old one never comes back.
           </p>
           {/* Always the same height, whatever the toggle shows, so the dialog never resizes. */}
           <div className="h-9 flex items-center">
@@ -203,11 +240,28 @@ function FolderDialog({
                 >
                   Copy
                 </button>
+                <button
+                  type="button"
+                  onClick={rotateLink}
+                  disabled={rotating}
+                  title="Replace the link. Anyone using the old one loses access immediately."
+                  className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all disabled:opacity-50 ${armed ? 'border-[#e05252] bg-[#e05252] text-white' : 'border-[#D0D0D0] text-[#555] hover:bg-[#F5F5F5]'}`}
+                >
+                  {rotating ? 'Replacing…' : armed ? 'Break old link?' : 'New link'}
+                </button>
               </div>
             ) : isPublic ? (
               <p className="text-xs text-[#777]">The shared link is created when you save.</p>
             ) : null}
           </div>
+        </div>
+
+        <div className="rounded-xl border border-[#E4E8F3] bg-[#F6F7FB] p-4 space-y-3">
+          <Toggle checked={commentsEnabled} onChange={setCommentsEnabled} label="Allow comments" id="folder-comments" />
+          <Toggle checked={commentsEnabled && commentsModerated} onChange={setCommentsModerated} label="Review comments before they appear" id="folder-moderated" disabled={!commentsEnabled} />
+          <p className="text-xs leading-relaxed text-[#777]">
+            Visitors type their own name, so comments are always shown as unverified. Reviewing lets you approve each one first.
+          </p>
         </div>
 
         <p className="h-5 text-sm text-[#e05252]">{error}</p>
@@ -296,6 +350,10 @@ interface PendingFile {
   title: string;
   description: string;
   watermark: boolean;
+  /** Direct-upload state: uploading shows a progress bar, verifying is the server's check, failed keeps the file for a retry. */
+  state?: 'uploading' | 'verifying' | 'failed';
+  progress?: number;
+  failure?: string;
 }
 
 /** Choose files, review thumbnails, set each artifact's title / description / watermark, then upload. */
@@ -332,6 +390,42 @@ function UploadSection({ folder }: { folder: FolderRecord }) {
   const patch = (index: number, change: Partial<PendingFile>) =>
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...change } : it)));
 
+  async function uploadLegacy() {
+    const body = new FormData();
+    body.append('folderId', folder.id);
+    items.forEach((it) => body.append('files', it.file));
+    body.append('titles', JSON.stringify(items.map((it) => it.title)));
+    body.append('descriptions', JSON.stringify(items.map((it) => it.description)));
+    body.append('watermarks', JSON.stringify(items.map((it) => it.watermark)));
+    const res = await fetch('/api/admin/deliverables', { method: 'POST', body });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Upload failed.');
+    return data.count as number;
+  }
+
+  /** Each file goes straight to storage with its own progress, then the server verifies it before it appears. */
+  async function uploadDirect(grants: { id: string; uploadUrl: string; contentType: string }[]) {
+    const done = new Set<number>();
+    await pool(items.length, 3, async (i) => {
+      const it = items[i];
+      const grant = grants[i];
+      patch(i, { state: 'uploading', progress: 0, failure: undefined });
+      try {
+        await putFile(grant.uploadUrl, it.file, grant.contentType, (p) => patch(i, { progress: p }));
+        patch(i, { state: 'verifying', progress: 1 });
+        const res = await fetch(`/api/admin/deliverables/${grant.id}/complete`, { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data.error || 'The file could not be verified.');
+        done.add(i);
+      } catch (err) {
+        patch(i, { state: 'failed', failure: err instanceof Error ? err.message : 'Upload failed.' });
+        // Nothing half-finished stays behind: this removes the pending record and any stored bytes.
+        fetch(`/api/admin/deliverables/${grant.id}`, { method: 'DELETE' }).catch(() => {});
+      }
+    });
+    return done;
+  }
+
   async function upload() {
     if (items.length === 0) { setError('Choose at least one file.'); return; }
     const missing = items.findIndex((it) => !it.title.trim());
@@ -340,24 +434,45 @@ function UploadSection({ folder }: { folder: FolderRecord }) {
     setUploading(true);
     setError('');
     try {
-      const body = new FormData();
-      body.append('folderId', folder.id);
-      items.forEach((it) => body.append('files', it.file));
-      body.append('titles', JSON.stringify(items.map((it) => it.title)));
-      body.append('descriptions', JSON.stringify(items.map((it) => it.description)));
-      body.append('watermarks', JSON.stringify(items.map((it) => it.watermark)));
-      const res = await fetch('/api/admin/deliverables', { method: 'POST', body });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || 'Upload failed.');
-      toast.success(
-        data.count === 1 ? 'File uploaded' : 'Files uploaded',
-        `${data.count} ${data.count === 1 ? 'file was' : 'files were'} added to “${folder.name}”.`,
-      );
-      urlsRef.current.forEach((u) => URL.revokeObjectURL(u));
-      urlsRef.current = [];
-      setItems([]);
-      setInputKey((k) => k + 1);
-      router.refresh();
+      const init = await fetch('/api/admin/deliverables/uploads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folderId: folder.id,
+          files: items.map((it) => ({ name: it.file.name, size: it.file.size, contentType: it.file.type, title: it.title, description: it.description, watermark: it.watermark })),
+        }),
+      });
+      const plan = await init.json();
+      if (!init.ok || !plan.ok) throw new Error(plan.error || 'Upload failed.');
+
+      let count: number;
+      let failed = 0;
+      if (plan.mode === 'legacy') {
+        count = await uploadLegacy();
+      } else {
+        const done = await uploadDirect(plan.files);
+        count = done.size;
+        failed = items.length - done.size;
+        // Successful files leave the list; failed ones stay (with the reason) so they can be retried.
+        setItems((prev) => {
+          prev.forEach((it, i) => { if (done.has(i)) URL.revokeObjectURL(it.previewUrl); });
+          return prev.filter((_, i) => !done.has(i)).map((it) => ({ ...it, state: it.state === 'failed' ? 'failed' : undefined, progress: undefined }));
+        });
+      }
+
+      if (count > 0) {
+        toast.success(count === 1 ? 'File uploaded' : 'Files uploaded', `${count} ${count === 1 ? 'file was' : 'files were'} added to “${folder.name}”.`);
+        router.refresh();
+      }
+      if (failed > 0) {
+        setError(`${failed} ${failed === 1 ? 'file' : 'files'} didn’t upload. See the message on each file, then try again.`);
+        toast.error('Some files didn’t upload', `${failed} failed — they are still in the list so you can retry.`);
+      } else {
+        urlsRef.current.forEach((u) => URL.revokeObjectURL(u));
+        urlsRef.current = [];
+        setItems([]);
+        setInputKey((k) => k + 1);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.');
       toast.error('Upload failed', err instanceof Error ? err.message : undefined);
@@ -405,8 +520,22 @@ function UploadSection({ folder }: { folder: FolderRecord }) {
                 <div className="min-w-0 flex-1 space-y-2.5">
                   <div className="flex items-center justify-between gap-3">
                     <p className="min-w-0 truncate text-xs text-[#888]" title={it.file.name}>{it.file.name} · {formatBytes(it.file.size)}</p>
-                    <button type="button" onClick={() => removeItem(i)} className="shrink-0 text-xs font-medium text-[#999] hover:text-[#e05252] transition-colors">Remove</button>
+                    <button type="button" onClick={() => removeItem(i)} disabled={uploading} className="shrink-0 text-xs font-medium text-[#999] disabled:opacity-40 hover:text-[#e05252] transition-colors">Remove</button>
                   </div>
+                  {it.state && (
+                    <div aria-live="polite">
+                      {it.state === 'failed' ? (
+                        <p className="text-xs font-medium text-[#e05252]">{it.failure}</p>
+                      ) : (
+                        <>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#E4E8F3]" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round((it.progress ?? 0) * 100)}>
+                            <div className="h-full rounded-full bg-gradient-to-r from-[#3DD9C8] via-[#7BB5F5] to-[#B87AF5] transition-[width] duration-150" style={{ width: `${Math.round((it.progress ?? 0) * 100)}%` }} />
+                          </div>
+                          <p className="mt-1 text-[11px] text-[#888]">{it.state === 'verifying' ? 'Checking the file…' : `Uploading… ${Math.round((it.progress ?? 0) * 100)}%`}</p>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 md:grid-cols-[1fr_1.4fr] gap-3">
                     <div className="flex flex-col gap-1">
                       <label htmlFor={`file-title-${i}`} className="text-xs font-medium text-[#555]">Title <span className="text-red-400">*</span></label>
@@ -505,6 +634,21 @@ function ArtifactCard({
     }
   }
 
+  async function moderate(c: CommentRecord, status: 'APPROVED' | 'HIDDEN') {
+    try {
+      const res = await fetch(`/api/admin/deliverable-comments/${c.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success(status === 'APPROVED' ? 'Comment approved' : 'Comment hidden', status === 'APPROVED' ? `The comment from ${c.authorName} is now visible on the shared link.` : `The comment from ${c.authorName} is no longer shown on the shared link.`);
+      router.refresh();
+    } catch {
+      toast.error('Could not update comment', 'Please try again.');
+    }
+  }
+
   return (
     <li className="flex flex-col rounded-2xl border border-[#E2E4EA] bg-white shadow-sm">
       <div className="flex gap-4 p-4">
@@ -551,9 +695,18 @@ function ArtifactCard({
                 <div className="min-w-0 flex-1">
                   <p className="flex flex-wrap items-baseline gap-x-2 text-xs">
                     <span className="font-semibold text-[#1a1a1a]">{c.authorName}</span>
+                    <span className="rounded-full bg-[#F1F2F5] px-1.5 py-px text-[10px] font-semibold text-[#888]" title="Guests type their own name; it hasn't been verified.">Guest · unverified</span>
+                    {c.status === 'PENDING' && <span className="rounded-full bg-amber-100 px-1.5 py-px text-[10px] font-semibold text-amber-700">Awaiting review</span>}
+                    {c.status === 'HIDDEN' && <span className="rounded-full bg-red-100 px-1.5 py-px text-[10px] font-semibold text-red-600">Hidden</span>}
                     <span className="text-[#999]">{formatWhen(c.createdAt)}</span>
                   </p>
                   <p className="mt-0.5 text-sm leading-snug text-[#444] whitespace-pre-wrap break-words">{c.body}</p>
+                  {c.status !== 'APPROVED' && (
+                    <button type="button" onClick={() => moderate(c, 'APPROVED')} className="mt-1.5 text-xs font-semibold text-[#4f6df5] hover:underline">Approve</button>
+                  )}
+                  {c.status !== 'HIDDEN' && (
+                    <button type="button" onClick={() => moderate(c, 'HIDDEN')} className={`mt-1.5 text-xs font-semibold text-[#888] hover:underline ${c.status !== 'APPROVED' ? 'ml-3' : ''}`}>Hide</button>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -608,7 +761,7 @@ export default function DeliverablesPanel({ targetType, targetId, service, folde
   const copyLink = (folder: FolderRecord) =>
     navigator.clipboard.writeText(shareUrl(folder.shareToken)).then(() => toast.success('Link copied', `The shared link for “${folder.name}” is on your clipboard.`));
 
-  async function saveFolder(values: { name: string; description: string; isPublic: boolean }): Promise<string | null> {
+  async function saveFolder(values: FolderValues): Promise<string | null> {
     const editing = dialog?.mode === 'edit' ? dialog.folder : null;
     try {
       const res = editing

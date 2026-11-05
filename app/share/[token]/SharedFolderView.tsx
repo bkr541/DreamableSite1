@@ -34,12 +34,15 @@ function CommentsDialog({
   token,
   file,
   comments,
+  enabled,
   onPosted,
   onClose,
 }: {
   token: string;
   file: SharedFile;
   comments: SharedComment[];
+  /** false when the folder owner has turned comments off: existing comments stay readable, posting is closed. */
+  enabled: boolean;
   onPosted: (c: SharedComment) => void;
   onClose: () => void;
 }) {
@@ -51,6 +54,20 @@ function CommentsDialog({
   const [website, setWebsite] = useState(''); // honeypot
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  // After a "too many comments" answer the button counts down instead of letting people hammer it.
+  const [until, setUntil] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+  const waitSec = Math.max(0, Math.ceil((until - now) / 1000));
+
+  useEffect(() => {
+    if (until <= Date.now()) return;
+    const t = setInterval(() => {
+      setNow(Date.now());
+      if (Date.now() >= until) clearInterval(t);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [until]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -64,6 +81,7 @@ function CommentsDialog({
     if (!text.trim()) { setError('Please write a comment.'); return; }
     setPosting(true);
     setError('');
+    setNotice('');
     try {
       const res = await fetch(`/api/share/${token}/files/${file.id}/comments`, {
         method: 'POST',
@@ -71,9 +89,15 @@ function CommentsDialog({
         body: JSON.stringify({ name, body: text, website }),
       });
       const data = await res.json();
+      if (res.status === 429 && typeof data.retryAfterSeconds === 'number') {
+        const t = Date.now();
+        setNow(t);
+        setUntil(t + Math.min(data.retryAfterSeconds, 3600) * 1000);
+      }
       if (!res.ok || !data.ok) throw new Error(data.error || 'Could not post your comment.');
       try { localStorage.setItem(NAME_KEY, name.trim()); } catch {}
       if (data.comment) onPosted(data.comment);
+      if (data.pending) setNotice(data.message || 'Thanks! Your comment will appear once it has been reviewed.');
       setText('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not post your comment.');
@@ -110,6 +134,7 @@ function CommentsDialog({
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-baseline gap-x-2 text-xs">
                       <span className="font-semibold text-[#1a1a1a]">{c.authorName}</span>
+                      <span className="rounded-full bg-white px-1.5 py-px text-[10px] font-semibold text-[#888]" title="Anyone with the link can type any name; it hasn't been verified.">Guest · unverified</span>
                       <span className="text-[#999]">{formatWhen(c.createdAt)}</span>
                     </p>
                     <p className="mt-0.5 text-sm leading-snug text-[#444] whitespace-pre-wrap break-words">{c.body}</p>
@@ -120,6 +145,7 @@ function CommentsDialog({
           )}
         </div>
 
+        {enabled ? (
         <form onSubmit={submit} noValidate className="space-y-3 border-t border-[#F0F0F0] bg-[#FAFBFD] px-6 py-5">
           <input
             type="text"
@@ -143,13 +169,20 @@ function CommentsDialog({
           <div className="absolute -left-[9999px]" aria-hidden="true">
             <input type="text" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
           </div>
+          {notice && <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700" role="status">{notice}</p>}
+          <p className="text-xs text-[#999]">Names aren&apos;t verified — anyone with this link can type any name.</p>
           <div className="flex items-center justify-between gap-3">
-            <p className="min-h-5 text-sm text-[#e05252]">{error}</p>
-            <button type="submit" disabled={posting} className="shrink-0 inline-flex h-10 items-center rounded-full bg-[#1a2030] px-6 text-sm font-semibold text-white hover:-translate-y-0.5 hover:shadow-md transition-all disabled:opacity-50 disabled:hover:translate-y-0">
-              {posting ? 'Posting…' : 'Post comment'}
+            <p className="min-h-5 text-sm text-[#e05252]" role="alert">{error}</p>
+            <button type="submit" disabled={posting || waitSec > 0} className="shrink-0 inline-flex h-10 items-center rounded-full bg-[#1a2030] px-6 text-sm font-semibold text-white hover:-translate-y-0.5 hover:shadow-md transition-all disabled:opacity-50 disabled:hover:translate-y-0">
+              {posting ? 'Posting…' : waitSec > 0 ? `Try again in ${waitSec >= 60 ? `${Math.ceil(waitSec / 60)} min` : `${waitSec}s`}` : 'Post comment'}
             </button>
           </div>
         </form>
+        ) : (
+        <div className="border-t border-[#F0F0F0] bg-[#FAFBFD] px-6 py-5">
+          <p className="text-sm text-[#888]">Comments are turned off for this folder.</p>
+        </div>
+        )}
       </div>
     </div>
   );
@@ -162,9 +195,10 @@ interface Props {
   projectName: string | null;
   files: SharedFile[];
   comments: SharedComment[];
+  commentsEnabled: boolean;
 }
 
-export default function SharedFolderView({ token, name, description, projectName, files, comments: initialComments }: Props) {
+export default function SharedFolderView({ token, name, description, projectName, files, comments: initialComments, commentsEnabled }: Props) {
   const [preview, setPreview] = useState<PreviewFile | null>(null);
   const [comments, setComments] = useState<SharedComment[]>(initialComments);
   const [commentFileId, setCommentFileId] = useState<string | null>(null);
@@ -276,6 +310,7 @@ export default function SharedFolderView({ token, name, description, projectName
           token={token}
           file={commentFile}
           comments={comments.filter((c) => c.deliverableId === commentFile.id)}
+          enabled={commentsEnabled}
           onPosted={(c) => setComments((prev) => [...prev, c])}
           onClose={() => setCommentFileId(null)}
         />

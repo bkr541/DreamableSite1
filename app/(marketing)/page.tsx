@@ -10,6 +10,7 @@ import HeroRibbons from '@/components/HeroRibbons';
 import CubePuzzle from '@/components/CubePuzzle';
 import HeroCarousel from '@/components/HeroCarousel';
 import { formatPhone } from '@/lib/utils';
+import { pool, putFile } from '@/lib/clientUpload';
 import CustomSelect from '@/components/CustomSelect';
 import Image from 'next/image';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -57,6 +58,8 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [submitError, setSubmitError] = useState('');
+  // Upload progress (0-1) while attachments are sent straight to storage; null when not uploading.
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [fieldError, setFieldError] = useState<{ field: string; message: string } | null>(null);
 
   const handleNext = () => {
@@ -94,31 +97,56 @@ export default function Home() {
       // Read UTM params from URL
       const params = new URLSearchParams(window.location.search);
 
-      const res = await fetch('/api/inquiries', {
-        method: 'POST',
-        body: (() => {
-          const body = new FormData();
-          body.append('payload', JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          service: formData.projectType,
-          description: formData.message,
-          budget_range: formData.budgetRange,
-          timeline: formData.timeline,
-          phone: formData.phone || undefined,
-          project_name: formData.projectName,
-          website_hp: honeypot, // honeypot
-          utm_source: params.get('utm_source') || undefined,
-          utm_medium: params.get('utm_medium') || undefined,
-          utm_campaign: params.get('utm_campaign') || undefined,
-          utm_term: params.get('utm_term') || undefined,
-          utm_content: params.get('utm_content') || undefined,
-          referrer: document.referrer || undefined,
-          }));
-          attachments.forEach((file) => body.append('files', file));
-          return body;
-        })(),
-      });
+      const payload = {
+        name: formData.name,
+        email: formData.email,
+        service: formData.projectType,
+        description: formData.message,
+        budget_range: formData.budgetRange,
+        timeline: formData.timeline,
+        phone: formData.phone || undefined,
+        project_name: formData.projectName,
+        website_hp: honeypot, // honeypot
+        utm_source: params.get('utm_source') || undefined,
+        utm_medium: params.get('utm_medium') || undefined,
+        utm_campaign: params.get('utm_campaign') || undefined,
+        utm_term: params.get('utm_term') || undefined,
+        utm_content: params.get('utm_content') || undefined,
+        referrer: document.referrer || undefined,
+      };
+
+      // Large attachments go straight to file storage (with progress) instead of through the form post.
+      let uploadIds: string[] | null = null;
+      if (attachments.length > 0) {
+        const grantRes = await fetch('/api/inquiries/uploads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ files: attachments.map((f) => ({ name: f.name, size: f.size, contentType: f.type })) }),
+        });
+        const plan = await grantRes.json();
+        if (!grantRes.ok || !plan.ok) throw new Error(plan.message || 'Your files could not be uploaded. Please try again.');
+        if (plan.mode === 'direct') {
+          const done = new Array<number>(attachments.length).fill(0);
+          const report = () => setUploadProgress(done.reduce((a, b) => a + b, 0) / done.length);
+          setUploadProgress(0);
+          await pool(attachments.length, 3, async (i) => {
+            await putFile(plan.files[i].uploadUrl, attachments[i], plan.files[i].contentType, (p) => { done[i] = p; report(); });
+          });
+          uploadIds = plan.files.map((f: { id: string }) => f.id);
+        }
+      }
+
+      const res = uploadIds
+        ? await fetch('/api/inquiries', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, uploadIds }) })
+        : await fetch('/api/inquiries', {
+            method: 'POST',
+            body: (() => {
+              const body = new FormData();
+              body.append('payload', JSON.stringify(payload));
+              attachments.forEach((file) => body.append('files', file));
+              return body;
+            })(),
+          });
 
       const data = await res.json();
 
@@ -136,6 +164,7 @@ export default function Home() {
       setSubmitError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
       setSubmitting(false);
+      setUploadProgress(null);
     }
   };
 
@@ -530,7 +559,7 @@ export default function Home() {
                         {step === 0 ? 'Get Started' : 'Next'}
                         <HugeiconsIcon icon={ArrowRight01Icon} size={16} color="currentColor" strokeWidth={2} />
                       </>
-                    ) : submitting ? 'Sending…' : 'Send'}
+                    ) : submitting ? (uploadProgress !== null ? `Uploading files… ${Math.round(uploadProgress * 100)}%` : 'Sending…') : 'Send'}
                   </button>
                   <div className="flex items-center justify-end gap-1.5 min-w-0">
                     {step === LAST_STEP && (

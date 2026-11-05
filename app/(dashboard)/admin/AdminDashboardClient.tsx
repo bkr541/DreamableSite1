@@ -27,6 +27,8 @@ import {
   UserAdd02Icon,
   CancelCircleIcon,
   Delete04Icon,
+  Archive02Icon,
+  ArchiveArrowUpIcon,
   Delete02Icon,
   ArrowDown01Icon,
   ArrowLeft01Icon,
@@ -71,6 +73,8 @@ interface OpenInquiry {
   timeline: string | null;
   status: string;
   createdAt: string;
+  /** Set when the lead is archived: hidden from the open list, but nothing linked to it changes. */
+  archivedAt: string | null;
   attachments: { id: string; fileName: string; size: number }[];
 }
 
@@ -157,6 +161,7 @@ interface Props {
 
 const STATUS_COLORS: Record<string, string> = {
   INQUIRY: 'bg-amber-100 text-amber-700',
+  ARCHIVED: 'bg-gray-200 text-gray-600',
   APPROVED: 'bg-green-100 text-green-700',
   REJECTED: 'bg-red-100 text-red-700',
   ACTIVE: 'bg-blue-100 text-blue-700',
@@ -315,9 +320,9 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
 
   const [detailTab, setDetailTab] = useState<DetailTab>(initialTab);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(initialFolderId);
-  const [inquiryToDelete, setInquiryToDelete] = useState<OpenInquiry | null>(null);
-  const [deletingInquiry, setDeletingInquiry] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
+  const [inquiryToArchive, setInquiryToArchive] = useState<OpenInquiry | null>(null);
+  const [archivingInquiry, setArchivingInquiry] = useState(false);
+  const [archiveError, setArchiveError] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId);
   const [projectDirection, setProjectDirection] = useState(1);
   const selectedProject = projects.find(p => p.id === selectedProjectId) ?? null;
@@ -349,27 +354,48 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
       const q = inquiryFilter.search.toLowerCase();
       if (![i.name, i.email, i.projectName ?? ''].some(v => v.toLowerCase().includes(q))) return false;
     }
-    if (inquiryFilter.status && i.status !== inquiryFilter.status) return false;
+    // Archived leads are out of the way unless that filter is chosen.
+    if (inquiryFilter.status === 'ARCHIVED') { if (!i.archivedAt) return false; }
+    else if (i.archivedAt) return false;
+    if (inquiryFilter.status && inquiryFilter.status !== 'ARCHIVED' && i.status !== inquiryFilter.status) return false;
     if (inquiryFilter.service && i.service !== inquiryFilter.service) return false;
     return true;
   });
 
-  async function confirmDeleteInquiry() {
-    if (!inquiryToDelete) return;
-    setDeletingInquiry(true);
-    setDeleteError('');
+  async function setInquiryArchived(inq: OpenInquiry, archived: boolean) {
+    const res = await fetch(`/api/admin/inquiries/${inq.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ archived }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || `Could not ${archived ? 'archive' : 'restore'} this inquiry.`);
+  }
+
+  async function confirmArchiveInquiry() {
+    if (!inquiryToArchive) return;
+    setArchivingInquiry(true);
+    setArchiveError('');
     try {
-      const res = await fetch(`/api/admin/inquiries/${inquiryToDelete.id}`, { method: 'DELETE' });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || 'Could not delete this inquiry.');
-      toast.success('Inquiry deleted', `The inquiry from ${inquiryToDelete.name} was permanently deleted.`);
-      setInquiryToDelete(null);
+      await setInquiryArchived(inquiryToArchive, true);
+      toast.success('Inquiry archived', `The inquiry from ${inquiryToArchive.name} was archived. Its project, files and shared links are unchanged.`);
+      setInquiryToArchive(null);
       router.refresh();
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Could not delete this inquiry.');
-      toast.error('Could not delete inquiry', err instanceof Error ? err.message : undefined);
+      setArchiveError(err instanceof Error ? err.message : 'Could not archive this inquiry.');
+      toast.error('Could not archive inquiry', err instanceof Error ? err.message : undefined);
     } finally {
-      setDeletingInquiry(false);
+      setArchivingInquiry(false);
+    }
+  }
+
+  async function restoreInquiry(inq: OpenInquiry) {
+    try {
+      await setInquiryArchived(inq, false);
+      toast.success('Inquiry restored', `The inquiry from ${inq.name} is back in the open list.`);
+      router.refresh();
+    } catch (err) {
+      toast.error('Could not restore inquiry', err instanceof Error ? err.message : undefined);
     }
   }
 
@@ -987,7 +1013,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 label="Status"
                 value={inquiryFilter.status}
                 onChange={(v) => setInquiryFilter(f => ({ ...f, status: v }))}
-                options={statusOptions([{ value: '', label: 'All statuses' }, { value: 'INQUIRY', label: 'Inquiry' }, { value: 'APPROVED', label: 'Approved' }, { value: 'REJECTED', label: 'Rejected' }])}
+                options={statusOptions([{ value: '', label: 'All statuses' }, { value: 'INQUIRY', label: 'Inquiry' }, { value: 'APPROVED', label: 'Approved' }, { value: 'REJECTED', label: 'Rejected' }, { value: 'ARCHIVED', label: 'Archived' }])}
                 width="w-[164px]"
               />
                 <Dropdown
@@ -1023,20 +1049,30 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 ),
               },
               { key: 'service', label: 'Service', width: 'minmax(0,1.2fr)', render: (inq) => <p className="text-[13px] text-[#333] truncate">{inq.service}</p> },
-              { key: 'status', label: 'Status', width: '104px', render: (inq) => <StatusDot status={inq.status} /> },
+              { key: 'status', label: 'Status', width: '104px', render: (inq) => <StatusDot status={inq.archivedAt ? 'ARCHIVED' : inq.status} /> },
               { key: 'received', label: 'Received', width: '112px', render: (inq) => <p className="text-[13px] text-[#555]">{fmt(inq.createdAt)}</p> },
             ]}
             trailing={{
               label: 'Action', width: '88px', interactive: true,
-              render: (inq) => (
+              render: (inq) => inq.archivedAt ? (
                 <button
                   type="button"
-                  onClick={() => { setDeleteError(''); setInquiryToDelete(inq); }}
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-[#e05252] hover:bg-red-50 transition-colors"
-                  title="Delete inquiry"
-                  aria-label={`Delete inquiry from ${inq.name}`}
+                  onClick={() => restoreInquiry(inq)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-[#4f6df5] hover:bg-[#EEF2FF] transition-colors"
+                  title="Restore inquiry"
+                  aria-label={`Restore inquiry from ${inq.name}`}
                 >
-                  <HugeiconsIcon icon={Delete02Icon} size={19} color="currentColor" strokeWidth={1.5} />
+                  <HugeiconsIcon icon={ArchiveArrowUpIcon} size={19} color="currentColor" strokeWidth={1.5} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { setArchiveError(''); setInquiryToArchive(inq); }}
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-[#888] hover:bg-[#F1F2F5] hover:text-[#1a2030] transition-colors"
+                  title="Archive inquiry"
+                  aria-label={`Archive inquiry from ${inq.name}`}
+                >
+                  <HugeiconsIcon icon={Archive02Icon} size={19} color="currentColor" strokeWidth={1.5} />
                 </button>
               ),
             }}
@@ -1066,7 +1102,18 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                     <h2 className="text-lg font-semibold text-[#1a1a1a] truncate">{selectedInquiry.projectName || selectedInquiry.service}</h2>
                     <p className="text-xs text-[#888] mt-0.5">Received {fmt(selectedInquiry.createdAt)}</p>
                   </div>
-                  <Badge status={selectedInquiry.status} />
+                  <div className="flex items-center gap-3">
+                    <Badge status={selectedInquiry.archivedAt ? 'ARCHIVED' : selectedInquiry.status} />
+                    {selectedInquiry.archivedAt ? (
+                      <button type="button" onClick={() => restoreInquiry(selectedInquiry)} className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border border-[#1a2030] text-[#1a2030] text-xs font-semibold hover:bg-[#1a2030] hover:text-white transition-all">
+                        <HugeiconsIcon icon={ArchiveArrowUpIcon} size={15} color="currentColor" strokeWidth={1.75} /> Restore
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => { setArchiveError(''); setInquiryToArchive(selectedInquiry); }} className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border border-[#D0D0D0] text-[#555] text-xs font-semibold hover:bg-[#F5F5F5] transition-colors">
+                        <HugeiconsIcon icon={Archive02Icon} size={15} color="currentColor" strokeWidth={1.75} /> Archive
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <DetailTabs tab={detailTab} onChange={(t) => { setDetailTab(t); if (t !== 'deliverables') setSelectedFolderId(null); }} />
                 <div className="px-6 py-4 space-y-3">
@@ -1185,19 +1232,19 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
         <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
 
         <AnimatePresence>
-          {inquiryToDelete && (
+          {inquiryToArchive && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-                onClick={() => !deletingInquiry && setInquiryToDelete(null)}
+                onClick={() => !archivingInquiry && setInquiryToArchive(null)}
               />
               <motion.div
                 role="alertdialog"
                 aria-modal="true"
-                aria-labelledby="delete-inquiry-title"
+                aria-labelledby="archive-inquiry-title"
                 initial={{ opacity: 0, scale: 0.97, y: 10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.97, y: 10 }}
@@ -1205,36 +1252,33 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 className="relative w-full max-w-[420px] rounded-2xl bg-white shadow-2xl border border-[#F0F0F0] p-6"
               >
                 <div className="flex items-center gap-3 mb-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-[#e05252]">
-                    <HugeiconsIcon icon={Delete02Icon} size={20} color="currentColor" strokeWidth={1.5} />
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EEF2FF] text-[#4f6df5]">
+                    <HugeiconsIcon icon={Archive02Icon} size={20} color="currentColor" strokeWidth={1.5} />
                   </span>
-                  <h3 id="delete-inquiry-title" className="text-base font-semibold text-[#1a1a1a]">Delete this inquiry?</h3>
+                  <h3 id="archive-inquiry-title" className="text-base font-semibold text-[#1a1a1a]">Archive this inquiry?</h3>
                 </div>
                 <p className="text-sm text-[#555] leading-relaxed">
-                  This will permanently delete the inquiry from <span className="font-medium text-[#1a1a1a]">{inquiryToDelete.name}</span>
-                  {inquiryToDelete.projectName ? <> (<span className="font-medium text-[#1a1a1a]">{inquiryToDelete.projectName}</span>)</> : null}
-                  {' '}along with its attached files and deliverables. This can&apos;t be undone.
+                  The inquiry from <span className="font-medium text-[#1a1a1a]">{inquiryToArchive.name}</span>
+                  {inquiryToArchive.projectName ? <> (<span className="font-medium text-[#1a1a1a]">{inquiryToArchive.projectName}</span>)</> : null}
+                  {' '}will move out of the open list. Nothing is deleted: its attached files, deliverables, shared links, and any client or project created from it stay exactly as they are. You can restore it at any time.
                 </p>
-                {inquiryToDelete.status === 'APPROVED' && (
-                  <p className="text-xs text-[#888] mt-2">The client account and project created from this inquiry will be kept.</p>
-                )}
-                {deleteError && <p className="text-sm text-[#e05252] mt-3">{deleteError}</p>}
+                {archiveError && <p className="text-sm text-[#e05252] mt-3">{archiveError}</p>}
                 <div className="flex items-center justify-end gap-3 mt-6">
                   <button
                     type="button"
-                    onClick={() => setInquiryToDelete(null)}
-                    disabled={deletingInquiry}
+                    onClick={() => setInquiryToArchive(null)}
+                    disabled={archivingInquiry}
                     className="inline-flex items-center h-10 px-5 rounded-full border border-[#D0D0D0] text-[#555] text-sm font-medium hover:bg-[#F5F5F5] transition-colors disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="button"
-                    onClick={confirmDeleteInquiry}
-                    disabled={deletingInquiry}
-                    className="inline-flex items-center h-10 px-5 rounded-full bg-[#e05252] text-white text-sm font-semibold hover:bg-[#c93f3f] transition-colors disabled:opacity-50"
+                    onClick={confirmArchiveInquiry}
+                    disabled={archivingInquiry}
+                    className="inline-flex items-center h-10 px-5 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all disabled:opacity-50 disabled:hover:translate-y-0"
                   >
-                    {deletingInquiry ? 'Deleting…' : 'Delete'}
+                    {archivingInquiry ? 'Archiving…' : 'Archive'}
                   </button>
                 </div>
               </motion.div>

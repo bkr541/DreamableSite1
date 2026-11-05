@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { canWatermark } from '@/lib/watermark';
+import { removeObjects } from '@/lib/storage';
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin(req);
@@ -10,7 +11,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { id } = await params;
 
   try {
+    const row = await prisma.deliverable.findUnique({ where: { id }, select: { storageKey: true } });
+    if (!row) return NextResponse.json({ ok: false, error: 'File not found.' }, { status: 404 });
     await prisma.deliverable.delete({ where: { id } });
+    await removeObjects([row.storageKey]); // also how an aborted upload is cleaned up
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[admin/deliverables DELETE]', err);

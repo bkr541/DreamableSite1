@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { DELIVERABLE_MAX_BYTES, DELIVERABLE_MAX_FILES } from '@/lib/deliverables';
-import { UPLOAD_EXT } from '@/lib/serveFile';
+import { UPLOAD_EXT, safeFileName } from '@/lib/fileTypes';
+import { validateUpload } from '@/lib/fileValidation';
 import { canWatermark } from '@/lib/watermark';
 
 const fail = (error: string, status: number) => NextResponse.json({ ok: false, error }, { status });
@@ -32,27 +33,34 @@ export async function POST(req: NextRequest) {
     if (!folder) return fail('Folder not found.', 404);
 
     for (const f of files) {
-      if (f.size > DELIVERABLE_MAX_BYTES) return fail(`${f.name} is larger than 25 MB.`, 400);
-      if (!UPLOAD_EXT.test(f.name)) return fail(`${f.name} is not a supported file type.`, 400);
+      if (f.size > DELIVERABLE_MAX_BYTES) return fail(`${safeFileName(f.name)} is larger than 25 MB.`, 400);
+      if (!UPLOAD_EXT.test(f.name)) return fail(`${safeFileName(f.name)} is not a supported file type.`, 400);
     }
 
-    const rows = await Promise.all(
-      files.map(async (f, i) => ({
+    // Used only when object storage isn't configured (local development). The bytes are still checked for real.
+    const rows = [];
+    for (const [i, f] of files.entries()) {
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      const name = safeFileName(f.name);
+      const checked = await validateUpload({ fileName: name, declaredType: f.type, bytes });
+      if (!checked.ok) return fail(checked.error, 400);
+      rows.push({
         folderId: folder.id,
         // Kept on the file too, so client-portal access checks don't need to look the folder up.
         inquiryId: folder.inquiryId,
         projectId: folder.projectId,
-        watermark: Array.isArray(watermarks) && watermarks[i] === true && canWatermark(f.name),
+        watermark: Array.isArray(watermarks) && watermarks[i] === true && canWatermark(name),
         // The title is the artifact's display name; it defaults to the file name.
-        title: (Array.isArray(titles) && typeof titles[i] === 'string' ? titles[i].trim().slice(0, 200) : '') || f.name,
+        title: (Array.isArray(titles) && typeof titles[i] === 'string' ? titles[i].trim().slice(0, 200) : '') || name,
         description:
           (Array.isArray(descriptions) && typeof descriptions[i] === 'string' ? descriptions[i].trim().slice(0, 500) : '') || null,
-        fileName: f.name,
-        contentType: f.type || 'application/octet-stream',
-        size: f.size,
-        data: new Uint8Array(await f.arrayBuffer()),
-      })),
-    );
+        fileName: name,
+        contentType: checked.contentType,
+        size: bytes.length,
+        sha256: checked.sha256,
+        data: bytes,
+      });
+    }
     await prisma.deliverable.createMany({ data: rows });
 
     return NextResponse.json({ ok: true, count: rows.length });

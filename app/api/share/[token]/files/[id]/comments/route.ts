@@ -1,57 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getClientIp } from '@/lib/clientIp';
+import { RULES, consume, firstDenied, tooManyRequests } from '@/lib/rateLimit';
+import { logRef, logSecurity } from '@/lib/securityLog';
+import { cleanAuthorName, cleanCommentBody } from '@/lib/commentText';
+import { findSharedFile } from '@/lib/shareAccess';
 
-// Best-effort, per-instance rate limit (same approach as the inquiry form).
-const hits = new Map<string, { count: number; resetAt: number }>();
-const LIMIT = 8;
-const WINDOW = 60_000;
 const MAX_PER_FILE = 200;
-
-function limited(ip: string) {
-  const now = Date.now();
-  const entry = hits.get(ip);
-  if (!entry || now > entry.resetAt) {
-    hits.set(ip, { count: 1, resetAt: now + WINDOW });
-    return false;
-  }
-  entry.count++;
-  return entry.count > LIMIT;
-}
+const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
+const MAX_BODY_BYTES = 16 * 1024;
 
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 
-// Public: anyone holding a public folder's link can comment on a file inside it.
+// Public: anyone holding a public folder's link can comment on a file inside it — if the folder allows comments.
+// Visitors are never verified: the name is whatever they typed, and it is shown as "unverified".
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string; id: string }> }) {
   const { token, id } = await params;
+  const ip = getClientIp(req.headers);
 
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  if (limited(ip)) return fail('Too many comments. Please wait a moment and try again.', 429);
+  // Per-source limit first: it also bounds how many throwaway tokens/ids one visitor can probe.
+  const ipDecision = await consume(RULES.commentIp, ip);
+  if (!ipDecision.allowed) return tooManyRequests(ipDecision, 'comments');
 
   try {
-    const body = await req.json();
+    if (Number(req.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) return fail('That comment is too large.', 413);
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') return fail('We could not read that comment.');
 
     // Honeypot: bots fill hidden fields; pretend it worked.
     if (body.website) return NextResponse.json({ ok: true, comment: null });
 
-    const authorName = typeof body.name === 'string' ? body.name.trim() : '';
-    const text = typeof body.body === 'string' ? body.body.trim() : '';
-    if (!authorName) return fail('Please enter your name.');
-    if (authorName.length > 80) return fail('Name must be 80 characters or fewer.');
-    if (!text) return fail('Please write a comment.');
-    if (text.length > 2000) return fail('Comments must be 2000 characters or fewer.');
+    const name = cleanAuthorName(body.name);
+    if (!name.ok) return fail(name.error);
+    const text = cleanCommentBody(body.body);
+    if (!text.ok) return fail(text.error);
 
-    const file = await prisma.deliverable.findFirst({
-      where: { id, folder: { shareToken: token, isPublic: true } },
-      select: { id: true, _count: { select: { comments: true } } },
-    });
+    // Every write re-checks that the link is live (public folder, matching token) — never trust an earlier page load.
+    const file = await findSharedFile(token, id);
     if (!file) return fail('This link is no longer available.', 404);
+    if (!file.folder?.commentsEnabled) return fail('Comments are turned off for this folder.', 403);
+
+    // Valid link from here on, so these buckets can't be inflated by random tokens.
+    const blocked = firstDenied(
+      await consume(RULES.commentLink, token),
+      await consume(RULES.commentIpFile, ip, file.id),
+    );
+    if (blocked) {
+      logSecurity('comment.throttled', { ip: logRef(ip), file: logRef(file.id) });
+      return tooManyRequests(blocked, 'comments');
+    }
+
     if (file._count.comments >= MAX_PER_FILE) return fail('This file has reached its comment limit.', 429);
 
+    // Same author posting the same words again (double click, retry, copy-paste spam).
+    const duplicate = await prisma.deliverableComment.findFirst({
+      where: { deliverableId: file.id, authorName: name.value, body: text.value, createdAt: { gt: new Date(Date.now() - DUPLICATE_WINDOW_MS) } },
+      select: { id: true },
+    });
+    if (duplicate) return fail('You already posted that comment.', 409);
+
+    const moderated = file.folder.commentsModerated;
     const comment = await prisma.deliverableComment.create({
-      data: { deliverableId: file.id, authorName, body: text },
-      select: { id: true, authorName: true, body: true, createdAt: true },
+      data: { deliverableId: file.id, authorName: name.value, body: text.value, status: moderated ? 'PENDING' : 'APPROVED' },
+      select: { id: true, deliverableId: true, authorName: true, body: true, createdAt: true },
     });
 
+    // Held comments are not returned: the visitor sees a notice, everyone else sees nothing until approval.
+    if (moderated) {
+      return NextResponse.json({ ok: true, comment: null, pending: true, message: 'Thanks! Your comment will appear once it has been reviewed.' });
+    }
     return NextResponse.json({ ok: true, comment: { ...comment, createdAt: comment.createdAt.toISOString() } });
   } catch (err) {
     console.error('[share comments POST]', err);

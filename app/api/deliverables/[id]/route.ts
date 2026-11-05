@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
-import { fileResponse } from '@/lib/serveFile';
-import { applyWatermark, canWatermark } from '@/lib/watermark';
+import { deliverFile } from '@/lib/serveFile';
 
 // Serves a deliverable to an admin, or to the client it was delivered to.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -13,14 +12,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
 
   try {
-    const file = await prisma.deliverable.findUnique({
-      where: { id },
+    // Only verified files (status READY) are ever served; an upload still in progress doesn't exist yet.
+    const file = await prisma.deliverable.findFirst({
+      where: { id, status: 'READY' },
       include: { project: { select: { primaryUserId: true } } },
     });
     if (!file) {
       return NextResponse.json({ ok: false, error: 'Not found.' }, { status: 404 });
     }
 
+    // Ownership is checked here, before any storage link is created, so another client's file is just "not found".
     if (!user.admin) {
       const ownsProject = file.project?.primaryUserId === user.id;
       const ownsInquiry = !!file.inquiryId && file.inquiryId === user.inquiryId;
@@ -29,12 +30,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    const wantInline = req.nextUrl.searchParams.get('inline') === '1';
-    if (file.watermark && canWatermark(file.fileName)) {
-      const data = await applyWatermark(file.fileName, file.data);
-      return fileResponse({ fileName: file.fileName, size: data.length, data }, wantInline);
-    }
-    return fileResponse(file, wantInline);
+    return await deliverFile(file, { inline: req.nextUrl.searchParams.get('inline') === '1', range: req.headers.get('range') });
   } catch (err) {
     console.error('[deliverables GET]', err);
     return NextResponse.json({ ok: false, error: 'Internal server error.' }, { status: 500 });

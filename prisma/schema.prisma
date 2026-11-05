@@ -28,6 +28,10 @@ model Inquiry {
   approvedAt   DateTime? @map("approved_at") @db.Timestamptz()
   approvedById String?   @map("approved_by_id") @db.Uuid
 
+  // Archiving hides a lead from the open list but leaves everything linked to it untouched.
+  archivedAt   DateTime? @map("archived_at") @db.Timestamptz()
+  archivedById String?   @map("archived_by_id") @db.Uuid
+
   source      String?
   utmSource   String? @map("utm_source")
   utmMedium   String? @map("utm_medium")
@@ -47,6 +51,7 @@ model Inquiry {
   @@index([createdAt(sort: Desc)])
   @@index([status])
   @@index([email])
+  @@index([archivedAt])
   @@map("inquiries")
 }
 
@@ -54,15 +59,23 @@ model InquiryAttachment {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  inquiryId   String @map("inquiry_id") @db.Uuid
-  fileName    String @map("file_name")
-  contentType String @map("content_type")
+  // Null while a public upload is waiting to be claimed by a submitted inquiry (status PENDING).
+  inquiryId   String? @map("inquiry_id") @db.Uuid
+  fileName    String  @map("file_name")
+  contentType String  @map("content_type")
   size        Int
-  data        Bytes
 
-  inquiry Inquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  // Bytes live in object storage (storageKey) for new files; older rows keep them in `data` until migrated.
+  data       Bytes?
+  storageKey String? @unique @map("storage_key")
+  sha256     String?
+  // PENDING until the bytes have been verified, then READY. Only READY files are ever listed or served.
+  status     String  @default("READY")
+
+  inquiry Inquiry? @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
 
   @@index([inquiryId])
+  @@index([status, createdAt])
   @@map("inquiry_attachments")
 }
 
@@ -81,9 +94,14 @@ model Deliverable {
   fileName    String @map("file_name")
   contentType String @map("content_type")
   size        Int
-  data        Bytes
 
-  inquiry Inquiry? @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  data       Bytes?
+  storageKey String? @unique @map("storage_key")
+  sha256     String?
+  status     String  @default("READY")
+
+  // Restrict: a client's deliverables can never disappear because a lead record was removed.
+  inquiry Inquiry? @relation(fields: [inquiryId], references: [id], onDelete: Restrict)
   project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   folder  DeliverableFolder? @relation(fields: [folderId], references: [id], onDelete: Cascade)
   comments DeliverableComment[]
@@ -91,6 +109,7 @@ model Deliverable {
   @@index([inquiryId])
   @@index([projectId])
   @@index([folderId])
+  @@index([status, createdAt])
   @@map("deliverables")
 }
 
@@ -101,10 +120,14 @@ model DeliverableComment {
   deliverableId String @map("deliverable_id") @db.Uuid
   authorName    String @map("author_name")
   body          String @db.Text
+  // Public commenters are never verified. PENDING comments wait for an admin when the folder moderates;
+  // HIDDEN ones are kept for the record but never shown publicly.
+  status        String @default("APPROVED")
 
   deliverable Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
 
   @@index([deliverableId])
+  @@index([deliverableId, status])
   @@map("deliverable_comments")
 }
 
@@ -121,7 +144,13 @@ model DeliverableFolder {
   isPublic    Boolean @default(false) @map("is_public")
   shareToken  String  @unique @map("share_token")
 
-  inquiry      Inquiry?      @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  commentsEnabled   Boolean @default(true)  @map("comments_enabled")
+  commentsModerated Boolean @default(false) @map("comments_moderated")
+
+  // Set whenever the link is replaced (rotate, or sharing switched off/on). Old URLs never work again.
+  shareRotatedAt DateTime? @map("share_rotated_at") @db.Timestamptz()
+
+  inquiry      Inquiry?      @relation(fields: [inquiryId], references: [id], onDelete: Restrict)
   project      Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   deliverables Deliverable[]
 
@@ -313,4 +342,17 @@ model Project {
   @@index([status])
   @@index([createdAt(sort: Desc)])
   @@map("projects")
+}
+
+// Shared counters for the rate limiter (lib/rateLimit.ts). Written with raw SQL; keys are hashed, never emails or IPs.
+model RateLimit {
+  key          String    @id
+  hits         Int
+  windowStart  DateTime  @map("window_start") @db.Timestamptz()
+  strikes      Int       @default(0)
+  blockedUntil DateTime? @map("blocked_until") @db.Timestamptz()
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz()
+
+  @@index([updatedAt])
+  @@map("rate_limits")
 }

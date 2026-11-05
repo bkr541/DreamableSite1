@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NoopStore } from './pg';
+import { setRateLimitStore } from '@/lib/rateLimit';
 import { req, setSecrets, RESET } from './helpers';
 
 type Tok = { id: string; userId: string; tokenHash: string; expiresAt: Date; consumedAt: Date | null };
@@ -37,6 +39,7 @@ vi.mock('@/lib/prisma', () => {
 
 vi.mock('@/lib/auth', () => ({ hashPassword: vi.fn(async (p: string) => `hash:${p}`) }));
 
+import { hashRecoveryCode } from '@/lib/recoveryCode';
 import { issueResetToken } from '@/lib/resetTokens';
 import { POST as setPassword } from '@/app/api/auth/set-password/route';
 import { POST as verifyToken } from '@/app/api/auth/verify-reset-token/route';
@@ -47,6 +50,7 @@ const set = (token: string, password = 'new-password-1') => setPassword(req('/x'
 const verify = async (token: string) => (await verifyToken(req('/x', { body: { token } }))).json();
 
 beforeEach(() => {
+  setRateLimitStore(new NoopStore());
   setSecrets();
   mem.tokens.length = 0; mem.users.length = 0; mem.n = 0;
   mem.users.push(user());
@@ -104,7 +108,7 @@ describe('reset links are single use', () => {
     process.env.RESET_SECRET = RESET;
   });
   it('success revokes existing sessions and clears codes', async () => {
-    mem.users[0].templogincode = 'ABCD1234';
+    mem.users[0].templogincode = 'stored-hash';
     const t = await issueResetToken('u1');
     await set(t);
     expect(mem.users[0].sessionVersion).toBe(1);
@@ -133,14 +137,14 @@ describe('account state is respected by both reset flows', () => {
     expect(mem.users[0].status).toBe('ACTIVE');
   });
   it('code flow: suspended account is not reactivated and the password is unchanged', async () => {
-    mem.users[0] = user({ status: 'SUSPENDED', templogincode: 'ABCD1234', tempLoginCodeExpiresAt: new Date(Date.now() + 1e5) });
+    mem.users[0] = user({ status: 'SUSPENDED', templogincode: hashRecoveryCode('a@x.com', 'ABCD1234'), tempLoginCodeExpiresAt: new Date(Date.now() + 1e5) });
     const res = await updateWithCode(req('/x', { body: { email: 'a@x.com', code: 'abcd1234', password: 'new-password-1' } }));
     expect(res.status).toBe(400);
     expect(mem.users[0].status).toBe('SUSPENDED');
     expect(mem.users[0].passwordHash).toBe('old');
   });
   it('code flow: code works once, concurrent replays fail, sessions are revoked', async () => {
-    mem.users[0] = user({ templogincode: 'ABCD1234', tempLoginCodeExpiresAt: new Date(Date.now() + 1e5) });
+    mem.users[0] = user({ templogincode: hashRecoveryCode('a@x.com', 'ABCD1234'), tempLoginCodeExpiresAt: new Date(Date.now() + 1e5) });
     const go = () => updateWithCode(req('/x', { body: { email: 'a@x.com', code: 'ABCD1234', password: 'new-password-1' } }));
     const statuses = (await Promise.all([go(), go()])).map((r) => r.status).sort();
     expect(statuses).toEqual([200, 400]);

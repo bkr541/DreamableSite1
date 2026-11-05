@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
+import { getClientIp } from '@/lib/clientIp';
+import { RULES, consume, tooManyRequests } from '@/lib/rateLimit';
 import { consumeResetToken, lookupResetToken } from '@/lib/resetTokens';
 import { statusAfterPasswordFlow } from '@/lib/accountStatus';
 
@@ -8,6 +10,9 @@ const INVALID = { ok: false, error: 'Reset link is invalid or expired.' };
 
 export async function POST(req: NextRequest) {
   try {
+    const limited = await consume(RULES.linkIp, getClientIp(req.headers));
+    if (!limited.allowed) return tooManyRequests(limited, 'attempts');
+
     const { token, password } = await req.json();
 
     if (typeof token !== 'string' || typeof password !== 'string' || password.length < 8 || password.length > 200) {

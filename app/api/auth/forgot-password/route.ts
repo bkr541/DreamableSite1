@@ -3,6 +3,10 @@ import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/prisma';
 import { issueResetToken } from '@/lib/resetTokens';
 import { canUsePasswordFlow } from '@/lib/accountStatus';
+import { getClientIp } from '@/lib/clientIp';
+import { RULES, check, consume, firstDenied, tooManyRequests } from '@/lib/rateLimit';
+import { logRef, logSecurity } from '@/lib/securityLog';
+
 
 async function sendResetEmail(to: string, resetUrl: string) {
   const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, INQUIRY_FROM_EMAIL } = process.env;
@@ -48,6 +52,19 @@ export async function POST(req: NextRequest) {
 
     if (!email || typeof email !== 'string') {
       return NextResponse.json({ ok: false, error: 'Email is required.' }, { status: 400 });
+    }
+
+
+    // One budget per mailbox and per source, shared by "email me a link" and "email me a code", so neither
+    // route can be used to flood someone's inbox. The answer never depends on whether the account exists.
+    const ip = getClientIp(req.headers);
+    const sendBlocked = firstDenied(
+      await consume(RULES.recoveryEmailIp, ip),
+      await consume(RULES.recoveryEmail, email.toLowerCase().trim()),
+    );
+    if (sendBlocked) {
+      logSecurity('recovery.send_throttled', { ref: logRef(email.toLowerCase().trim()), ip: logRef(ip) });
+      return tooManyRequests(sendBlocked, 'reset requests for this account');
     }
 
     // Always answer ok so the response never reveals which emails exist or what state they are in.

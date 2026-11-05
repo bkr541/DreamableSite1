@@ -23,34 +23,36 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       prisma.user.count({ where: { admin: false } }),
       prisma.project.count(),
       prisma.project.count({ where: { status: { notIn: ['COMPLETED', 'CANCELLED'] } } }),
-      prisma.inquiry.count({ where: { status: 'INQUIRY' } }),
+      prisma.inquiry.count({ where: { status: 'INQUIRY', archivedAt: null } }),
       prisma.inquiry.findMany({
         orderBy: { createdAt: 'desc' },
         select: {
           id: true, name: true, email: true, company: true, service: true, description: true,
-          budgetRange: true, timeline: true, status: true, createdAt: true, metadata: true,
-          attachments: { select: { id: true, fileName: true, size: true }, orderBy: { createdAt: 'asc' } },
+          budgetRange: true, timeline: true, status: true, createdAt: true, metadata: true, archivedAt: true,
+          attachments: { where: { status: 'READY' }, select: { id: true, fileName: true, size: true }, orderBy: { createdAt: 'asc' } },
         },
       }),
       prisma.deliverable.findMany({
+        where: { status: 'READY' }, // files still uploading or being verified aren't listed
         orderBy: { createdAt: 'asc' },
         select: { id: true, inquiryId: true, projectId: true, folderId: true, title: true, description: true, fileName: true, size: true, watermark: true, createdAt: true },
       }),
       prisma.deliverableFolder.findMany({
         orderBy: { createdAt: 'asc' },
-        select: { id: true, inquiryId: true, projectId: true, name: true, description: true, isPublic: true, shareToken: true, createdAt: true },
+        select: { id: true, inquiryId: true, projectId: true, name: true, description: true, isPublic: true, shareToken: true, commentsEnabled: true, commentsModerated: true, shareRotatedAt: true, createdAt: true },
       }),
       // Comments are newer than the rest of the schema; an unmigrated database shows none instead of breaking the page.
       prisma.deliverableComment
         .findMany({
           orderBy: { createdAt: 'asc' },
-          select: { id: true, deliverableId: true, authorName: true, body: true, createdAt: true },
+          select: { id: true, deliverableId: true, authorName: true, body: true, status: true, createdAt: true },
         })
         .catch((err) => {
           console.error('[admin] could not load deliverable comments:', err);
           return [];
         }),
       prisma.inquiry.findMany({
+        where: { archivedAt: null },
         orderBy: { createdAt: 'desc' },
         take: 6,
         select: { id: true, name: true, email: true, service: true, status: true, createdAt: true },
@@ -115,7 +117,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       stats={{ totalUsers, totalProjects, activeProjects, openInquiries }}
       inquiries={allInquiries.map(({ metadata, createdAt, ...i }) => {
         const meta = (metadata ?? {}) as { phone?: string; projectName?: string };
-        return { ...i, phone: meta.phone ?? null, projectName: meta.projectName ?? null, createdAt: createdAt.toISOString() };
+        return { ...i, archivedAt: i.archivedAt?.toISOString() ?? null, phone: meta.phone ?? null, projectName: meta.projectName ?? null, createdAt: createdAt.toISOString() };
       })}
       recentInquiries={recentInquiries.map((i) => ({ ...i, createdAt: i.createdAt.toISOString() }))}
       recentUsers={recentUsers.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}
@@ -124,7 +126,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       services={services}
       comments={comments.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() }))}
       initialFolderId={one(sp.folder) ?? null}
-      folders={folders.map((f) => ({ ...f, createdAt: f.createdAt.toISOString() }))}
+      folders={folders.map((f) => ({ ...f, shareRotatedAt: f.shareRotatedAt?.toISOString() ?? null, createdAt: f.createdAt.toISOString() }))}
       deliverables={deliverables.map((d) => ({ ...d, createdAt: d.createdAt.toISOString() }))}
       projects={projects.map((p) => ({ ...p, createdAt: p.createdAt.toISOString() }))}
       invoices={invoices.map((inv) => ({ ...inv, createdAt: inv.createdAt.toISOString() }))}

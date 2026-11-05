@@ -36,6 +36,7 @@ export default async function DashboardPage() {
 
   const deliverables = await prisma.deliverable.findMany({
     where: {
+      status: 'READY',
       OR: [
         { project: { primaryUserId: user.id } },
         ...(user.inquiryId ? [{ inquiryId: user.inquiryId }] : []),

@@ -12,6 +12,7 @@ export const STATUS_DOT: Record<string, string> = {
   ACTIVE: 'bg-blue-500',
   INVITED: 'bg-purple-500',
   SUSPENDED: 'bg-red-500',
+  ARCHIVED: 'bg-gray-400',
   ONBOARDING: 'bg-sky-500',
   COMPLETED: 'bg-gray-400',
   CANCELLED: 'bg-red-400',

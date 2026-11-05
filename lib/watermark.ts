@@ -7,6 +7,12 @@ import { canWatermarkName } from '@/lib/watermarkTypes';
 const IMAGE_EXT = ['png', 'jpg', 'jpeg'];
 const BRAND_TEXT = 'Dreamable.studio';
 
+// Transformation limits, separate from the transfer limits: a file that is fine to store and download may still
+// be too heavy to watermark on the fly. Over these, the request fails (it never falls back to the clean file).
+export const WATERMARK_MAX_BYTES = 25 * 1024 * 1024;
+export const WATERMARK_MAX_PIXELS = 100_000_000;
+const WATERMARK_MAX_PDF_PAGES = 300;
+
 const ext = (fileName: string) => fileName.split('.').pop()?.toLowerCase() ?? '';
 
 /** Watermarking is supported for raster images and PDFs; other types are served untouched. */
@@ -23,7 +29,7 @@ async function logoPng() {
 
 // Image watermark: the logo plus wordmark, tiled diagonally across the whole image so it can't be cropped out.
 async function watermarkImage(data: Uint8Array, e: string) {
-  const image = sharp(data, { failOn: 'none' }).rotate();
+  const image = sharp(data, { failOn: 'none', limitInputPixels: WATERMARK_MAX_PIXELS }).rotate();
   const { width = 0, height = 0 } = await image.metadata();
   const base = Math.max(120, Math.round(Math.min(width, height) / 6));
   const tileW = Math.round(base * 4.4);
@@ -48,6 +54,7 @@ async function watermarkImage(data: Uint8Array, e: string) {
 // PDF watermark: the same logo + wordmark repeated on a grid on every page.
 async function watermarkPdf(data: Uint8Array) {
   const pdf = await PDFDocument.load(data, { ignoreEncryption: true });
+  if (pdf.getPageCount() > WATERMARK_MAX_PDF_PAGES) throw new Error('PDF has too many pages to watermark');
   const logo = await pdf.embedPng(await logoPng());
   const font = await pdf.embedFont(StandardFonts.HelveticaBold);
 
