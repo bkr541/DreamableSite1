@@ -10,7 +10,8 @@ import { SessionPayload } from '@/lib/session';
 import { useToast } from '@/components/Toast';
 import RecordList, { Avatar, StatusDot } from '@/components/RecordList';
 import DatePicker from '@/components/DatePicker';
-import CustomSelect from '@/components/CustomSelect';
+import { statusOptions, serviceOptions } from '@/components/dropdowns/options';
+import Dropdown from '@/components/dropdowns/Dropdown';
 import DeliverablesPanel, { CommentRecord, DeliverableRecord, FolderRecord } from '@/components/DeliverablesPanel';
 import FilePreviewModal, { PreviewFile, previewKind, formatBytes } from '@/components/FilePreviewModal';
 import { motion, AnimatePresence } from 'motion/react';
@@ -801,6 +802,26 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
     }
   }
 
+  // Computed after all state is declared (these read the filter state).
+  const visibleClients = clients.filter(c => {
+    if (clientFilter.search) { const q = clientFilter.search.toLowerCase(); if (!c.name.toLowerCase().includes(q) && !c.email.toLowerCase().includes(q)) return false; }
+    if (clientFilter.status && c.status !== clientFilter.status) return false;
+    return true;
+  });
+  const visibleProjects = projects.filter(p => {
+    if (projectFilter.search && !p.name.toLowerCase().includes(projectFilter.search.toLowerCase())) return false;
+    if (projectFilter.status && p.status !== projectFilter.status) return false;
+    if (projectFilter.service && p.service !== projectFilter.service) return false;
+    return true;
+  });
+
+  // Record count shown next to the page title on the three list screens (not on a record's detail page).
+  const headerCount =
+    activeView === 'clients' ? visibleClients.length
+    : activeView === 'inquiries' && !selectedInquiry ? filteredInquiries.length
+    : activeView === 'projects' && !selectedProject ? visibleProjects.length
+    : null;
+
   return (
     <div className="min-h-screen bg-[#F7F7F8]">
       {/* Top nav */}
@@ -893,7 +914,12 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
         {/* Page heading — shared across all views */}
         <div className={`flex items-end justify-between gap-4 ${activeView === 'clients' || activeView === 'inquiries' || activeView === 'projects' ? 'mb-5' : 'mb-10'}`}>
           <div className="min-w-0">
-            <h1 className="text-3xl font-semibold tracking-tight text-[#1a1a1a]">{VIEW_META[activeView].title}</h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-semibold tracking-tight text-[#1a1a1a]">{VIEW_META[activeView].title}</h1>
+              {headerCount !== null && (
+                <span className="px-2.5 py-0.5 rounded-full bg-[#EEF2FF] text-sm font-semibold text-[#4f6df5]" aria-label={`${headerCount} records`}>{headerCount}</span>
+              )}
+            </div>
             <p className="text-sm text-[#888] mt-1">{VIEW_META[activeView].subtitle}</p>
           </div>
           {activeView === 'clients' && (
@@ -950,32 +976,32 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 transition={{ duration: 0.25, ease: 'easeInOut' }}
               >
           <RecordList
-            title="Inquiries"
             rows={filteredInquiries}
             rowKey={(inq) => inq.id}
             onRowClick={(inq) => openInquiry(inq.id)}
             search={{ value: inquiryFilter.search, onChange: (v) => setInquiryFilter(f => ({ ...f, search: v })), placeholder: 'Search by name, email, or project…' }}
-            onClearFilters={(inquiryFilter.search || inquiryFilter.status || inquiryFilter.service) ? () => setInquiryFilter({ search: '', status: '', service: '' }) : undefined}
             filters={
               <>
-                <CustomSelect
-                  value={inquiryFilter.status}
-                  onChange={(v) => setInquiryFilter(f => ({ ...f, status: v }))}
-                  options={[{ value: '', label: 'All statuses' }, { value: 'INQUIRY', label: 'Inquiry' }, { value: 'APPROVED', label: 'Approved' }, { value: 'REJECTED', label: 'Rejected' }]}
-                  variant="compact"
-                />
-                <CustomSelect
-                  value={inquiryFilter.service}
-                  onChange={(v) => setInquiryFilter(f => ({ ...f, service: v }))}
-                  options={[{ value: '', label: 'All services' }, ...Array.from(new Set(inquiries.map(i => i.service))).map(sv => ({ value: sv, label: sv }))]}
-                  variant="compact"
-                />
+                <Dropdown
+                label="Status"
+                value={inquiryFilter.status}
+                onChange={(v) => setInquiryFilter(f => ({ ...f, status: v }))}
+                options={statusOptions([{ value: '', label: 'All statuses' }, { value: 'INQUIRY', label: 'Inquiry' }, { value: 'APPROVED', label: 'Approved' }, { value: 'REJECTED', label: 'Rejected' }])}
+                width="w-[164px]"
+              />
+                <Dropdown
+                label="Service"
+                value={inquiryFilter.service}
+                onChange={(v) => setInquiryFilter(f => ({ ...f, service: v }))}
+                options={serviceOptions([{ value: '', label: 'All services' }, ...Array.from(new Set(inquiries.map(i => i.service))).map(sv => ({ value: sv, label: sv }))])}
+                width="w-[228px]"
+              />
               </>
             }
             emptyMessage={inquiries.length === 0 ? 'No inquiries yet.' : 'No inquiries match your filters.'}
             columns={[
               {
-                key: 'inquiry', label: 'Inquiry', icon: Mail01Icon, width: 'minmax(0,2.2fr)',
+                key: 'inquiry', label: 'Inquiry', width: 'minmax(0,2.2fr)',
                 render: (inq) => (
                   <div className="flex items-center gap-4 min-w-0">
                     <Avatar name={inq.name} size={32} />
@@ -987,7 +1013,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 ),
               },
               {
-                key: 'contact', label: 'Contact', icon: Call02Icon, width: 'minmax(0,1.6fr)',
+                key: 'contact', label: 'Contact', width: 'minmax(0,1.6fr)',
                 render: (inq) => (
                   <>
                     <p className="text-[13px] font-medium text-[#222] truncate">{inq.email}</p>
@@ -995,12 +1021,12 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   </>
                 ),
               },
-              { key: 'service', label: 'Service', icon: Briefcase06Icon, width: 'minmax(0,1.2fr)', render: (inq) => <p className="text-[13px] text-[#333] truncate">{inq.service}</p> },
-              { key: 'status', label: 'Status', icon: Activity01Icon, width: '104px', render: (inq) => <StatusDot status={inq.status} /> },
-              { key: 'received', label: 'Received', icon: Calendar03Icon, width: '112px', render: (inq) => <p className="text-[13px] text-[#555]">{fmt(inq.createdAt)}</p> },
+              { key: 'service', label: 'Service', width: 'minmax(0,1.2fr)', render: (inq) => <p className="text-[13px] text-[#333] truncate">{inq.service}</p> },
+              { key: 'status', label: 'Status', width: '104px', render: (inq) => <StatusDot status={inq.status} /> },
+              { key: 'received', label: 'Received', width: '112px', render: (inq) => <p className="text-[13px] text-[#555]">{fmt(inq.createdAt)}</p> },
             ]}
             trailing={{
-              label: 'Action', icon: MoreHorizontalCircle01Icon, width: '88px', interactive: true,
+              label: 'Action', width: '88px', interactive: true,
               render: (inq) => (
                 <button
                   type="button"
@@ -1235,28 +1261,23 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
 
         {activeView === 'clients' && (
           <RecordList
-            title="All clients"
-            rows={clients.filter(c => {
-              if (clientFilter.search) { const q = clientFilter.search.toLowerCase(); if (!c.name.toLowerCase().includes(q) && !c.email.toLowerCase().includes(q)) return false; }
-              if (clientFilter.status && c.status !== clientFilter.status) return false;
-              return true;
-            })}
+            rows={visibleClients}
             rowKey={(c) => c.id}
             onRowClick={(c) => toggleClientExpand(c.id)}
             search={{ value: clientFilter.search, onChange: (v) => setClientFilter(f => ({ ...f, search: v })), placeholder: 'Search by name or email…' }}
-            onClearFilters={(clientFilter.search || clientFilter.status) ? () => setClientFilter({ search: '', status: '' }) : undefined}
             filters={
-              <CustomSelect
+              <Dropdown
+                label="Status"
                 value={clientFilter.status}
                 onChange={(v) => setClientFilter(f => ({ ...f, status: v }))}
-                options={[{ value: '', label: 'All statuses' }, { value: 'INVITED', label: 'Invited' }, { value: 'ACTIVE', label: 'Active' }, { value: 'ONBOARDING', label: 'Onboarding' }, { value: 'COMPLETED', label: 'Completed' }]}
-                variant="compact"
+                options={statusOptions([{ value: '', label: 'All statuses' }, { value: 'INVITED', label: 'Invited' }, { value: 'ACTIVE', label: 'Active' }, { value: 'ONBOARDING', label: 'Onboarding' }, { value: 'COMPLETED', label: 'Completed' }])}
+                width="w-[164px]"
               />
             }
             emptyMessage={clients.length === 0 ? 'No clients yet.' : 'No clients match your filters.'}
             columns={[
               {
-                key: 'client', label: 'Client', icon: User03Icon, width: 'minmax(0,2.2fr)',
+                key: 'client', label: 'Client', width: 'minmax(0,2.2fr)',
                 render: (c) => (
                   <div className="flex items-center gap-4 min-w-0">
                     <Avatar name={c.name} size={32} />
@@ -1271,7 +1292,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 ),
               },
               {
-                key: 'company', label: 'Company', icon: Building01Icon, width: 'minmax(0,1.5fr)',
+                key: 'company', label: 'Company', width: 'minmax(0,1.5fr)',
                 render: (c) => c.company ? (
                   <>
                     <p className="text-[13px] font-medium text-[#222] truncate">{c.company.name}</p>
@@ -1280,12 +1301,12 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 ) : <p className="text-sm text-[#999]">—</p>,
               },
               {
-                key: 'role', label: 'Role', icon: Shield01Icon, width: '88px',
+                key: 'role', label: 'Role', width: '88px',
                 render: (c) => <span className="rounded-md border border-[#D5D9E4] px-2 py-0.5 text-xs font-semibold capitalize text-[#444]">{c.role.toLowerCase()}</span>,
               },
-              { key: 'status', label: 'Status', icon: Activity01Icon, width: '104px', render: (c) => <StatusDot status={c.status} /> },
+              { key: 'status', label: 'Status', width: '104px', render: (c) => <StatusDot status={c.status} /> },
               {
-                key: 'projects', label: 'Projects', icon: Briefcase06Icon, width: '112px',
+                key: 'projects', label: 'Projects', width: '112px',
                 render: (c) => {
                   const n = projects.filter(p => p.primaryUser?.id === c.id).length;
                   return (
@@ -1297,7 +1318,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               },
             ]}
             trailing={{
-              label: 'Actions', icon: MoreHorizontalCircle01Icon, width: '96px', interactive: true,
+              label: 'Actions', width: '96px', interactive: true,
               render: (c) => (
                 <button
                   type="button"
@@ -1354,37 +1375,32 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 transition={{ duration: 0.25, ease: 'easeInOut' }}
               >
           <RecordList
-            title="Projects"
-            rows={projects.filter(p => {
-              if (projectFilter.search && !p.name.toLowerCase().includes(projectFilter.search.toLowerCase())) return false;
-              if (projectFilter.status && p.status !== projectFilter.status) return false;
-              if (projectFilter.service && p.service !== projectFilter.service) return false;
-              return true;
-            })}
+            rows={visibleProjects}
             rowKey={(p) => p.id}
             onRowClick={(p) => openProject(p.id)}
             search={{ value: projectFilter.search, onChange: (v) => setProjectFilter(f => ({ ...f, search: v })), placeholder: 'Search by project name…' }}
-            onClearFilters={(projectFilter.search || projectFilter.status || projectFilter.service) ? () => setProjectFilter({ search: '', status: '', service: '' }) : undefined}
             filters={
               <>
-                <CustomSelect
-                  value={projectFilter.status}
-                  onChange={(v) => setProjectFilter(f => ({ ...f, status: v }))}
-                  options={[{ value: '', label: 'All statuses' }, { value: 'ONBOARDING', label: 'Onboarding' }, { value: 'ACTIVE', label: 'Active' }, { value: 'COMPLETED', label: 'Completed' }, { value: 'CANCELLED', label: 'Cancelled' }]}
-                  variant="compact"
-                />
-                <CustomSelect
-                  value={projectFilter.service}
-                  onChange={(v) => setProjectFilter(f => ({ ...f, service: v }))}
-                  options={[{ value: '', label: 'All services' }, ...services.map(sv => ({ value: sv.name, label: sv.name }))]}
-                  variant="compact"
-                />
+                <Dropdown
+                label="Status"
+                value={projectFilter.status}
+                onChange={(v) => setProjectFilter(f => ({ ...f, status: v }))}
+                options={statusOptions([{ value: '', label: 'All statuses' }, { value: 'ONBOARDING', label: 'Onboarding' }, { value: 'ACTIVE', label: 'Active' }, { value: 'COMPLETED', label: 'Completed' }, { value: 'CANCELLED', label: 'Cancelled' }])}
+                width="w-[164px]"
+              />
+                <Dropdown
+                label="Service"
+                value={projectFilter.service}
+                onChange={(v) => setProjectFilter(f => ({ ...f, service: v }))}
+                options={serviceOptions([{ value: '', label: 'All services' }, ...services.map(sv => ({ value: sv.name, label: sv.name }))])}
+                width="w-[228px]"
+              />
               </>
             }
             emptyMessage={projects.length === 0 ? 'No projects yet.' : 'No projects match your filters.'}
             columns={[
               {
-                key: 'project', label: 'Project', icon: Briefcase06Icon, width: 'minmax(0,2.2fr)',
+                key: 'project', label: 'Project', width: 'minmax(0,2.2fr)',
                 render: (p) => (
                   <div className="flex items-center gap-4 min-w-0">
                     <Avatar name={p.name} size={32} />
@@ -1395,9 +1411,9 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   </div>
                 ),
               },
-              { key: 'company', label: 'Company', icon: Building01Icon, width: 'minmax(0,1.3fr)', render: (p) => <p className="text-[13px] font-medium text-[#222] truncate">{p.company?.name ?? '—'}</p> },
+              { key: 'company', label: 'Company', width: 'minmax(0,1.3fr)', render: (p) => <p className="text-[13px] font-medium text-[#222] truncate">{p.company?.name ?? '—'}</p> },
               {
-                key: 'client', label: 'Client', icon: User03Icon, width: 'minmax(0,1.4fr)',
+                key: 'client', label: 'Client', width: 'minmax(0,1.4fr)',
                 render: (p) => p.primaryUser ? (
                   <div className="flex items-center gap-2.5 min-w-0">
                     <Avatar name={p.primaryUser.name} size={28} />
@@ -1405,11 +1421,11 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   </div>
                 ) : <span className="text-sm text-[#999]">—</span>,
               },
-              { key: 'status', label: 'Status', icon: Activity01Icon, width: '104px', render: (p) => <StatusDot status={p.status} /> },
-              { key: 'created', label: 'Created', icon: Calendar03Icon, width: '112px', render: (p) => <p className="text-[13px] text-[#555]">{fmt(p.createdAt)}</p> },
+              { key: 'status', label: 'Status', width: '104px', render: (p) => <StatusDot status={p.status} /> },
+              { key: 'created', label: 'Created', width: '112px', render: (p) => <p className="text-[13px] text-[#555]">{fmt(p.createdAt)}</p> },
             ]}
             trailing={{
-              label: 'Actions', icon: MoreHorizontalCircle01Icon, width: '96px', interactive: true,
+              label: 'Actions', width: '96px', interactive: true,
               render: (p) => (
                 <div className="flex items-center gap-1">
                   <button
@@ -1555,11 +1571,12 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 onChange={e => setInvoiceFilter(f => ({ ...f, search: e.target.value }))}
                 className="flex-1 bg-[#FAFAFA] border border-[#EBEBEB] rounded-xl px-4 py-2 text-sm text-[#1a1a1a] placeholder:text-[#CCC] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
               />
-              <CustomSelect
+              <Dropdown
+                label="Status"
                 value={invoiceFilter.status}
                 onChange={(v) => setInvoiceFilter(f => ({ ...f, status: v }))}
-                options={[{ value: '', label: 'All statuses' }, { value: 'Unsent', label: 'Unsent' }, { value: 'Not Paid', label: 'Not Paid' }, { value: 'Paid', label: 'Paid' }]}
-                variant="compact"
+                options={statusOptions([{ value: '', label: 'All statuses' }, { value: 'Unsent', label: 'Unsent' }, { value: 'Not Paid', label: 'Not Paid' }, { value: 'Paid', label: 'Paid' }])}
+                width="w-[164px]"
               />
               {(invoiceFilter.search || invoiceFilter.status) && (
                 <button onClick={() => setInvoiceFilter({ search: '', status: '' })} className="text-xs text-[#AAAAAA] hover:text-[#1a2030] transition-colors whitespace-nowrap">
@@ -1850,22 +1867,24 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Company <span className="text-red-400">*</span></label>
-                      <CustomSelect
+                      <Dropdown
+                label="Company"
                 value={projectForm.companyId}
                 onChange={(v) => { setProjectForm(f => ({ ...f, companyId: v, primaryUserId: '' })); setProjectFieldError(null); }}
                 options={[{ value: '', label: 'Select a company…' }, ...companies.map(c => ({ value: c.id, label: c.name }))]}
-                variant="form"
+                width="w-full"
                 invalid={projectFieldError?.field === 'companyId'}
               />
                       {projectFieldError?.field === 'companyId' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Primary Contact <span className="text-[#CCC] font-normal normal-case">— optional</span></label>
-                      <CustomSelect
+                      <Dropdown
+                label="Primary contact"
                 value={projectForm.primaryUserId}
                 onChange={(v) => setProjectForm(f => ({ ...f, primaryUserId: v }))}
                 options={[{ value: '', label: 'None' }, ...clients.filter(c => !projectForm.companyId || c.company?.id === projectForm.companyId).map(c => ({ value: c.id, label: c.name }))]}
-                variant="form"
+                width="w-full"
               />
                     </div>
                   </div>
@@ -1874,22 +1893,24 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Service <span className="text-red-400">*</span></label>
-                      <CustomSelect
+                      <Dropdown
+                label="Service"
                 value={projectForm.service}
                 onChange={(v) => { setProjectForm(f => ({ ...f, service: v, subCategory: '' })); setProjectFieldError(null); }}
-                options={[{ value: '', label: 'Select a service…' }, ...services.map(sv => ({ value: sv.name, label: sv.name }))]}
-                variant="form"
+                options={serviceOptions([{ value: '', label: 'Select a service…' }, ...services.map(sv => ({ value: sv.name, label: sv.name }))])}
+                width="w-full"
                 invalid={projectFieldError?.field === 'service'}
               />
                       {projectFieldError?.field === 'service' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Sub-Category <span className="text-[#CCC] font-normal normal-case">— optional</span></label>
-                      <CustomSelect
+                      <Dropdown
+                label="Sub-category"
                 value={projectForm.subCategory}
                 onChange={(v) => setProjectForm(f => ({ ...f, subCategory: v }))}
                 options={[{ value: '', label: projectForm.service ? 'Select a sub-category…' : 'Select a service first' }, ...(services.find(sv => sv.name === projectForm.service)?.subCategories.map(sc => ({ value: sc.name, label: sc.name })) ?? [])]}
-                variant="form"
+                width="w-full"
                 disabled={!projectForm.service}
               />
                     </div>
@@ -1914,20 +1935,22 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Budget Range</label>
-                      <CustomSelect
+                      <Dropdown
+                label="Budget"
                 value={projectForm.budgetRange}
                 onChange={(v) => setProjectForm(f => ({ ...f, budgetRange: v }))}
                 options={[{ value: '', label: 'Select…' }, { value: 'Under $5K', label: 'Under $5K' }, { value: '$5K – $15K', label: '$5K – $15K' }, { value: '$15K – $30K', label: '$15K – $30K' }, { value: '$30K – $60K', label: '$30K – $60K' }, { value: '$60K+', label: '$60K+' }]}
-                variant="form"
+                width="w-full"
               />
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Timeline</label>
-                      <CustomSelect
+                      <Dropdown
+                label="Timeline"
                 value={projectForm.timeline}
                 onChange={(v) => setProjectForm(f => ({ ...f, timeline: v }))}
                 options={[{ value: '', label: 'Select…' }, { value: 'ASAP', label: 'ASAP' }, { value: '1 – 2 months', label: '1 – 2 months' }, { value: '2 – 4 months', label: '2 – 4 months' }, { value: '4 – 6 months', label: '4 – 6 months' }, { value: '6+ months', label: '6+ months' }, { value: 'Ongoing', label: 'Ongoing' }]}
-                variant="form"
+                width="w-full"
               />
                     </div>
                   </div>
@@ -1953,11 +1976,12 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 <div className="space-y-3">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Status</p>
                   <div className="flex flex-col gap-1.5">
-                    <CustomSelect
+                    <Dropdown
+                label="Status"
                 value={projectForm.status}
                 onChange={(v) => setProjectForm(f => ({ ...f, status: v }))}
-                options={[{ value: 'ONBOARDING', label: 'Onboarding' }, { value: 'ACTIVE', label: 'Active' }, { value: 'COMPLETED', label: 'Completed' }, { value: 'CANCELLED', label: 'Cancelled' }]}
-                variant="form"
+                options={statusOptions([{ value: 'ONBOARDING', label: 'Onboarding' }, { value: 'ACTIVE', label: 'Active' }, { value: 'COMPLETED', label: 'Completed' }, { value: 'CANCELLED', label: 'Cancelled' }])}
+                width="w-full"
               />
                   </div>
                 </div>
@@ -2119,11 +2143,12 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Status</label>
-                      <CustomSelect
+                      <Dropdown
+                label="Status"
                 value={invoiceForm.status}
                 onChange={(v) => setInvoiceForm(f => ({ ...f, status: v }))}
-                options={[{ value: 'Unsent', label: 'Unsent' }, { value: 'Not Paid', label: 'Not Paid' }, { value: 'Paid', label: 'Paid' }]}
-                variant="form"
+                options={statusOptions([{ value: 'Unsent', label: 'Unsent' }, { value: 'Not Paid', label: 'Not Paid' }, { value: 'Paid', label: 'Paid' }])}
+                width="w-full"
               />
                     </div>
                   </div>
@@ -2284,20 +2309,22 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   <div className="grid grid-cols-2 gap-4">
                       <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium text-[#555]">Role</label>
-                        <CustomSelect
+                        <Dropdown
+                label="Role"
                 value={addForm.role}
                 onChange={(v) => setAddForm(f => ({ ...f, role: v }))}
                 options={[{ value: 'CLIENT', label: 'Client' }, { value: 'DESIGNER', label: 'Designer' }, { value: 'DEVELOPER', label: 'Developer' }, { value: 'MANAGER', label: 'Manager' }]}
-                variant="form"
+                width="w-full"
               />
                       </div>
                       <div className="flex flex-col gap-1.5">
                         <label className="text-sm font-medium text-[#555]">Status</label>
-                        <CustomSelect
+                        <Dropdown
+                label="Status"
                 value={addForm.status}
                 onChange={(v) => setAddForm(f => ({ ...f, status: v }))}
-                options={[{ value: 'INVITED', label: 'Invited' }, { value: 'ACTIVE', label: 'Active' }, { value: 'ONBOARDING', label: 'Onboarding' }, { value: 'COMPLETED', label: 'Completed' }]}
-                variant="form"
+                options={statusOptions([{ value: 'INVITED', label: 'Invited' }, { value: 'ACTIVE', label: 'Active' }, { value: 'ONBOARDING', label: 'Onboarding' }, { value: 'COMPLETED', label: 'Completed' }])}
+                width="w-full"
               />
                       </div>
                   </div>
@@ -2476,11 +2503,12 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Status</label>
-                      <CustomSelect
+                      <Dropdown
+                label="Status"
                 value={editInvForm.status}
                 onChange={(v) => setEditInvForm(f => ({ ...f, status: v }))}
-                options={[{ value: 'Unsent', label: 'Unsent' }, { value: 'Not Paid', label: 'Not Paid' }, { value: 'Paid', label: 'Paid' }]}
-                variant="form"
+                options={statusOptions([{ value: 'Unsent', label: 'Unsent' }, { value: 'Not Paid', label: 'Not Paid' }, { value: 'Paid', label: 'Paid' }])}
+                width="w-full"
               />
                     </div>
                   </div>

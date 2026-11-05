@@ -5,8 +5,6 @@ import { motion } from 'motion/react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Search01Icon } from '@hugeicons/core-free-icons';
 
-type IconData = Parameters<typeof HugeiconsIcon>[0]['icon'];
-
 export const STATUS_DOT: Record<string, string> = {
   INQUIRY: 'bg-amber-400',
   APPROVED: 'bg-green-500',
@@ -16,6 +14,10 @@ export const STATUS_DOT: Record<string, string> = {
   ONBOARDING: 'bg-sky-500',
   COMPLETED: 'bg-gray-400',
   CANCELLED: 'bg-red-400',
+  // Invoice statuses
+  Unsent: 'bg-gray-400',
+  'Not Paid': 'bg-amber-400',
+  Paid: 'bg-green-500',
 };
 
 const AVATAR_GRADIENTS = [
@@ -53,7 +55,6 @@ export function StatusDot({ status }: { status: string }) {
 export interface RecordColumn<T> {
   key: string;
   label: string;
-  icon?: IconData;
   /** CSS grid track, e.g. 'minmax(0,2fr)' or '120px'. */
   width: string;
   render: (row: T) => React.ReactNode;
@@ -61,7 +62,6 @@ export interface RecordColumn<T> {
 
 export interface RecordTrailing<T> {
   label?: string;
-  icon?: IconData;
   width: string;
   render: (row: T) => React.ReactNode;
   /** True when the cell holds its own buttons, so clicking it must not trigger the row click. */
@@ -69,40 +69,32 @@ export interface RecordTrailing<T> {
 }
 
 interface RecordListProps<T> {
-  title: string;
   /** Rows currently shown (after filters). */
   rows: T[];
   rowKey: (row: T) => string;
   columns: RecordColumn<T>[];
   trailing?: RecordTrailing<T>;
   onRowClick?: (row: T) => void;
-  /** Button (or other node) at the right of the header. */
-  action?: React.ReactNode;
   search: { value: string; onChange: (v: string) => void; placeholder: string };
   /** Filter controls shown next to the search box. */
   filters?: React.ReactNode;
-  /** Pass a handler to show "Clear filters". */
-  onClearFilters?: () => void;
   emptyMessage: string;
   expanded?: (row: T) => boolean;
   renderExpanded?: (row: T) => React.ReactNode;
 }
 
 /**
- * The standard record listing: card with title, count, action button, search + filters,
- * an always-visible icon column header, zebra rows, and optional expandable detail rows.
+ * The standard record listing: card with search + filters,
+ * an always-visible column header row, zebra rows, and optional expandable detail rows.
  */
 export default function RecordList<T>({
-  title,
   rows,
   rowKey,
   columns,
   trailing,
   onRowClick,
-  action,
   search,
   filters,
-  onClearFilters,
   emptyMessage,
   expanded,
   renderExpanded,
@@ -111,19 +103,11 @@ export default function RecordList<T>({
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const template = [...columns.map((c) => c.width), ...(trailing ? [trailing.width] : [])].join(' ');
   const gridStyle = { gridTemplateColumns: template };
-  const headers = [...columns.map((c) => ({ label: c.label, icon: c.icon })), ...(trailing ? [{ label: trailing.label ?? '', icon: trailing.icon }] : [])];
+  const headers = [...columns.map((c) => c.label), ...(trailing ? [trailing.label ?? ''] : [])];
 
   return (
     <div className="bg-white rounded-2xl border border-[#E2E4EA] shadow-sm overflow-hidden">
-      <div className="px-6 py-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <h2 className="text-base font-semibold text-[#1a1a1a]">{title}</h2>
-          <span className="px-2.5 py-0.5 rounded-full bg-[#EEF2FF] text-xs font-semibold text-[#4f6df5]">{rows.length}</span>
-        </div>
-        {action}
-      </div>
-
-      <div className="px-6 pb-3 flex flex-wrap items-center gap-3">
+      <div className="px-6 pt-4 pb-3 flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[240px]">
           <HugeiconsIcon icon={Search01Icon} size={18} color="#999999" strokeWidth={1.5} className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
@@ -135,11 +119,6 @@ export default function RecordList<T>({
           />
         </div>
         {filters}
-        {onClearFilters && (
-          <button type="button" onClick={onClearFilters} className="text-sm font-medium text-[#7c3aed] hover:text-[#5b21b6] transition-colors whitespace-nowrap">
-            Clear filters
-          </button>
-        )}
       </div>
 
       {/* One scroll area: long lists scroll here while the column headings stay pinned. */}
@@ -148,10 +127,7 @@ export default function RecordList<T>({
           {/* Column headings stay visible even when there are no records */}
           <div style={gridStyle} className="sticky top-0 z-10 grid gap-1.5 px-6 py-2.5 bg-[#EEF0F6] border-y border-[#E2E4EA]">
             {headers.map((h, i) => (
-              <p key={i} className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#4a5368]">
-                {h.icon && <HugeiconsIcon icon={h.icon} size={15} color="currentColor" strokeWidth={1.75} className="shrink-0" />}
-                {h.label}
-              </p>
+              <p key={i} className="text-xs font-bold uppercase tracking-wider text-[#4a5368]">{h}</p>
             ))}
           </div>
 

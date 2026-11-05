@@ -27,10 +27,10 @@ interface CustomSelectProps {
 
 // Horizontal padding is shared by the label and the chevron, so the space to the right of the icon matches the space left of the text.
 const TRIGGER: Record<Variant, string> = {
-  default: 'w-full gap-2 bg-white/60 rounded-xl px-4 py-3 border focus-visible:ring-2 focus-visible:ring-cyan-200/50',
-  form: 'w-full gap-2 bg-white rounded-xl px-3 py-2.5 text-sm border focus-visible:ring-2 focus-visible:ring-purple-200/50',
-  compact: 'gap-2 bg-[#FAFAFA] rounded-xl px-3 py-2 text-sm border focus-visible:ring-2 focus-visible:ring-purple-200/50',
-  underline: 'w-full gap-2 bg-transparent rounded-none px-0 py-3 border-0 border-b',
+  default: 'w-full gap-2 bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] border focus-visible:ring-2 focus-visible:ring-cyan-200/50',
+  form: 'w-full gap-2 bg-white rounded-xl px-3 py-2.5 text-sm text-[#1a1a1a] border focus-visible:ring-2 focus-visible:ring-purple-200/50',
+  compact: 'gap-2 bg-[#FAFAFA] rounded-xl px-3 py-2 text-sm text-[#1a1a1a] border focus-visible:ring-2 focus-visible:ring-purple-200/50',
+  underline: 'w-full gap-2 bg-transparent rounded-none px-0 py-3 text-[#1a1a1a] border-0 border-b',
 };
 
 const normalize = (o: SelectOption) => (typeof o === 'string' ? { value: o, label: o } : o);
@@ -159,7 +159,7 @@ export default function CustomSelect({
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={handleKeyDown}
-        className={`flex items-center justify-between text-left text-[#1a1a1a] focus:outline-none transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${TRIGGER[variant]} ${border}`}
+        className={`flex items-center justify-between text-left focus:outline-none transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${TRIGGER[variant]} ${border}`}
       >
         <span className={`truncate ${selected ? '' : 'text-[#bbb]'}`}>{selected ? selected.label : placeholder ?? ''}</span>
         <HugeiconsIcon
