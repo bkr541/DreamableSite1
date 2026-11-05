@@ -28,6 +28,11 @@ model Inquiry {
   approvedAt   DateTime? @map("approved_at") @db.Timestamptz()
   approvedById String?   @map("approved_by_id") @db.Uuid
 
+  // Rejection closes a lead without creating anything. The reason is an internal note — never shown outside the admin.
+  rejectedAt      DateTime? @map("rejected_at") @db.Timestamptz()
+  rejectedById    String?   @map("rejected_by_id") @db.Uuid
+  rejectionReason String?   @map("rejection_reason")
+
   // Archiving hides a lead from the open list but leaves everything linked to it untouched.
   archivedAt   DateTime? @map("archived_at") @db.Timestamptz()
   archivedById String?   @map("archived_by_id") @db.Uuid
@@ -200,6 +205,9 @@ model PasswordResetToken {
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz()
   userId     String    @map("user_id") @db.Uuid
   tokenHash  String    @unique @map("token_hash")
+  // RESET: sign-in recovery for an ACTIVE account (1 hour). INVITE: first-time setup for an INVITED account (7 days).
+  // The two never substitute for each other.
+  purpose    String    @default("RESET")
   expiresAt  DateTime  @map("expires_at") @db.Timestamptz()
   consumedAt DateTime? @map("consumed_at") @db.Timestamptz()
 

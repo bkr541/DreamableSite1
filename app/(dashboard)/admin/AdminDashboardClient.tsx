@@ -10,6 +10,8 @@ import type { SessionPayload } from '@/lib/session';
 import { useToast } from '@/components/Toast';
 import RecordList, { Avatar, StatusDot } from '@/components/RecordList';
 import NotificationsPanel from '@/components/NotificationsPanel';
+import { ApproveInquiryDialog, RejectInquiryDialog } from '@/components/InquiryReviewDialogs';
+import { INVITATION_LABEL, type InvitationState } from '@/lib/invitations';
 import DatePicker from '@/components/DatePicker';
 import { statusOptions, serviceOptions } from '@/components/dropdowns/options';
 import Dropdown from '@/components/dropdowns/Dropdown';
@@ -75,6 +77,11 @@ interface OpenInquiry {
   createdAt: string;
   /** Set when the lead is archived: hidden from the open list, but nothing linked to it changes. */
   archivedAt: string | null;
+  /** Set when rejected; the note is internal to the admin. */
+  rejectedAt: string | null;
+  rejectionReason: string | null;
+  /** The client account created from this inquiry, once approved. */
+  clientUserId: string | null;
   attachments: { id: string; fileName: string; size: number }[];
 }
 
@@ -158,6 +165,8 @@ interface Props {
   invoices: InvoiceRecord[];
   adminCompany: { id: string; name: string; website: string | null } | null;
   unreadNotifications: number;
+  /** Where each invited client stands, keyed by user id. */
+  invitations: Record<string, { state: InvitationState; at: string | null }>;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -300,7 +309,7 @@ function getDefaultInvoiceForm() {
   };
 }
 
-export default function AdminDashboardClient({ session, initialView, initialInquiryId, initialProjectId, initialTab, initialBilling, stats, recentInquiries, inquiries, deliverables, folders, comments, initialFolderId, recentUsers, clients, companies, services, projects, invoices, adminCompany, unreadNotifications }: Props) {
+export default function AdminDashboardClient({ session, initialView, initialInquiryId, initialProjectId, initialTab, initialBilling, stats, recentInquiries, inquiries, deliverables, folders, comments, initialFolderId, recentUsers, clients, companies, services, projects, invoices, adminCompany, unreadNotifications, invitations }: Props) {
   const router = useRouter();
   const [activeView, setActiveView] = useState<ViewId>(initialView);
   const [unread, setUnread] = useState(unreadNotifications);
@@ -323,6 +332,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
   const [inquiryToArchive, setInquiryToArchive] = useState<OpenInquiry | null>(null);
   const [archivingInquiry, setArchivingInquiry] = useState(false);
   const [archiveError, setArchiveError] = useState('');
+  const [reviewing, setReviewing] = useState<{ kind: 'approve' | 'reject'; inquiry: OpenInquiry } | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId);
   const [projectDirection, setProjectDirection] = useState(1);
   const selectedProject = projects.find(p => p.id === selectedProjectId) ?? null;
@@ -376,6 +386,30 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
     if (inquiryFilter.service && i.service !== inquiryFilter.service) return false;
     return true;
   });
+
+  async function reopenInquiry(inq: OpenInquiry) {
+    try {
+      const res = await fetch(`/api/admin/inquiries/${inq.id}/reopen`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Could not reopen this inquiry.');
+      toast.success('Inquiry reopened', `${inq.name}’s inquiry is back under review.`);
+      router.refresh();
+    } catch (err) {
+      toast.error('Could not reopen inquiry', err instanceof Error ? err.message : undefined);
+    }
+  }
+
+  async function resendInvite(userId: string, name: string) {
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/invite`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Could not send the invitation.');
+      toast.success(data.alreadyQueued ? 'Invitation already on its way' : 'Invitation queued', data.alreadyQueued ? `${name}’s invitation hasn’t gone out yet — no need to send another.` : `A new invitation is being sent to ${name}. Older invitation links stop working.`);
+      router.refresh();
+    } catch (err) {
+      toast.error('Could not send invitation', err instanceof Error ? err.message : undefined);
+    }
+  }
 
   async function setInquiryArchived(inq: OpenInquiry, archived: boolean) {
     const res = await fetch(`/api/admin/inquiries/${inq.id}`, {
@@ -450,9 +484,12 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
   }
   const [showAddClient, setShowAddClient] = useState(false);
   const [addForm, setAddForm] = useState({
-    name: '', email: '', role: 'CLIENT', status: 'INVITED',
+    name: '', email: '',
+    companyId: '',          // an existing company chosen from the list ('' = none / create a new one below)
     companyName: '', companyWebsite: '',
+    confirmNewCompany: false,
   });
+  const [companyClash, setCompanyClash] = useState<{ id: string; name: string } | null>(null);
   const [addError, setAddError] = useState('');
   const [addFieldError, setAddFieldError] = useState<{ field: string; message: string } | null>(null);
   const [addSubmitting, setAddSubmitting] = useState(false);
@@ -765,7 +802,8 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
   }
 
   function resetAddForm() {
-    setAddForm({ name: '', email: '', role: 'CLIENT', status: 'INVITED', companyName: '', companyWebsite: '' });
+    setAddForm({ name: '', email: '', companyId: '', companyName: '', companyWebsite: '', confirmNewCompany: false });
+    setCompanyClash(null);
     setAddError('');
     setAddFieldError(null);
   }
@@ -783,11 +821,20 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
       const res = await fetch('/api/admin/clients', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(addForm),
+        body: JSON.stringify({
+          name: addForm.name,
+          email: addForm.email,
+          ...(addForm.companyId ? { companyId: addForm.companyId } : { companyName: addForm.companyName, companyWebsite: addForm.companyWebsite, confirmNewCompany: addForm.confirmNewCompany }),
+        }),
       });
       const data = await res.json();
-      if (!res.ok) { setAddError(data.error || 'Something went wrong.'); return; }
-      toast.success('Client added', `${addForm.name.trim()} was added as ${addForm.role.toLowerCase()} with status ${addForm.status.toLowerCase()}.`);
+      if (!res.ok) {
+        if (data.code === 'COMPANY_EXISTS' && data.company) { setCompanyClash(data.company); setAddError(''); return; }
+        if (data.code === 'EMAIL_EXISTS') { setAddFieldError({ field: 'email', message: 'A client with this email already exists.' }); return; }
+        setAddError(data.error || 'Something went wrong.');
+        return;
+      }
+      toast.success('Client added', `${addForm.name.trim()} was added. An invitation email is on its way so they can set their own password.`);
       setShowAddClient(false);
       resetAddForm();
       router.refresh();
@@ -1122,8 +1169,23 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                     <h2 className="text-lg font-semibold text-[#1a1a1a] truncate">{selectedInquiry.projectName || selectedInquiry.service}</h2>
                     <p className="text-xs text-[#888] mt-0.5">Received {fmt(selectedInquiry.createdAt)}</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     <Badge status={selectedInquiry.archivedAt ? 'ARCHIVED' : selectedInquiry.status} />
+                    {!selectedInquiry.archivedAt && selectedInquiry.status === 'INQUIRY' && (
+                      <>
+                        <button type="button" onClick={() => setReviewing({ kind: 'reject', inquiry: selectedInquiry })} className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border border-[#e9b3b3] text-[#c93f3f] text-xs font-semibold hover:bg-red-50 transition-colors">
+                          Reject
+                        </button>
+                        <button type="button" onClick={() => setReviewing({ kind: 'approve', inquiry: selectedInquiry })} className="inline-flex items-center gap-1.5 h-8 px-4 rounded-full bg-[#1a2030] text-white text-xs font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all">
+                          Approve
+                        </button>
+                      </>
+                    )}
+                    {!selectedInquiry.archivedAt && selectedInquiry.status === 'REJECTED' && (
+                      <button type="button" onClick={() => reopenInquiry(selectedInquiry)} className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border border-[#1a2030] text-[#1a2030] text-xs font-semibold hover:bg-[#1a2030] hover:text-white transition-all">
+                        Reopen
+                      </button>
+                    )}
                     {selectedInquiry.archivedAt ? (
                       <button type="button" onClick={() => restoreInquiry(selectedInquiry)} className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-full border border-[#1a2030] text-[#1a2030] text-xs font-semibold hover:bg-[#1a2030] hover:text-white transition-all">
                         <HugeiconsIcon icon={ArchiveArrowUpIcon} size={15} color="currentColor" strokeWidth={1.75} /> Restore
@@ -1135,6 +1197,23 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                     )}
                   </div>
                 </div>
+                {selectedInquiry.status === 'REJECTED' && (
+                  <div className="px-6 py-3 bg-red-50/60 border-b border-red-100 text-xs text-[#7a3030]">
+                    Rejected{selectedInquiry.rejectedAt ? ` on ${fmt(selectedInquiry.rejectedAt)}` : ''}. No client or project was created.
+                    {selectedInquiry.rejectionReason && <> Internal note: <span className="font-medium">{selectedInquiry.rejectionReason}</span></>}
+                  </div>
+                )}
+                {selectedInquiry.status === 'APPROVED' && selectedInquiry.clientUserId && invitations[selectedInquiry.clientUserId] && (
+                  <div className="px-6 py-3 bg-[#F6F8FF] border-b border-[#E4E8F3] flex flex-wrap items-center justify-between gap-2 text-xs text-[#444]">
+                    <span>
+                      Client invitation: <span className={`font-semibold ${['failed', 'expired'].includes(invitations[selectedInquiry.clientUserId].state) ? 'text-[#e05252]' : ''}`}>{INVITATION_LABEL[invitations[selectedInquiry.clientUserId].state]}</span>
+                      {invitations[selectedInquiry.clientUserId].at ? ` · ${fmt(invitations[selectedInquiry.clientUserId].at!)}` : ''}
+                    </span>
+                    {invitations[selectedInquiry.clientUserId].state !== 'accepted' && invitations[selectedInquiry.clientUserId].state !== 'none' && (
+                      <button type="button" onClick={() => resendInvite(selectedInquiry.clientUserId!, selectedInquiry.name)} className="font-semibold text-[#4f6df5] hover:underline">Resend invitation</button>
+                    )}
+                  </div>
+                )}
                 <DetailTabs tab={detailTab} onChange={(t) => { setDetailTab(t); if (t !== 'deliverables') setSelectedFolderId(null); }} />
                 <div className="px-6 py-4 space-y-3">
                   {detailTab === 'info' ? (
@@ -1251,6 +1330,9 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
 
         <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
 
+        {reviewing?.kind === 'approve' && <ApproveInquiryDialog inquiry={reviewing.inquiry} onClose={() => setReviewing(null)} />}
+        {reviewing?.kind === 'reject' && <RejectInquiryDialog inquiry={reviewing.inquiry} onClose={() => setReviewing(null)} />}
+
         <AnimatePresence>
           {inquiryToArchive && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -1355,7 +1437,19 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 key: 'role', label: 'Role', width: '88px',
                 render: (c) => <span className="rounded-md border border-[#D5D9E4] px-2 py-0.5 text-xs font-semibold capitalize text-[#444]">{c.role.toLowerCase()}</span>,
               },
-              { key: 'status', label: 'Status', width: '104px', render: (c) => <StatusDot status={c.status} /> },
+              {
+                key: 'status', label: 'Status', width: '150px',
+                render: (c) => (
+                  <>
+                    <StatusDot status={c.status} />
+                    {c.status === 'INVITED' && (
+                      <p className={`text-[11px] truncate mt-0.5 ${invitations[c.id]?.state === 'failed' || invitations[c.id]?.state === 'expired' ? 'text-[#e05252] font-medium' : 'text-[#999]'}`}>
+                        {INVITATION_LABEL[invitations[c.id]?.state ?? 'none']}
+                      </p>
+                    )}
+                  </>
+                ),
+              },
               {
                 key: 'projects', label: 'Projects', width: '112px',
                 render: (c) => {
@@ -1369,8 +1463,20 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               },
             ]}
             trailing={{
-              label: 'Actions', width: '96px', interactive: true,
+              label: 'Actions', width: '132px', interactive: true,
               render: (c) => (
+                <div className="flex items-center gap-1">
+                {c.status === 'INVITED' && (
+                  <button
+                    type="button"
+                    onClick={() => resendInvite(c.id, c.name)}
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-[#4f6df5] hover:bg-[#EEF2FF] transition-colors"
+                    title={`Send ${c.name} a new invitation`}
+                    aria-label={`Resend invitation to ${c.name}`}
+                  >
+                    <HugeiconsIcon icon={Mail01Icon} size={19} color="currentColor" strokeWidth={1.5} />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => openProjectForClient(c)}
@@ -1380,6 +1486,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 >
                   <HugeiconsIcon icon={Briefcase06Icon} size={19} color="currentColor" strokeWidth={1.5} />
                 </button>
+                </div>
               ),
             }}
             expanded={(c) => expandedClientIds.has(c.id)}
@@ -2352,40 +2459,35 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-sm font-medium text-[#555]">Role</label>
-                        <Dropdown
-                label="Role"
-                value={addForm.role}
-                onChange={(v) => setAddForm(f => ({ ...f, role: v }))}
-                options={[{ value: 'CLIENT', label: 'Client' }, { value: 'DESIGNER', label: 'Designer' }, { value: 'DEVELOPER', label: 'Developer' }, { value: 'MANAGER', label: 'Manager' }]}
-                width="w-full"
-              />
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-sm font-medium text-[#555]">Status</label>
-                        <Dropdown
-                label="Status"
-                value={addForm.status}
-                onChange={(v) => setAddForm(f => ({ ...f, status: v }))}
-                options={statusOptions([{ value: 'INVITED', label: 'Invited' }, { value: 'ACTIVE', label: 'Active' }, { value: 'SUSPENDED', label: 'Suspended' }])}
-                width="w-full"
-              />
-                      </div>
-                  </div>
+                  <p className="text-xs text-[#888] leading-relaxed">
+                    The client is invited by email and chooses their own password — no password is created or sent. You can resend the invitation from the Clients list.
+                  </p>
                 </div>
 
                 {/* Company information */}
                 <div className="space-y-3">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Company Information <span className="normal-case text-[#CCC] font-normal">— optional</span></p>
 
+                  {companies.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-sm font-medium text-[#555]">Existing company</label>
+                      <Dropdown
+                        label="Company"
+                        value={addForm.companyId}
+                        onChange={(v) => { setAddForm(f => ({ ...f, companyId: v })); setCompanyClash(null); }}
+                        options={[{ value: '', label: 'New company (or none)' }, ...companies.map((c) => ({ value: c.id, label: c.name }))]}
+                        width="w-full"
+                      />
+                    </div>
+                  )}
+
+                  {!addForm.companyId && (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Company Name</label>
                       <input
                         value={addForm.companyName}
-                        onChange={e => setAddForm(f => ({ ...f, companyName: e.target.value }))}
+                        onChange={e => { setAddForm(f => ({ ...f, companyName: e.target.value, confirmNewCompany: false })); setCompanyClash(null); }}
                         placeholder="Acme Inc."
                         className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
                       />
@@ -2401,6 +2503,17 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                       />
                     </div>
                   </div>
+                  )}
+
+                  {companyClash && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-[#7a5200]" role="alert">
+                      <p>A company called <span className="font-semibold">{companyClash.name}</span> already exists.</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button type="button" className="rounded-full bg-[#1a2030] px-3.5 py-1.5 text-xs font-semibold text-white" onClick={() => { setAddForm(f => ({ ...f, companyId: companyClash.id })); setCompanyClash(null); }}>Use that company</button>
+                        <button type="button" className="rounded-full border border-[#1a2030] px-3.5 py-1.5 text-xs font-semibold text-[#1a2030]" onClick={() => { setAddForm(f => ({ ...f, confirmNewCompany: true })); setCompanyClash(null); }}>It’s a different company</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {addError && <p className="text-sm text-[#e05252]">{addError}</p>}

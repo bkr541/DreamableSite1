@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import type { SessionPayload } from '@/lib/session';
 import FileTile from '@/components/FileTile';
 import FilePreviewModal, { PreviewFile } from '@/components/FilePreviewModal';
+import AccountPanel from '@/components/AccountPanel';
 
 interface Deliverable {
   id: string;
@@ -250,6 +251,8 @@ export default function CustomerDashboardClient({ session, user, deliverables, f
         )}
 
         <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
+
+        <AccountPanel name={user.name} email={user.email} company={user.company?.name ?? null} />
 
         {/* Help footer */}
         <div className="mt-10 p-6 bg-white rounded-2xl border border-[#EBEBEB] flex flex-col sm:flex-row items-center justify-between gap-4">

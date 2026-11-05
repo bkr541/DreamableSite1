@@ -6,6 +6,7 @@ import { getClientIp } from '@/lib/clientIp';
 import { RULES, check, consume, firstDenied, tooManyRequests } from '@/lib/rateLimit';
 import { logRef, logSecurity } from '@/lib/securityLog';
 import { recoveryCodeMatches } from '@/lib/recoveryCode';
+import { passwordProblem } from '@/lib/passwordPolicy';
 import { links, notify } from '@/lib/notifications';
 
 const INVALID_CODE = { ok: false, error: 'Invalid or expired code.' };
@@ -19,9 +20,8 @@ export async function POST(req: NextRequest) {
     if (typeof email !== 'string' || typeof code !== 'string' || typeof password !== 'string' || !email || !code || !password) {
       return NextResponse.json(INVALID_CODE, { status: 400 });
     }
-    if (password.length < 8 || password.length > 200) {
-      return NextResponse.json({ ok: false, error: 'Password must be at least 8 characters.' }, { status: 400 });
-    }
+    const weak = passwordProblem(password, { email });
+    if (weak) return NextResponse.json({ ok: false, error: weak }, { status: 400 });
 
     const normalizedEmail = email.toLowerCase().trim();
     const ip = getClientIp(req.headers);

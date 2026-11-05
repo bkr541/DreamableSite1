@@ -1,5 +1,6 @@
 'use client';
 
+import { PASSWORD_HINT, passwordProblem } from '@/lib/passwordPolicy';
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -15,6 +16,7 @@ function ResetPasswordContent() {
   const token = searchParams.get('token') ?? '';
 
   const [status, setStatus] = useState<TokenStatus>('validating');
+  const [invite, setInvite] = useState(false); // an invitation (first-time setup) rather than a password reset
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -31,7 +33,7 @@ function ResetPasswordContent() {
       .then((r) => r.json())
       .then((data) => {
         if (data.expired) { setStatus('expired'); return; }
-        if (data.valid) { setStatus('valid'); return; }
+        if (data.valid) { setInvite(data.purpose === 'invite'); setStatus('valid'); return; }
         setStatus('invalid');
       })
       .catch(() => setStatus('invalid'));
@@ -41,8 +43,9 @@ function ResetPasswordContent() {
     e.preventDefault();
     setFieldError('');
 
-    if (password.length < 8) {
-      setFieldError('Password must be at least 8 characters.');
+    const weak = passwordProblem(password);
+    if (weak) {
+      setFieldError(weak);
       return;
     }
     if (password !== confirm) {
@@ -84,9 +87,9 @@ function ResetPasswordContent() {
 
       {status === 'valid' && (
         <div>
-          <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-2">Set your password</p>
+          <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-2">{invite ? 'Set up your account' : 'Set your password'}</p>
           <p className="text-sm text-[#888] mb-8">
-            Choose a new password for your account. This link can only be used once.
+            {invite ? 'Welcome to your client portal. Choose a password to finish setting up your account.' : 'Choose a new password for your account.'} This link can only be used once. {PASSWORD_HINT}
           </p>
 
           <form onSubmit={handleSetPassword} className="space-y-6" noValidate>
@@ -138,7 +141,7 @@ function ResetPasswordContent() {
         <div className="text-center">
           <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-8">Password set</p>
           <p className="text-sm text-[#555] leading-relaxed">
-            Your password has been updated. Redirecting you to sign in…
+            {invite ? 'Your account is ready.' : 'Your password has been updated.'} Redirecting you to sign in…
           </p>
         </div>
       )}
@@ -147,7 +150,7 @@ function ResetPasswordContent() {
         <div className="text-center">
           <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-8">Link expired</p>
           <p className="text-sm text-[#888] leading-relaxed">
-            This reset link has expired. Please request a new one from the sign-in page.
+            This link has expired. If it was an invitation, ask Dreamable.studio to send a new one; if you were resetting your password, request a new link from the sign-in page.
           </p>
           <div className="flex justify-center pt-6">
             <Link
@@ -164,7 +167,7 @@ function ResetPasswordContent() {
         <div className="text-center">
           <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-8">Invalid link</p>
           <p className="text-sm text-[#888] leading-relaxed">
-            This reset link is not valid. It may have already been used or was malformed.
+            This link is not valid. It may have already been used, been replaced by a newer one, or been malformed.
           </p>
           <div className="flex justify-center pt-6">
             <Link

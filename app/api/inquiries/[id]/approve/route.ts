@@ -6,11 +6,13 @@ import { toApprovalResponse } from '@/lib/approvalDto';
 import { enqueueEmail } from '@/lib/emailOutbox';
 import { dispatchOutbox } from '@/lib/dispatch';
 import { links, notify } from '@/lib/notifications';
+import { canReview } from '@/lib/inquiryReview';
 
 const REQUIRED_FIELDS = ['name', 'email', 'service', 'description'] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const INCLUDE = { companyRecord: true, user: true, project: true } as const;
+const EMAIL_TAKEN = 'A client account with this email address already exists, so a second one can’t be created. Open Clients to review it before approving this request.';
 
 export async function POST(
   req: NextRequest,
@@ -33,15 +35,22 @@ export async function POST(
       const inquiry = await tx.inquiry.findUnique({ where: { id }, include: INCLUDE });
       if (!inquiry) return { kind: 'not_found' as const };
 
-      if (inquiry.archivedAt && !(inquiry.companyRecord && inquiry.user && inquiry.project)) return { kind: 'archived' as const };
+      // Idempotent: everything already exists, so change nothing, write no audit row, queue no second invitation.
+      if (inquiry.companyRecord && inquiry.user && inquiry.project) {
+        return { kind: 'ok' as const, body: { ...toApprovalResponse(inquiry), alreadyApproved: true } };
+      }
+
+      // Rejected and archived inquiries can't be approved by accident (see lib/inquiryReview.ts).
+      const verdict = canReview(inquiry, 'approve');
+      if (!verdict.ok) return { kind: 'blocked' as const, verdict };
 
       const missing = REQUIRED_FIELDS.filter((f) => !inquiry[f]);
       if (missing.length) return { kind: 'missing' as const, missing };
 
-      // Idempotent: everything already exists, so change nothing and write no audit row.
-      if (inquiry.companyRecord && inquiry.user && inquiry.project) {
-        return { kind: 'ok' as const, body: toApprovalResponse(inquiry) };
-      }
+      // An existing account is never overwritten or re-pointed at a different request.
+      const email = inquiry.email.toLowerCase().trim();
+      const existing = await tx.user.findUnique({ where: { email }, select: { inquiryId: true, name: true, status: true } });
+      if (existing && existing.inquiryId !== id) return { kind: 'email_taken' as const, name: existing.name, status: existing.status };
 
       const now = new Date();
       const approved = await tx.inquiry.update({
@@ -57,7 +66,7 @@ export async function POST(
         where: { inquiryId: id },
         update: {},
         create: {
-          inquiryId: id, companyId: company.id, name: inquiry.name, email: inquiry.email,
+          inquiryId: id, companyId: company.id, name: inquiry.name, email,
           role: 'CLIENT', status: 'INVITED', invitedAt: now,
         },
       });
@@ -93,7 +102,8 @@ export async function POST(
       return { kind: 'ok' as const, body: toApprovalResponse({ ...approved, companyRecord: company, user, project }), first: true as const };
     });
 
-    if (result.kind === 'archived') return NextResponse.json({ ok: false, error: 'Restore this inquiry before approving it.' }, { status: 409 });
+    if (result.kind === 'blocked') return NextResponse.json({ ok: false, code: result.verdict.code, error: result.verdict.error }, { status: 409 });
+    if (result.kind === 'email_taken') return NextResponse.json({ ok: false, code: 'EMAIL_EXISTS', error: EMAIL_TAKEN }, { status: 409 });
     if (result.kind === 'not_found') return NextResponse.json({ ok: false, error: 'Inquiry not found.' }, { status: 404 });
     if (result.kind === 'missing') {
       return NextResponse.json({ ok: false, error: `Missing required fields: ${result.missing.join(', ')}.` }, { status: 422 });
@@ -103,7 +113,7 @@ export async function POST(
   } catch (err: unknown) {
     // Unique constraint on users.email — someone with this email already exists. The transaction rolled back.
     if (err instanceof Error && 'code' in err && (err as { code: string }).code === 'P2002') {
-      return NextResponse.json({ ok: false, error: 'A user with this email already exists.' }, { status: 409 });
+      return NextResponse.json({ ok: false, code: 'EMAIL_EXISTS', error: EMAIL_TAKEN }, { status: 409 });
     }
     console.error('[approve] unexpected error:', err);
     return NextResponse.json({ ok: false, error: 'Internal server error.' }, { status: 500 });

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import AdminDashboardClient from './AdminDashboardClient';
 import { ToastProvider } from '@/components/Toast';
 import { dispatchOutbox } from '@/lib/dispatch';
+import { invitationState, type InvitationState } from '@/lib/invitations';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -32,6 +33,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         select: {
           id: true, name: true, email: true, company: true, service: true, description: true,
           budgetRange: true, timeline: true, status: true, createdAt: true, metadata: true, archivedAt: true,
+          rejectedAt: true, rejectionReason: true, user: { select: { id: true, status: true } },
           attachments: { where: { status: 'READY' }, select: { id: true, fileName: true, size: true }, orderBy: { createdAt: 'asc' } },
         },
       }),
@@ -112,6 +114,20 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     .count({ where: { reads: { none: { userId: admin.id } } } })
     .catch(() => 0); // a not-yet-migrated database shows no badge instead of breaking the page
 
+  // Where each invited client stands (queued / sent / failed / expired), from their latest invitation email.
+  const invited = [...clients, ...allInquiries.map((i) => i.user).filter((u) => !!u) as { id: string; status: string }[]].filter((u) => u.status === 'INVITED');
+  const jobs = invited.length
+    ? await prisma.emailOutbox
+        .findMany({ where: { eventType: 'client.invitation', entityId: { in: invited.map((u) => u.id) } }, orderBy: { createdAt: 'desc' }, select: { entityId: true, status: true, sentAt: true, createdAt: true } })
+        .catch(() => [])
+    : [];
+  const invitations: Record<string, { state: InvitationState; at: string | null }> = {};
+  for (const u of invited) {
+    const latest = jobs.find((j) => j.entityId === u.id) ?? null;
+    const { state, at } = invitationState(u, latest);
+    invitations[u.id] = { state, at: at?.toISOString() ?? null };
+  }
+
   // Whenever staff open the admin, anything queued and due (e.g. after a mail outage) gets another try.
   dispatchOutbox();
 
@@ -127,7 +143,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       stats={{ totalUsers, totalProjects, activeProjects, openInquiries }}
       inquiries={allInquiries.map(({ metadata, createdAt, ...i }) => {
         const meta = (metadata ?? {}) as { phone?: string; projectName?: string };
-        return { ...i, archivedAt: i.archivedAt?.toISOString() ?? null, phone: meta.phone ?? null, projectName: meta.projectName ?? null, createdAt: createdAt.toISOString() };
+        return { ...i, user: undefined, clientUserId: i.user?.id ?? null, rejectedAt: i.rejectedAt?.toISOString() ?? null, archivedAt: i.archivedAt?.toISOString() ?? null, phone: meta.phone ?? null, projectName: meta.projectName ?? null, createdAt: createdAt.toISOString() };
       })}
       recentInquiries={recentInquiries.map((i) => ({ ...i, createdAt: i.createdAt.toISOString() }))}
       recentUsers={recentUsers.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}
@@ -142,6 +158,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       invoices={invoices.map((inv) => ({ ...inv, createdAt: inv.createdAt.toISOString() }))}
       adminCompany={adminUser?.company ?? null}
       unreadNotifications={unreadNotifications}
+      invitations={invitations}
     />
     </ToastProvider>
   );

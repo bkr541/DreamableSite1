@@ -17,7 +17,7 @@ beforeEach(async () => {
 
 describe('migration safety (real Postgres, real schema)', () => {
   it('the new migrations are idempotent — running them again changes nothing and errors nothing', async () => {
-    for (const dir of ['20261105000000_abuse_protection', '20261105010000_files_sharing_archive', '20261105020000_email_outbox_notifications']) {
+    for (const dir of ['20261105000000_abuse_protection', '20261105010000_files_sharing_archive', '20261105020000_email_outbox_notifications', '20261105030000_review_and_invitations']) {
       const sql = readFileSync(path.resolve(__dirname, `../prisma/migrations/${dir}/migration.sql`), 'utf8');
       await db.exec(sql);
       await db.exec(sql);
@@ -114,5 +114,32 @@ describe('outbox and notification tables (real Postgres)', () => {
     expect(await q(`SELECT 1 FROM admin_notifications n WHERE NOT EXISTS (SELECT 1 FROM notification_reads r WHERE r.notification_id = n.id AND r.user_id = '${FOLDER}')`)).toHaveLength(1);
     await db.exec(`DELETE FROM admin_notifications`);
     expect(await q(`SELECT 1 FROM notification_reads`)).toHaveLength(0);
+  });
+});
+
+describe('review and invitation migration (real Postgres)', () => {
+  const USER = '70000000-0000-4000-8000-0000000000aa';
+  const ins = (id: string, email: string, status: string, extra = '') =>
+    db.exec(`INSERT INTO users (id, name, email, status, password_hash${extra ? ', ' + extra.split('=')[0] : ''}) VALUES ('${id}', 'N', '${email}', '${status}', 'salt:hash'${extra ? ', ' + extra.split('=')[1] : ''})`);
+
+  it('clears the unknowable password of never-signed-in invited clients, and nobody else', async () => {
+    await ins('70000000-0000-4000-8000-000000000001', 'new@x.co', 'INVITED');
+    await ins('70000000-0000-4000-8000-000000000002', 'seen@x.co', 'INVITED', "last_login_at=now()");
+    await ins('70000000-0000-4000-8000-000000000003', 'active@x.co', 'ACTIVE');
+    await ins('70000000-0000-4000-8000-000000000004', 'admin@x.co', 'INVITED', 'admin=true');
+    await db.exec(`UPDATE users SET password_hash = NULL WHERE status = 'INVITED' AND last_login_at IS NULL AND admin = false AND password_hash IS NOT NULL`);   // the backfill statement
+    const rows = Object.fromEntries((await q(`SELECT email, password_hash FROM users`)).map((r) => [r.email, r.password_hash]));
+    expect(rows['new@x.co']).toBeNull();
+    expect(rows['seen@x.co']).toBe('salt:hash');
+    expect(rows['active@x.co']).toBe('salt:hash');
+    expect(rows['admin@x.co']).toBe('salt:hash');
+  });
+
+  it('existing tokens become password-reset tokens; invitations and rejections have somewhere to live', async () => {
+    await ins(USER, 'u@x.co', 'ACTIVE');
+    await db.exec(`INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ('${USER}', 'h1', now() + interval '1 hour')`);
+    expect(await q(`SELECT purpose FROM password_reset_tokens`)).toEqual([{ purpose: 'RESET' }]);
+    await db.exec(`UPDATE inquiries SET status = 'REJECTED', rejected_at = now(), rejection_reason = 'no fit' WHERE id = '${INQ}'`);
+    expect(await q(`SELECT status, rejection_reason FROM inquiries`)).toEqual([{ status: 'REJECTED', rejection_reason: 'no fit' }]);
   });
 });

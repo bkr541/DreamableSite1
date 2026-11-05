@@ -1,5 +1,6 @@
 'use client';
 
+import { passwordProblem } from '@/lib/passwordPolicy';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -162,8 +163,9 @@ export default function Portal() {
       setResetError('Passwords do not match.');
       return;
     }
-    if (newPassword.length < 8) {
-      setResetError('Password must be at least 8 characters.');
+    const weak = passwordProblem(newPassword, { email: resetEmail });
+    if (weak) {
+      setResetError(weak);
       return;
     }
 

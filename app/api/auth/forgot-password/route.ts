@@ -33,9 +33,12 @@ export async function POST(req: NextRequest) {
     // no token ever sits in the queue, and the request takes the same time whether or not the account exists.
     const user = await prisma.user.findUnique({ where: { email: normalized }, select: { id: true, email: true, status: true } });
     if (user && canUsePasswordFlow(user.status)) {
+      // An account that was never set up gets a fresh invitation (which also retires older ones); a working
+      // account gets a reset link. Either way the response below is identical.
+      const invited = user.status === 'INVITED';
       await enqueueEmail(prisma, {
-        eventType: 'auth.reset_link', recipient: user.email,
-        dedupeKey: `reset-link:${user.id}:${Math.floor(Date.now() / 15_000)}`, // a double click within a few seconds is one email
+        eventType: invited ? 'client.invitation' : 'auth.reset_link', recipient: user.email,
+        dedupeKey: `${invited ? 'invite-request' : 'reset-link'}:${user.id}:${Math.floor(Date.now() / 15_000)}`, // a double click within a few seconds is one email
         payload: { userId: user.id }, entityType: 'user', entityId: user.id,
       });
       dispatchOutbox();

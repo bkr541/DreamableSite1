@@ -178,7 +178,7 @@ A signed cookie is only a *claim*. `lib/authz.ts` (`requireUser`, `requireAdmin`
 ### Account states (`users.status`)
 | Status | Sign in | Password link/code | Notes |
 |---|---|---|---|
-| `INVITED` | no | yes — completing it activates the account | Created by inquiry approval or "Add client" |
+| `INVITED` | no | yes — an **invitation link** (or the emailed code on the sign-in page) completes setup and activates the account | Created by inquiry approval or "Add client"; has no password until then |
 | `ACTIVE` | yes | yes (stays `ACTIVE`) | |
 | `SUSPENDED` | no | **no** — never reactivated by a reset | Only an admin action changes it |
 | anything else | no | no | Fails closed |
@@ -357,4 +357,54 @@ The *Workspace* entry held a single shortcut (Generate invoice) that Billing →
 4. On a preview deployment or locally, confirm a test inquiry does **not** email the customer.
 
 `npm test` covers the outbox (outage, backoff, give-up, retry, concurrency, crash recovery, no secrets in the queue), mail-mode safety, notification endpoints and event wiring, and — on a real in-process Postgres built from the migrations — the unique-key guarantees. **Not covered:** a real SMTP server, real Vercel Cron timing, and the visual layout of the new screen in a browser.
+
+---
+
+## Inquiry review & client onboarding
+
+### Review workflow
+Open an inquiry in **Admin → Inquiries**. Open (`INQUIRY`) inquiries show **Approve** and **Reject**; the status badge and filter distinguish *Inquiry / Approved / Rejected / Archived*.
+
+| From | Action | To | Notes |
+|---|---|---|---|
+| Inquiry | **Approve** | Approved | Confirmation dialog lists what is created (client, company, project) and that an invitation email follows. Calls `POST /api/inquiries/:id/approve` (admin-only). Repeated clicks are harmless: the second answer is "already approved" and nothing is created or emailed again. |
+| Inquiry | **Reject** (optional internal note) | Rejected | `POST /api/admin/inquiries/:id/reject`. Creates nothing, deletes nothing (attachments stay), **emails nobody**. Stores who/when/why; the note is shown only in the admin. |
+| Rejected | **Reopen** | Inquiry | `POST /api/admin/inquiries/:id/reopen`. The only way back, so an approval never silently overrides a rejection. |
+| Approved | Reject | — refused | It already has a client and project; archive it or manage the project instead. Its project is never touched. |
+| Archived | any review action | — refused | Restore it first. |
+
+Rules live in one place (`lib/inquiryReview.ts`). Approval refuses, with an actionable message: missing required fields (422); an email that already belongs to an account (409 `EMAIL_EXISTS` — **an existing account is never overwritten or re-pointed**; review it under Clients); a rejected or archived inquiry (409). Approval and rejection can't race each other (row lock / conditional update). If the invitation email later fails, the approval stands — the email is retried from the outbox.
+
+### Invitations (no passwords are ever generated or emailed)
+Approving an inquiry or adding a client creates an `INVITED` account **without a password** and queues an invitation. The email is built when it is sent and contains a single-use link (`/portal/reset-password?token=…`) for a **separate token purpose, `INVITE`**:
+
+* valid **7 days**, one use; a password-reset link (`RESET`, **1 hour**) can't activate an invited account and an invitation can't be used on an active one;
+* only works while the account is still `INVITED` — a suspended client can't activate through an invitation (checked again inside the same transaction as the password write);
+* the setup page asks for a strong password (≥ 10 characters, not a common password, not containing the email — `lib/passwordPolicy.ts`, the same rule everywhere a password is chosen);
+* sending a new invitation retires every older one, so only the newest link works.
+
+**Admin visibility.** *Clients → Status* shows `Invitation queued / sent / failed / expired` under *Invited* clients, and approved inquiries show the same with **Resend invitation**; the *Mail* icon in the Clients row does the same (`POST /api/admin/users/:id/invite`). Resending is refused for active or suspended accounts, is a no-op while one is already on its way, and waits a minute after one was just sent; it is audited (`client.invite_resend`). Delivery failures retry through the outbox (see *Email*) and appear under *Notifications → Email delivery*. "Forgot password" on an account that was never set up sends a fresh invitation instead of a reset link.
+
+### Adding a client (`POST /api/admin/clients`)
+Name and email are validated; **role and status can't be chosen** (always `CLIENT` / `INVITED` — anything else is a 400, and the Add Client dialog no longer offers them). Company, user and invitation are created in **one transaction**: a duplicate email (checked first, and again by the database if it races) or any failure leaves **no orphan company** and nothing else behind. Companies are chosen explicitly (existing-company list) or created new; typing a name that already exists asks "use that one / it's a different company" instead of merging or silently duplicating.
+
+### Customer account (portal)
+*Your account* on the customer dashboard (collapsed by default): change **name**; change **password** (requires the current password, rate limited, strength rules, signs out every *other* device while this one continues on a fresh session); email and company are shown and changed by the studio. The endpoints (`/api/account/profile`, `/api/account/password`) always act on the signed-in user — there is no id in the request — and refuse any other field (`email`, `role`, `admin`, `status`, `company`…) with a 403. Changing the email address from the portal is deliberately not offered (it is the sign-in identity and would need a verified confirmation flow); contact the studio.
+
+### Admin profile (`PUT /api/admin/profile`)
+The user and company changes are one transaction (an email conflict after the company was updated undoes the company update; the conflict is also checked before anything is written). The session cookie is re-issued only after the commit, from the database's role. A company that other people belong to is never edited from one member's profile: the admin gets a company of their own instead. A new email address ends the admin's other sessions (the cookie issued here carries the new version).
+
+### Deploying
+1. Run `prisma/migrations/20261105030000_review_and_invitations/migration.sql` first (additive). It also clears the never-usable random password hash of invited clients who have never signed in — they get in through an invitation (**Clients → Resend invitation**), not by anything stored.
+2. Deploy. Invitations are only queued for approvals and clients created from now on; **already-invited clients are not emailed automatically** (use Resend). Reset links issued before the deploy keep working for ≤ 1 hour.
+3. Rollback: the previous release still runs against the new columns.
+
+### Manual verification
+1. Submit the contact form → the inquiry appears; open it → **Approve**: dialog → confirm; the badge becomes *Approved*, the client appears under Clients as *Invited · Invitation queued → sent*, the project under Projects.
+2. Open the invitation email, click the link, set a weak password (refused) then a good one → you land on sign-in; sign in. The admin gets an "activated their account" notification. Click the link again: refused.
+3. Add a client with an email that exists → clear message, no stray company. Add one with a company name that exists → the use-it/different prompt.
+4. Reject a second inquiry with a note → *Rejected*, no client/email; **Reopen**, then approve.
+5. As the client: *Your account* → change name (header updates) and password (other browser is signed out).
+
+`npm test` covers all of the above — including the full inquiry → approval → invitation email → activation → sign-in journey, expired/reused/replaced/suspended-holder invitations, outage and resend paths, atomic rollbacks, privilege-escalation attempts and the migration backfill on a real in-process Postgres. **Not covered:** real email delivery and how the new dialogs look in a browser.
 

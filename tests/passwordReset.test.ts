@@ -128,7 +128,7 @@ describe('account state is respected by both reset flows', () => {
   });
   it('an invited account is activated by completing its emailed setup link', async () => {
     mem.users[0].status = 'INVITED';
-    const t = await issueResetToken('u1');
+    const t = await issueResetToken('u1', 'INVITE');
     expect((await set(t)).status).toBe(200);
     expect(mem.users[0].status).toBe('ACTIVE');
     // Staff are told once, and a replay of the same link doesn't tell them again.

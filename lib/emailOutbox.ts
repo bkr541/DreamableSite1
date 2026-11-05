@@ -114,14 +114,18 @@ async function render(job: Job): Promise<{ to: string; mail: BuiltMail }> {
   }
 
   const user = await prisma.user.findUnique({ where: { id: p.userId }, select: { id: true, name: true, email: true, status: true } });
+  // Each email is only valid for the state it was written for: invitations for accounts still to be set up, reset
+  // links for working accounts, codes for either. A suspended account gets none of them.
   if (!user || !canUsePasswordFlow(user.status)) throw new Suppress('the account is not eligible');
+  if (job.eventType === 'client.invitation' && user.status !== 'INVITED') throw new Suppress('the account is already set up');
+  if (job.eventType === 'auth.reset_link' && user.status !== 'ACTIVE') throw new Suppress('the account has not been set up yet');
 
   if (job.eventType === 'auth.recovery_code') {
     const code = genCode();
     await prisma.user.update({ where: { id: user.id }, data: { templogincode: hashRecoveryCode(user.email, code), tempLoginCodeExpiresAt: new Date(Date.now() + 10 * 60 * 1000) } });
     return { to: user.email, mail: buildRecoveryCodeEmail(code) };
   }
-  const token = await issueResetToken(user.id);
+  const token = await issueResetToken(user.id, job.eventType === 'client.invitation' ? 'INVITE' : 'RESET');
   const url = `${appUrl()}/portal/reset-password?token=${encodeURIComponent(token)}`;
   return { to: user.email, mail: job.eventType === 'client.invitation' ? buildInvitationEmail(user.name, url) : buildResetLinkEmail(url) };
 }

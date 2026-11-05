@@ -189,6 +189,9 @@ export const RULES = {
   loginIpEmail:      { name: 'login.ip-email',      limit: 5,  windowSec: 15 * MIN, maxBlockSec: 60 * MIN, failuresOnly: true },
   loginEmail:        { name: 'login.email',         limit: 10, windowSec: 15 * MIN, maxBlockSec: 60 * MIN, failuresOnly: true },
 
+  // Re-entering a current password to change it: a few wrong tries per account, then a cooldown that always expires.
+  accountReauth:     { name: 'account.reauth', limit: 5, windowSec: 15 * MIN, maxBlockSec: 60 * MIN, failuresOnly: true },
+
   // Shared by forgot-password and request-code so the two together cannot flood one mailbox.
   recoveryEmailIp:   { name: 'recovery.send.ip',    limit: 10, windowSec: 60 * MIN, maxBlockSec: 240 * MIN },
   recoveryEmail:     { name: 'recovery.send.email', limit: 3,  windowSec: 60 * MIN, maxBlockSec: 240 * MIN },

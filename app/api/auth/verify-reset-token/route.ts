@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { lookupResetToken } from '@/lib/resetTokens';
-import { canUsePasswordFlow } from '@/lib/accountStatus';
 import { getClientIp } from '@/lib/clientIp';
 import { RULES, consume, tooManyRequests } from '@/lib/rateLimit';
 
@@ -15,10 +14,11 @@ export async function POST(req: NextRequest) {
     const { token } = await req.json();
     const found = await lookupResetToken(token);
     if (found.state === 'expired') return NextResponse.json({ valid: false, expired: true });
-    if (found.state !== 'valid' || !canUsePasswordFlow(found.user.status)) {
+    // Valid only for the state it was issued for (an invitation for an invited account, a reset for an active one).
+    if (found.state !== 'valid' || found.user.status !== (found.purpose === 'INVITE' ? 'INVITED' : 'ACTIVE')) {
       return NextResponse.json({ valid: false, expired: false });
     }
-    return NextResponse.json({ valid: true, expired: false });
+    return NextResponse.json({ valid: true, expired: false, purpose: found.purpose === 'INVITE' ? 'invite' : 'reset' });
   } catch (err) {
     console.error('[verify-reset-token] error:', err);
     return NextResponse.json({ valid: false, expired: false });

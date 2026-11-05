@@ -4,10 +4,11 @@ import { hashPassword } from '@/lib/auth';
 import { getClientIp } from '@/lib/clientIp';
 import { RULES, consume, tooManyRequests } from '@/lib/rateLimit';
 import { consumeResetToken, lookupResetToken } from '@/lib/resetTokens';
-import { statusAfterPasswordFlow } from '@/lib/accountStatus';
+import { passwordProblem } from '@/lib/passwordPolicy';
 import { links, notify } from '@/lib/notifications';
 
 const INVALID = { ok: false, error: 'Reset link is invalid or expired.' };
+const INVITE_USED = { ok: false, error: 'This invitation has already been used or is no longer valid. Sign in, or ask us to send a new one.' };
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,29 +17,36 @@ export async function POST(req: NextRequest) {
 
     const { token, password } = await req.json();
 
-    if (typeof token !== 'string' || typeof password !== 'string' || password.length < 8 || password.length > 200) {
-      return NextResponse.json({ ok: false, error: 'Token and a password of at least 8 characters are required.' }, { status: 400 });
+    if (typeof token !== 'string' || typeof password !== 'string') {
+      return NextResponse.json({ ok: false, error: 'A link and a password are required.' }, { status: 400 });
     }
 
     const found = await lookupResetToken(token);
     if (found.state !== 'valid') return NextResponse.json(INVALID, { status: 400 });
 
-    const nextStatus = statusAfterPasswordFlow(found.user.status);
-    if (!nextStatus) return NextResponse.json(INVALID, { status: 400 }); // suspended etc.: a link never reactivates
+    // A link only works for the situation it was issued for. An invitation completes first-time setup of an
+    // INVITED account; a reset link recovers an ACTIVE one. Neither can be used to move any other account
+    // (suspended, already set up, …) anywhere — a link never reactivates a suspended client.
+    const invite = found.purpose === 'INVITE';
+    const requiredStatus = invite ? 'INVITED' : 'ACTIVE';
+    if (found.user.status !== requiredStatus) return NextResponse.json(invite ? INVITE_USED : INVALID, { status: 400 });
 
-    const wasInvited = found.user.status === 'INVITED';
+    const account = await prisma.user.findUnique({ where: { id: found.user.id }, select: { email: true, name: true } });
+    const weak = passwordProblem(password, { email: account?.email });
+    if (weak) return NextResponse.json({ ok: false, error: weak }, { status: 400 });
+
+    const wasInvited = invite;
     const passwordHash = await hashPassword(password);
 
     const done = await prisma.$transaction(async (tx) => {
       // Claim the link first. Of two simultaneous requests only one gets count === 1.
       if (!(await consumeResetToken(tx, found.id))) return false;
 
-      // Re-check the status inside the same transaction so a suspension between lookup and now still wins.
       const { count } = await tx.user.updateMany({
-        where: { id: found.user.id, status: { in: ['ACTIVE', 'INVITED'] } },
+        where: { id: found.user.id, status: requiredStatus },   // re-checked here, so a suspension in between still wins
         data: {
           passwordHash,
-          status: nextStatus,
+          status: 'ACTIVE',
           templogincode: null,
           tempLoginCodeExpiresAt: null,
           sessionVersion: { increment: 1 }, // every existing session for this user dies

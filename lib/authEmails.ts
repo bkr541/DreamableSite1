@@ -47,10 +47,10 @@ export function buildInvitationEmail(name: string, setupUrl: string): BuiltMail 
         <h2 style="font-size:22px;font-weight:600;margin-bottom:16px;">Welcome, ${first}!</h2>
         <p style="color:#555;line-height:1.6;margin-bottom:28px;">
           Your Dreamable.studio client portal is ready. Choose a password to sign in and see your project and files.
-          This link works once and expires in 1 hour — if it expires, use &ldquo;Forgot password&rdquo; on the sign-in page for a new one.
+          This link works once and expires in 7 days — if it expires, ask us to send a new invitation or use &ldquo;Forgot password&rdquo; on the sign-in page.
         </p>
         ${button(setupUrl, 'Set up your account')}
         <p style="color:#aaa;font-size:12px;margin-top:32px;line-height:1.6;">If you weren&apos;t expecting this, you can ignore this email.</p>`),
-    text: `Your Dreamable.studio client portal is ready. Choose a password (link works once, expires in 1 hour):\n${setupUrl}`,
+    text: `Your Dreamable.studio client portal is ready. Choose a password (link works once, expires in 7 days):\n${setupUrl}`,
   };
 }

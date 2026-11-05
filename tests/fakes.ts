@@ -67,6 +67,11 @@ export function table(rows: Row[] = [], opts: Opts = {}) {
     },
     update: async ({ where, data }: Row) => { const r = rows.find((x) => match(x, where)); if (!r) throw Object.assign(new Error('nf'), { code: 'P2025' }); apply(r, data); return r; },
     updateMany: async ({ where, data }: Row) => { const hit = rows.filter((r) => match(r, where)); hit.forEach((r) => apply(r, data)); return { count: hit.length }; },
+    upsert: async ({ where, create, update }: Row) => {
+      const r = rows.find((x) => match(x, where));
+      if (r) { apply(r, update ?? {}); return { ...r }; }
+      const created = { id: randomUUID(), ...(opts.defaults?.() ?? {}), ...create }; rows.push(created); return { ...created };
+    },
     delete: async ({ where }: Row) => { const i = rows.findIndex((r) => match(r, where)); if (i < 0) throw Object.assign(new Error('nf'), { code: 'P2025' }); return rows.splice(i, 1)[0]; },
     deleteMany: async ({ where }: Row = {}) => { const keep = rows.filter((r) => !match(r, where)); const n = rows.length - keep.length; rows.length = 0; rows.push(...keep); return { count: n }; },
   };
@@ -84,4 +89,23 @@ export function mailTables() {
     adminNotification: table([], { unique: 'dedupeKey', defaults: () => ({ createdAt: new Date(), body: null }) }),
     notificationRead: table([], { unique: 'notificationId' }),
   };
+}
+
+
+/**
+ * Gives a fake database real transaction behaviour: if the callback throws, every table goes back to exactly how it
+ * was before the transaction began. This is what lets a test prove "nothing was left behind".
+ */
+export function withTransactions(db: Record<string, any>) {
+  db.$transaction = async (arg: any) => {
+    const tables = Object.values(db).filter((t: any) => t && Array.isArray(t.rows)) as { rows: Row[] }[];
+    const snapshot = tables.map((t) => [t, t.rows.map((r) => ({ ...r }))] as const);
+    try {
+      return typeof arg === 'function' ? await arg(db) : await Promise.all(arg);
+    } catch (err) {
+      for (const [t, rows] of snapshot) { t.rows.length = 0; t.rows.push(...rows); }
+      throw err;
+    }
+  };
+  return db;
 }

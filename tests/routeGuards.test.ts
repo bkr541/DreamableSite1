@@ -88,4 +88,21 @@ describe('authorization is centralised', () => {
     const files2 = files.filter((f) => /app\/api\//.test(f) && /prisma\.inquiry\.delete\(|tx\.inquiry\.delete\(/.test(readFileSync(f, 'utf8')));
     expect(files2.map(rel)).toEqual(['app/api/admin/inquiries/[id]/purge/route.ts']);
   });
+  it('self-service account routes act only on the signed-in user (requireUser, no id taken from the request)', () => {
+    for (const f of ['app/api/account/profile/route.ts', 'app/api/account/password/route.ts']) {
+      const src = readFileSync(path.join(root, f), 'utf8');
+      expect(src, f).toMatch(/requireUser\(req\)/);
+      expect(src, f).not.toMatch(/body\.(userId|id)\b|params/);
+    }
+  });
+  it('every route that sets a password applies the shared strength policy', () => {
+    for (const f of ['app/api/auth/set-password/route.ts', 'app/api/auth/update-password/route.ts', 'app/api/account/password/route.ts']) {
+      expect(readFileSync(path.join(root, f), 'utf8'), f).toMatch(/passwordProblem\(/);
+    }
+  });
+  it('the app never invents or emails a password: no random-password generator remains', () => {
+    const offenders = files.filter((f) => /app\/api\//.test(f) && /generateSecurePassword|randomBytes\(18\)|temporary password/i.test(readFileSync(f, 'utf8')));
+    expect(offenders.map(rel)).toEqual([]);
+    expect(readFileSync(path.join(root, 'app/api/admin/clients/route.ts'), 'utf8')).not.toMatch(/hashPassword/);
+  });
 });

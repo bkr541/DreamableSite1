@@ -1,74 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
 import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
-import { hashPassword } from '@/lib/auth';
-import { isUserStatus } from '@/lib/accountStatus';
 import { enqueueEmail } from '@/lib/emailOutbox';
 import { dispatchOutbox } from '@/lib/dispatch';
+import { headerText, safeEmailAddress } from '@/lib/html';
 
-function generateSecurePassword(): string {
-  // 24-char random password — strong enough that the client should reset via forgot-password
-  return randomBytes(18).toString('base64url');
-}
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const fail = (error: string, status: number, extra: object = {}) => NextResponse.json({ ok: false, error, ...extra }, { status });
+const EMAIL_TAKEN = 'An account with that email address already exists.';
 
+// Adds a client. Every client starts INVITED with no password: they choose their own through the emailed
+// invitation, nobody is ever given (or emailed) a password. Admins cannot set a client's role or status here —
+// those are fixed server-side, so a crafted request can't create a privileged or pre-activated account.
 export async function POST(req: NextRequest) {
   const auth = await requireAdmin(req);
   if (!auth.ok) return auth.response;
 
-  const { name, email, role = 'CLIENT', status = 'INVITED', companyName, companyWebsite } =
-    await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== 'object') return fail('We could not read that request.', 400);
 
-  if (role !== 'CLIENT' || !isUserStatus(status)) {
-    return NextResponse.json({ ok: false, error: 'Invalid role or status.' }, { status: 400 });
-  }
+  if (body.role !== undefined && body.role !== 'CLIENT') return fail('Only client accounts can be created here.', 400);
+  if (body.status !== undefined && body.status !== 'INVITED') return fail('New clients always start as invited.', 400);
 
-  if (!name?.trim() || !email?.trim()) {
-    return NextResponse.json(
-      { ok: false, error: 'Name and email are required.' },
-      { status: 400 },
-    );
-  }
+  const name = typeof body.name === 'string' ? headerText(body.name, 120) : '';
+  const email = typeof body.email === 'string' ? safeEmailAddress(body.email)?.toLowerCase() : null;
+  if (!name) return fail('Name is required.', 400);
+  if (!email) return fail('A valid email address is required.', 400);
+
+  const companyId = typeof body.companyId === 'string' && body.companyId ? body.companyId : null;
+  const companyName = typeof body.companyName === 'string' ? headerText(body.companyName, 200) : '';
+  const companyWebsite = typeof body.companyWebsite === 'string' ? headerText(body.companyWebsite, 300) : '';
+  if (companyId && !UUID.test(companyId)) return fail('Choose a company from the list.', 400);
 
   try {
-    const passwordHash = await hashPassword(generateSecurePassword());
+    // Checked before anything is written, so a conflict leaves the database exactly as it was.
+    if (await prisma.user.findUnique({ where: { email }, select: { id: true } })) return fail(EMAIL_TAKEN, 409, { code: 'EMAIL_EXISTS' });
 
-    // Company, user and the invitation email are created together: either all exist or none do.
-    const invited = await prisma.$transaction(async (tx) => {
-      let companyId: string | null = null;
-      if (companyName?.trim()) {
-        const company = await tx.company.create({
-          data: { name: companyName.trim(), website: companyWebsite?.trim() || null, status: 'ACTIVE' },
-        });
-        companyId = company.id;
-      }
+    if (companyId) {
+      if (!(await prisma.company.findUnique({ where: { id: companyId }, select: { id: true } }))) return fail('That company no longer exists.', 404);
+    } else if (companyName && body.confirmNewCompany !== true) {
+      // Companies are never merged by name. If one with this name exists, the admin picks it explicitly or confirms a separate one.
+      const same = await prisma.company.findFirst({ where: { name: companyName }, select: { id: true, name: true } });
+      if (same) return fail(`A company called “${same.name}” already exists. Choose it from the list, or confirm that this is a different company.`, 409, { code: 'COMPANY_EXISTS', company: same });
+    }
+
+    // Company, user and invitation are one unit: if any step fails (or the email is taken in the meantime),
+    // none of them exists afterwards. The email itself is sent later, by the outbox, after this commits.
+    await prisma.$transaction(async (tx) => {
+      const linkedCompanyId = companyId ?? (companyName
+        ? (await tx.company.create({ data: { name: companyName, website: companyWebsite || null, status: 'ACTIVE' }, select: { id: true } })).id
+        : null);
 
       const user = await tx.user.create({
-        data: { name: name.trim(), email: email.toLowerCase().trim(), passwordHash, role, status, companyId },
+        data: { name, email, passwordHash: null, role: 'CLIENT', status: 'INVITED', invitedAt: new Date(), companyId: linkedCompanyId },
         select: { id: true, email: true },
       });
 
-      // Only someone who still has to finish setting up gets an invitation (the link is created when it is sent).
-      if (status === 'INVITED') {
-        await enqueueEmail(tx, {
-          eventType: 'client.invitation', recipient: user.email, dedupeKey: `invite:${user.id}`,
-          payload: { userId: user.id }, entityType: 'user', entityId: user.id,
-        });
-        return true;
-      }
-      return false;
+      await enqueueEmail(tx, {
+        eventType: 'client.invitation', recipient: user.email, dedupeKey: `invite:${user.id}`,
+        payload: { userId: user.id }, entityType: 'user', entityId: user.id,
+      });
     });
-    if (invited) dispatchOutbox();
+    dispatchOutbox();
 
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {
     if (typeof err === 'object' && err !== null && 'code' in err && (err as { code: string }).code === 'P2002') {
-      return NextResponse.json(
-        { ok: false, error: 'A user with that email already exists.' },
-        { status: 409 },
-      );
+      return fail(EMAIL_TAKEN, 409, { code: 'EMAIL_EXISTS' });
     }
     console.error('[admin/clients POST]', err);
-    return NextResponse.json({ ok: false, error: 'Internal server error.' }, { status: 500 });
+    return fail('Internal server error.', 500);
   }
 }

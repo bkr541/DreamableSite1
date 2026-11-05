@@ -46,7 +46,7 @@ function makeTx(opts: { existing?: boolean; failAuditWrite?: boolean } = {}) {
       update: vi.fn(async () => { writes.push('inquiry'); return { ...baseInquiry, status: 'APPROVED', approvedAt: new Date() }; }),
     },
     company: { upsert: vi.fn(async () => { writes.push('company'); return co; }) },
-    user: { upsert: vi.fn(async () => { writes.push('user'); return fullUser; }) },
+    user: { upsert: vi.fn(async () => { writes.push('user'); return fullUser; }), findUnique: vi.fn(async () => null) },
     project: { upsert: vi.fn(async () => { writes.push('project'); return proj; }) },
     auditLog: { create: vi.fn(async () => { if (opts.failAuditWrite) throw new Error('boom'); writes.push('audit'); return {}; }) },
     emailOutbox: { createMany: vi.fn(async () => { writes.push('invite'); return { count: 1 }; }) },
