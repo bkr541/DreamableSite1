@@ -3,6 +3,9 @@ import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { recordAudit } from '@/lib/audit';
 import { toApprovalResponse } from '@/lib/approvalDto';
+import { enqueueEmail } from '@/lib/emailOutbox';
+import { dispatchOutbox } from '@/lib/dispatch';
+import { links, notify } from '@/lib/notifications';
 
 const REQUIRED_FIELDS = ['name', 'email', 'service', 'description'] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -77,7 +80,17 @@ export async function POST(
         metadata: { companyId: company.id, userId: user.id, projectId: project.id },
       });
 
-      return { kind: 'ok' as const, body: toApprovalResponse({ ...approved, companyRecord: company, user, project }) };
+      // The client's invitation and the staff notification are part of the same transaction as the approval.
+      await enqueueEmail(tx, {
+        eventType: 'client.invitation', recipient: user.email, dedupeKey: `invite:${user.id}`,
+        payload: { userId: user.id }, entityType: 'user', entityId: user.id,
+      });
+      await notify(tx, {
+        type: 'inquiry.approved', title: `Inquiry approved: ${inquiry.name}`, body: `${inquiry.service} — a client portal invitation was queued`,
+        entityType: 'inquiry', entityId: id, url: links.inquiry(id), actorId: auth.user.id, dedupeKey: `inquiry.approved:${id}`,
+      });
+
+      return { kind: 'ok' as const, body: toApprovalResponse({ ...approved, companyRecord: company, user, project }), first: true as const };
     });
 
     if (result.kind === 'archived') return NextResponse.json({ ok: false, error: 'Restore this inquiry before approving it.' }, { status: 409 });
@@ -85,6 +98,7 @@ export async function POST(
     if (result.kind === 'missing') {
       return NextResponse.json({ ok: false, error: `Missing required fields: ${result.missing.join(', ')}.` }, { status: 422 });
     }
+    if ('first' in result && result.first) dispatchOutbox();
     return NextResponse.json(result.body);
   } catch (err: unknown) {
     // Unique constraint on users.email — someone with this email already exists. The transaction rolled back.

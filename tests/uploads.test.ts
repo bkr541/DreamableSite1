@@ -36,6 +36,7 @@ beforeEach(() => {
     ]),
     deliverableFolder: table([{ id: FOLDER, inquiryId: null, projectId: 'p1' }]),
     deliverable: table([], { defaults: () => ({ status: 'READY', createdAt: new Date(), storageKey: null, data: null }) }),
+    adminNotification: table([], { unique: 'dedupeKey', defaults: () => ({ createdAt: new Date(), body: null }) }),
     inquiryAttachment: table([], { defaults: () => ({ status: 'READY', createdAt: new Date(), storageKey: null, data: null, inquiryId: null }) }),
   };
 });
@@ -91,12 +92,17 @@ describe('admin direct upload: complete', () => {
     const { id, key } = await started(png);
     storage.put(key, png); // the browser's PUT
     expect(h.db.deliverable.rows[0].status).toBe('PENDING');
+    h.db.deliverable.rows[0].folder = { id: FOLDER, name: 'Wordmark', inquiryId: null, projectId: 'p1' };
     const res = await call(complete, {}, admin(), { id });
     expect(res.status).toBe(200);
+    // The upload is announced once, linking straight to the folder.
+    expect(h.db.adminNotification.rows).toHaveLength(1);
+    expect(h.db.adminNotification.rows[0]).toMatchObject({ type: 'deliverable.uploaded', url: `/admin?view=projects&project=p1&tab=deliverables&folder=${FOLDER}`, dedupeKey: `deliverable.uploaded:${id}` });
     const row = h.db.deliverable.rows[0];
     expect(row).toMatchObject({ status: 'READY', size: png.length, contentType: 'image/png' });
     expect(row.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(await (await call(complete, {}, admin(), { id })).json()).toEqual({ ok: true }); // a retry is harmless
+    expect(h.db.adminNotification.rows).toHaveLength(1);                                    // and doesn't repeat the notification
   });
 
   it('a disguised file is rejected and leaves neither a record nor an object', async () => {

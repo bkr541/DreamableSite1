@@ -44,11 +44,12 @@ beforeEach(() => {
     }),
     deliverableComment: table([], { defaults: () => ({ createdAt: new Date() }) }),
     auditLog: table(),
+    adminNotification: table([], { unique: 'dedupeKey', defaults: () => ({ createdAt: new Date(), body: null }) }),
   };
   h.db.deliverable.findFirst = async ({ where }: any) => {
     const fo = folders.find((x) => x.shareToken === where.folder?.shareToken && x.isPublic === where.folder?.isPublic);
     const row = h.db.deliverable.rows.find((r: any) => r.id === where.id && fo && r.folderId === fo.id && r.status === where.status);
-    return row ? { ...row, folder: { id: fo!.id, commentsEnabled: true, commentsModerated: false } } : null;
+    return row ? { ...row, title: 'Logo', folder: { id: fo!.id, name: 'Wordmark', inquiryId: null, projectId: 'p1', commentsEnabled: true, commentsModerated: false } } : null;
   };
   h.db.$transaction = async (fn: any) => fn(h.db);
 });
@@ -81,6 +82,18 @@ describe('rotating a link', () => {
     expect((await action({ action: 'rotate' }, admin())).status).toBe(409);
     expect((await action({ action: 'delete' }, admin())).status).toBe(400);
     expect((await action({ action: 'rotate' }, admin(), 'not-a-uuid')).status).toBe(404);
+  });
+});
+
+describe('guest comments notify staff', () => {
+  it('a new comment creates one notification that links to its folder; a refused one creates none', async () => {
+    expect((await commentVia(OLD)).status).toBe(200);
+    expect(h.db.adminNotification.rows).toHaveLength(1);
+    expect(h.db.adminNotification.rows[0]).toMatchObject({ type: 'comment.new', url: `/admin?view=projects&project=p1&tab=deliverables&folder=${FOLDER}` });
+    expect(h.db.adminNotification.rows[0].body).toContain('unverified');
+    await patch({ isPublic: false });
+    expect((await commentVia(OLD)).status).toBe(404);
+    expect(h.db.adminNotification.rows).toHaveLength(1);
   });
 });
 

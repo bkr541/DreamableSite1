@@ -5,6 +5,7 @@ import { RULES, consume, firstDenied, tooManyRequests } from '@/lib/rateLimit';
 import { logRef, logSecurity } from '@/lib/securityLog';
 import { cleanAuthorName, cleanCommentBody } from '@/lib/commentText';
 import { findSharedFile } from '@/lib/shareAccess';
+import { links, notify } from '@/lib/notifications';
 
 const MAX_PER_FILE = 200;
 const DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
@@ -64,6 +65,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       data: { deliverableId: file.id, authorName: name.value, body: text.value, status: moderated ? 'PENDING' : 'APPROVED' },
       select: { id: true, deliverableId: true, authorName: true, body: true, createdAt: true },
     });
+
+    // Staff hear about it once per comment, whatever happens to the response.
+    await notify(prisma, {
+      type: 'comment.new',
+      title: moderated ? `Comment awaiting review on ${file.title || file.fileName}` : `New comment on ${file.title || file.fileName}`,
+      body: `From ${name.value} (guest, unverified) in “${file.folder.name}”`,
+      entityType: 'deliverable_comment', entityId: comment.id, url: links.folder(file.folder), dedupeKey: `comment.new:${comment.id}`,
+    }).catch((e) => console.error('[share comments] notification failed', e instanceof Error ? e.message : e));
 
     // Held comments are not returned: the visitor sees a notice, everyone else sees nothing until approval.
     if (moderated) {

@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { DELIVERABLE_MAX_BYTES } from '@/lib/deliverables';
 import { removeObjects } from '@/lib/storage';
 import { finalizeUpload } from '@/lib/uploadFlow';
+import { links, notify } from '@/lib/notifications';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const row = await prisma.deliverable.findUnique({
       where: { id },
-      select: { id: true, status: true, storageKey: true, fileName: true, size: true, contentType: true },
+      select: { id: true, status: true, storageKey: true, fileName: true, size: true, contentType: true, title: true, folder: { select: { id: true, name: true, inquiryId: true, projectId: true } } },
     });
     if (!row || !row.storageKey) return NextResponse.json({ ok: false, error: 'File not found.' }, { status: 404 });
     if (row.status === 'READY') return NextResponse.json({ ok: true }); // a retried request
@@ -40,6 +41,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       data: { status: 'READY', size: result.size, sha256: result.sha256, contentType: result.contentType },
     });
     if (count !== 1) return NextResponse.json({ ok: false, error: 'This upload expired. Please try again.' }, { status: 409 });
+    if (row.folder) {
+      await notify(prisma, {
+        type: 'deliverable.uploaded', title: `File uploaded: ${row.title || row.fileName}`, body: `Added to “${row.folder.name}” by ${auth.user.name}`,
+        entityType: 'deliverable', entityId: id, url: links.folder(row.folder), actorId: auth.user.id, dedupeKey: `deliverable.uploaded:${id}`,
+      }).catch((e) => console.error('[deliverables complete] notification failed', e instanceof Error ? e.message : e));
+    }
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('[admin/deliverables complete]', err);

@@ -1,25 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makePg } from './pg';
 import { setSecrets } from './helpers';
+import { mailTables, table } from './fakes';
 
 const h = vi.hoisted(() => ({
   create: vi.fn(),
   findFirst: vi.fn(),
-  mails: [] as any[],
-  pending: [] as Promise<unknown>[],
+  db: {} as any,
 }));
 
-vi.mock('@/lib/prisma', () => {
-  const tx = { inquiry: { create: h.create }, inquiryAttachment: { updateMany: async () => ({ count: 1 }) } };
-  return { prisma: { inquiry: { create: h.create, findFirst: h.findFirst }, $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx) } };
-});
-vi.mock('nodemailer', () => ({
-  default: { createTransport: () => ({ sendMail: async (m: unknown) => { h.mails.push(m); } }) },
-}));
-vi.mock('next/server', async (orig) => {
-  const m = await orig<typeof import('next/server')>();
-  return { ...m, after: (fn: () => Promise<void>) => { h.pending.push(fn()); } };
-});
+vi.mock('@/lib/prisma', () => ({ prisma: new Proxy({}, { get: (_t, k) => h.db[k as string] }) }));
+vi.mock('@/lib/dispatch', () => ({ dispatchOutbox: vi.fn() }));
 
 let pg: Awaited<ReturnType<typeof makePg>>;
 
@@ -41,15 +32,32 @@ function submit(POST: Awaited<ReturnType<typeof process_>>, over: Record<string,
   });
   return POST(req as never);
 }
-const flush = async () => { await Promise.all(h.pending.splice(0)); };
+/** What the background worker would do: send whatever is queued. */
+const flush = async () => {
+  await (await import('@/lib/emailOutbox')).processOutbox({ limit: 50 });
+  return (await import('@/lib/mailer')).fakeInbox;
+};
 
 beforeEach(async () => {
   setSecrets();
   pg = await makePg();
-  h.create.mockReset().mockImplementation(async () => ({ id: `id-${Math.random()}` }));
+  const tables = mailTables();
+  const inquiries = table();
+  h.create.mockReset().mockImplementation(async ({ data }: any) => {
+    const row = { id: `id-${Math.random()}`, ...data, attachments: [], archivedAt: null };
+    inquiries.rows.push(row);
+    return row;
+  });
   h.findFirst.mockReset().mockResolvedValue(null);
-  h.mails.length = 0;
-  Object.assign(process.env, { DATABASE_URL: 'postgres://x', SMTP_HOST: 'smtp.test', SMTP_USER: 'u', SMTP_PASS: 'p', INQUIRY_TO_EMAIL: 'studio@example.com' });
+  h.db = {
+    ...tables,
+    inquiry: { create: h.create, findFirst: h.findFirst, findUnique: inquiries.findUnique },
+    inquiryAttachment: table(),
+    user: table(),
+    $transaction: async (fn: any) => fn(h.db),
+  };
+  h.db.inquiries = inquiries;
+  Object.assign(process.env, { DATABASE_URL: 'postgres://x', INQUIRY_TO_EMAIL: 'studio@example.com' });
   delete process.env.VERCEL;
   delete process.env.TRUSTED_PROXY;
 });
@@ -61,16 +69,22 @@ describe('public inquiry: saving and notifying', () => {
     const res = await submit(POST);
     expect(res.status).toBe(200);
     expect(h.create).toHaveBeenCalledTimes(1);
-    await flush();
-    expect(h.mails.map((m) => m.to).sort()).toEqual(['studio@example.com', expect.stringMatching(/@example\.com$/)].sort());
+    // The emails and the admin notification were written with the inquiry, as references (no personal text copied).
+    const queued = h.db.emailOutbox.rows;
+    expect(queued.map((j: any) => j.eventType).sort()).toEqual(['inquiry.confirmation', 'inquiry.notification']);
+    expect(queued.every((j: any) => Object.keys(j.payload).join() === 'inquiryId' && j.status === 'PENDING')).toBe(true);
+    expect(h.db.adminNotification.rows.map((n: any) => n.type)).toEqual(['inquiry.new']);
+    const fakeInbox = await flush();
+    expect(fakeInbox.map((m) => m.to).sort()).toEqual(['studio@example.com', expect.stringMatching(/@example\.com$/)].sort());
+    expect(h.db.emailOutbox.rows.every((j: any) => j.status === 'SENT')).toBe(true);
   });
 
   it('accepts valid special-character names and shows them as text in the email', async () => {
     const POST = await process_();
     const res = await submit(POST, { name: "Zoë O'Brien & <Sons>", description: '<script>alert(1)</script>\nsecond line' });
     expect(res.status).toBe(200);
-    await flush();
-    const admin = h.mails.find((m) => m.to === 'studio@example.com');
+    const fakeInbox = await flush();
+    const admin = fakeInbox.find((m) => m.to === 'studio@example.com')!;
     expect(admin.html).toContain('Zoë O&#39;Brien &amp; &lt;Sons&gt;');
     expect(admin.html).not.toMatch(/<script/i);
     expect(admin.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;<br>second line');
@@ -79,11 +93,11 @@ describe('public inquiry: saving and notifying', () => {
   it('cannot be used for header injection', async () => {
     const POST = await process_();
     await submit(POST, { name: 'Eve\r\nBcc: attacker@evil.com' });
-    await flush();
-    const admin = h.mails.find((m) => m.to === 'studio@example.com');
+    const fakeInbox = await flush();
+    const admin = fakeInbox.find((m) => m.to === 'studio@example.com')!;
     expect(admin.subject).not.toMatch(/[\r\n]/);
-    expect(admin.replyTo.name).not.toMatch(/[\r\n]/);
-    expect(JSON.stringify(h.mails)).not.toMatch(/"bcc"/i);
+    expect(admin.replyTo!.name).not.toMatch(/[\r\n]/);
+    expect(JSON.stringify(fakeInbox)).not.toMatch(/"bcc"/i);
   });
 
   it('rejects an email address carrying header or markup characters', async () => {
@@ -100,8 +114,9 @@ describe('public inquiry: saving and notifying', () => {
     const res = await submit(POST);
     expect(await res.json()).toEqual({ ok: true, inquiryId: 'original-id' });
     expect(h.create).not.toHaveBeenCalled();
-    await flush();
-    expect(h.mails).toHaveLength(0);
+    const fakeInbox = await flush();
+    expect(fakeInbox).toHaveLength(0);
+    expect(h.db.emailOutbox.rows).toHaveLength(0);
   });
 
   it('keeps the honeypot: pretends to succeed and stores nothing', async () => {

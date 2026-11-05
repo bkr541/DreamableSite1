@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { DELIVERABLE_MAX_BYTES, DELIVERABLE_MAX_FILES } from '@/lib/deliverables';
 import { UPLOAD_EXT, safeFileName } from '@/lib/fileTypes';
 import { validateUpload } from '@/lib/fileValidation';
+import { randomUUID } from 'crypto';
+import { links, notify } from '@/lib/notifications';
 import { canWatermark } from '@/lib/watermark';
 
 const fail = (error: string, status: number) => NextResponse.json({ ok: false, error }, { status });
@@ -45,6 +47,7 @@ export async function POST(req: NextRequest) {
       const checked = await validateUpload({ fileName: name, declaredType: f.type, bytes });
       if (!checked.ok) return fail(checked.error, 400);
       rows.push({
+        id: randomUUID(),
         folderId: folder.id,
         // Kept on the file too, so client-portal access checks don't need to look the folder up.
         inquiryId: folder.inquiryId,
@@ -62,6 +65,15 @@ export async function POST(req: NextRequest) {
       });
     }
     await prisma.deliverable.createMany({ data: rows });
+    const folderInfo = await prisma.deliverableFolder.findUnique({ where: { id: folder.id }, select: { id: true, name: true, inquiryId: true, projectId: true } });
+    if (folderInfo) {
+      for (const r of rows) {
+        await notify(prisma, {
+          type: 'deliverable.uploaded', title: `File uploaded: ${r.title}`, body: `Added to “${folderInfo.name}” by ${auth.user.name}`,
+          entityType: 'deliverable', entityId: r.id, url: links.folder(folderInfo), actorId: auth.user.id, dedupeKey: `deliverable.uploaded:${r.id}`,
+        }).catch(() => {});
+      }
+    }
 
     return NextResponse.json({ ok: true, count: rows.length });
   } catch (err) {

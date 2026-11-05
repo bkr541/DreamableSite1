@@ -6,6 +6,7 @@ import { getClientIp } from '@/lib/clientIp';
 import { RULES, check, consume, firstDenied, tooManyRequests } from '@/lib/rateLimit';
 import { logRef, logSecurity } from '@/lib/securityLog';
 import { recoveryCodeMatches } from '@/lib/recoveryCode';
+import { links, notify } from '@/lib/notifications';
 
 const INVALID_CODE = { ok: false, error: 'Invalid or expired code.' };
 
@@ -73,6 +74,13 @@ export async function POST(req: NextRequest) {
       },
     });
     if (count !== 1) return NextResponse.json(INVALID_CODE, { status: 400 });
+
+    if (user.status === 'INVITED') {
+      await notify(prisma, {
+        type: 'client.activated', title: `${user.name} activated their account`, body: 'They set a password and can now sign in to the portal.',
+        entityType: 'user', entityId: user.id, url: links.clients(), dedupeKey: `client.activated:${user.id}`,
+      }).catch((e) => console.error('[update-password] notification failed', e instanceof Error ? e.message : e));
+    }
 
     // A password change also retires any emailed reset link.
     await prisma.passwordResetToken.updateMany({ where: { userId: user.id, consumedAt: null }, data: { consumedAt: new Date() } });

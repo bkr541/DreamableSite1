@@ -17,7 +17,7 @@ beforeEach(async () => {
 
 describe('migration safety (real Postgres, real schema)', () => {
   it('the new migrations are idempotent — running them again changes nothing and errors nothing', async () => {
-    for (const dir of ['20261105000000_abuse_protection', '20261105010000_files_sharing_archive']) {
+    for (const dir of ['20261105000000_abuse_protection', '20261105010000_files_sharing_archive', '20261105020000_email_outbox_notifications']) {
       const sql = readFileSync(path.resolve(__dirname, `../prisma/migrations/${dir}/migration.sql`), 'utf8');
       await db.exec(sql);
       await db.exec(sql);
@@ -92,5 +92,27 @@ describe('share token uniqueness', () => {
   it('two folders can never hold the same token, so a rotated token can’t collide with a live one', async () => {
     await db.exec(`INSERT INTO deliverable_folders (inquiry_id, name, share_token) VALUES ('${INQ}', 'A', 'dup')`);
     expect(await fails(`INSERT INTO deliverable_folders (inquiry_id, name, share_token) VALUES ('${INQ}', 'B', 'dup')`)).toMatch(/unique|duplicate/i);
+  });
+});
+
+describe('outbox and notification tables (real Postgres)', () => {
+  it('the same email event can only exist once, so a retried request cannot queue it twice', async () => {
+    const insert = `INSERT INTO email_outbox (event_type, recipient, dedupe_key) VALUES ('inquiry.notification', 'a@b.co', 'inquiry.notification:1') ON CONFLICT (dedupe_key) DO NOTHING`;
+    await db.exec(insert); await db.exec(insert);
+    expect(await q(`SELECT status, attempts, max_attempts FROM email_outbox`)).toEqual([{ status: 'PENDING', attempts: 0, max_attempts: 8 }]);
+    expect(await fails(`INSERT INTO email_outbox (event_type, recipient, dedupe_key) VALUES ('x', 'a@b.co', 'inquiry.notification:1')`)).toMatch(/unique|duplicate/i);
+  });
+  it('the same notification event can only exist once; read state goes away with the notification', async () => {
+    await db.exec(`INSERT INTO admin_notifications (type, title, url, dedupe_key) VALUES ('inquiry.new', 'New inquiry', '/admin', 'inquiry.new:1') ON CONFLICT (dedupe_key) DO NOTHING`);
+    await db.exec(`INSERT INTO admin_notifications (type, title, url, dedupe_key) VALUES ('inquiry.new', 'New inquiry', '/admin', 'inquiry.new:1') ON CONFLICT (dedupe_key) DO NOTHING`);
+    const [{ id }] = await q(`SELECT id FROM admin_notifications`);
+    expect(await q(`SELECT 1 FROM admin_notifications`)).toHaveLength(1);
+    await db.exec(`INSERT INTO notification_reads (notification_id, user_id) VALUES ('${id}', '${INQ}')`);
+    expect(await fails(`INSERT INTO notification_reads (notification_id, user_id) VALUES ('${id}', '${INQ}')`)).toMatch(/unique|duplicate|primary/i);
+    // "unread for this admin" is exactly what the app asks for:
+    expect(await q(`SELECT 1 FROM admin_notifications n WHERE NOT EXISTS (SELECT 1 FROM notification_reads r WHERE r.notification_id = n.id AND r.user_id = '${INQ}')`)).toHaveLength(0);
+    expect(await q(`SELECT 1 FROM admin_notifications n WHERE NOT EXISTS (SELECT 1 FROM notification_reads r WHERE r.notification_id = n.id AND r.user_id = '${FOLDER}')`)).toHaveLength(1);
+    await db.exec(`DELETE FROM admin_notifications`);
+    expect(await q(`SELECT 1 FROM notification_reads`)).toHaveLength(0);
   });
 });

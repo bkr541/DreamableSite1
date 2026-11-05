@@ -4,6 +4,8 @@ import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 import { isUserStatus } from '@/lib/accountStatus';
+import { enqueueEmail } from '@/lib/emailOutbox';
+import { dispatchOutbox } from '@/lib/dispatch';
 
 function generateSecurePassword(): string {
   // 24-char random password — strong enough that the client should reset via forgot-password
@@ -31,28 +33,32 @@ export async function POST(req: NextRequest) {
   try {
     const passwordHash = await hashPassword(generateSecurePassword());
 
-    let companyId: string | null = null;
-    if (companyName?.trim()) {
-      const company = await prisma.company.create({
-        data: {
-          name: companyName.trim(),
-          website: companyWebsite?.trim() || null,
-          status: 'ACTIVE',
-        },
-      });
-      companyId = company.id;
-    }
+    // Company, user and the invitation email are created together: either all exist or none do.
+    const invited = await prisma.$transaction(async (tx) => {
+      let companyId: string | null = null;
+      if (companyName?.trim()) {
+        const company = await tx.company.create({
+          data: { name: companyName.trim(), website: companyWebsite?.trim() || null, status: 'ACTIVE' },
+        });
+        companyId = company.id;
+      }
 
-    await prisma.user.create({
-      data: {
-        name: name.trim(),
-        email: email.toLowerCase().trim(),
-        passwordHash,
-        role,
-        status,
-        companyId,
-      },
+      const user = await tx.user.create({
+        data: { name: name.trim(), email: email.toLowerCase().trim(), passwordHash, role, status, companyId },
+        select: { id: true, email: true },
+      });
+
+      // Only someone who still has to finish setting up gets an invitation (the link is created when it is sent).
+      if (status === 'INVITED') {
+        await enqueueEmail(tx, {
+          eventType: 'client.invitation', recipient: user.email, dedupeKey: `invite:${user.id}`,
+          payload: { userId: user.id }, entityType: 'user', entityId: user.id,
+        });
+        return true;
+      }
+      return false;
     });
+    if (invited) dispatchOutbox();
 
     return NextResponse.json({ ok: true });
   } catch (err: unknown) {

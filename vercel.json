@@ -1,3 +1,6 @@
 {
-  "crons": [{ "path": "/api/cron/cleanup-uploads", "schedule": "0 4 * * *" }]
+  "crons": [
+    { "path": "/api/cron/cleanup-uploads", "schedule": "0 4 * * *" },
+    { "path": "/api/cron/process-email-outbox", "schedule": "30 4 * * *" }
+  ]
 }

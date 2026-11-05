@@ -11,7 +11,7 @@ type Fields = Record<string, string | number | boolean | null | undefined>;
  * Events logged at 'alert' level go to stderr and are meant to drive notifications.
  */
 export function logSecurity(event: string, fields: Fields = {}, level: 'info' | 'alert' = 'info') {
-  const line = `[security] ${JSON.stringify({ event, level, at: new Date().toISOString(), ...fields })}`;
+  const line = `[security] ${JSON.stringify({ at: new Date().toISOString(), level, ...fields, event })}`;
   if (level === 'alert') console.error(line);
   else console.warn(line);
 }

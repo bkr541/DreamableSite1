@@ -15,6 +15,7 @@ vi.mock('@/lib/prisma', () => ({
   },
 }));
 vi.mock('next/headers', () => ({ cookies: vi.fn() }));
+vi.mock('@/lib/dispatch', () => ({ dispatchOutbox: vi.fn() }));
 vi.mock('next/navigation', () => ({ redirect: vi.fn() }));
 
 import { POST } from '@/app/api/inquiries/[id]/approve/route';
@@ -48,6 +49,8 @@ function makeTx(opts: { existing?: boolean; failAuditWrite?: boolean } = {}) {
     user: { upsert: vi.fn(async () => { writes.push('user'); return fullUser; }) },
     project: { upsert: vi.fn(async () => { writes.push('project'); return proj; }) },
     auditLog: { create: vi.fn(async () => { if (opts.failAuditWrite) throw new Error('boom'); writes.push('audit'); return {}; }) },
+    emailOutbox: { createMany: vi.fn(async () => { writes.push('invite'); return { count: 1 }; }) },
+    adminNotification: { createMany: vi.fn(async () => { writes.push('notification'); return { count: 1 }; }) },
   };
   return { tx, writes };
 }
@@ -106,7 +109,7 @@ describe('POST /api/inquiries/[id]/approve — behaviour and response shape', ()
     useTx(makeTx(), committed);
     const res = await POST(req('/x', { cookie: admin() }), ctx());
     expect(res.status).toBe(200);
-    expect(committed).toEqual(['inquiry', 'company', 'user', 'project', 'audit']);
+    expect(committed).toEqual(['inquiry', 'company', 'user', 'project', 'audit', 'invite', 'notification']);
     const body = await res.json();
     const keys = allKeys(body);
     for (const f of SECRET_FIELDS) expect(keys.has(f)).toBe(false);

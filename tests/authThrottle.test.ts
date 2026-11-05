@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makePg } from './pg';
 import { setSecrets } from './helpers';
+import { mailTables } from './fakes';
 
-const h = vi.hoisted(() => ({ users: [] as any[], mails: [] as any[], updates: 0 }));
+const h = vi.hoisted(() => ({ users: [] as any[], updates: 0, tables: {} as any }));
 
 vi.mock('@/lib/prisma', () => {
   const find = (where: any) => h.users.find((u) => (where.email ? u.email === where.email : u.id === where.id)) ?? null;
@@ -20,9 +21,9 @@ vi.mock('@/lib/prisma', () => {
     passwordResetToken: { updateMany: async () => ({ count: 0 }), create: async () => ({}) },
     $transaction: async (a: any) => (typeof a === 'function' ? a(prisma) : Promise.all(a)),
   };
-  return { prisma };
+  return { prisma: new Proxy(prisma, { get: (t, k: string) => (k in t ? t[k] : h.tables[k]) }) };
 });
-vi.mock('nodemailer', () => ({ default: { createTransport: () => ({ sendMail: async (m: unknown) => { h.mails.push(m); } }) } }));
+vi.mock('@/lib/dispatch', () => ({ dispatchOutbox: vi.fn() }));
 vi.mock('@/lib/auth', () => ({
   verifyPassword: vi.fn(async (p: string, hash: string) => hash === 'real-hash' && p === 'right-password'),
   hashPassword: vi.fn(async (p: string) => `hash:${p}`),
@@ -33,7 +34,11 @@ let pg: Awaited<ReturnType<typeof makePg>>;
 async function process_() {
   vi.resetModules();
   (await import('@/lib/rateLimit')).setRateLimitStore(pg.instance());
+  const outbox = await import('@/lib/emailOutbox');
+  const mailer = await import('@/lib/mailer');
   return {
+    /** Runs the email worker, then returns everything "delivered" so far (the in-memory test inbox). */
+    sendQueued: async () => { await outbox.processOutbox({ limit: 50 }); return mailer.fakeInbox; },
     login: (await import('@/app/api/auth/login/route')).POST,
     requestCode: (await import('@/app/api/auth/request-code/route')).POST,
     forgot: (await import('@/app/api/auth/forgot-password/route')).POST,
@@ -51,11 +56,12 @@ beforeEach(async () => {
   process.env.VERCEL = '1';              // platform headers (x-real-ip) are trusted, as on Vercel
   Object.assign(process.env, { SMTP_HOST: 'smtp.test', SMTP_USER: 'u', SMTP_PASS: 'p' });
   pg = await makePg();
-  h.mails.length = 0; h.updates = 0;
+  h.tables = mailTables();
+  h.updates = 0;
   h.users = [{ id: 'u1', name: 'Ann', email: 'ann@example.com', passwordHash: 'real-hash', status: 'ACTIVE', admin: false, sessionVersion: 0, templogincode: null, tempLoginCodeExpiresAt: null, lastLoginAt: null }];
 });
 
-const emailedCode = () => /letter-spacing:8px[^>]*>\s*([A-Z0-9]{8})\s*</.exec(h.mails.at(-1).html)![1];
+const codeFrom = (inbox: { html: string }[]) => /letter-spacing:8px[^>]*>\s*([A-Z0-9]{8})\s*</.exec(inbox.at(-1)!.html)![1];
 
 describe('login throttling', () => {
   it('throttles repeated wrong passwords — identically for real and non-existent accounts', async () => {
@@ -116,15 +122,25 @@ describe('login throttling', () => {
 
 describe('recovery emails cannot be used to flood a mailbox', () => {
   it('stops after a few requests for the same address — same answer whether or not it exists', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const p = await process_();
+      const real: number[] = [], ghost: number[] = [];
+      for (let i = 0; i < 5; i++) {
+        real.push((await call(p.requestCode, { email: 'ann@example.com' }, `198.51.100.${i + 1}`)).status);
+        ghost.push((await call(p.requestCode, { email: 'ghost@example.com' }, `198.51.100.${i + 1}`)).status);
+        vi.setSystemTime(Date.now() + 20_000); // a person re-requesting after a few seconds
+      }
+      expect(real).toEqual(ghost);
+      expect(real).toEqual([200, 200, 200, 429, 429]);
+      expect((await p.sendQueued()).length).toBe(3);   // three real emails; none for the account that doesn't exist
+    } finally { vi.useRealTimers(); }
+  });
+  it('a double click is one email, not two', async () => {
     const p = await process_();
-    const real: number[] = [], ghost: number[] = [];
-    for (let i = 0; i < 5; i++) {
-      real.push((await call(p.requestCode, { email: 'ann@example.com' }, `198.51.100.${i + 1}`)).status);
-      ghost.push((await call(p.requestCode, { email: 'ghost@example.com' }, `198.51.100.${i + 1}`)).status);
-    }
-    expect(real).toEqual(ghost);
-    expect(real).toEqual([200, 200, 200, 429, 429]);
-    expect(h.mails.length).toBe(3);
+    await call(p.requestCode, { email: 'ann@example.com' });
+    await call(p.requestCode, { email: 'ann@example.com' });
+    expect((await p.sendQueued()).length).toBe(1);
   });
   it('the emailed-link and emailed-code routes share one budget', async () => {
     const p = await process_();
@@ -146,7 +162,7 @@ describe('recovery emails cannot be used to flood a mailbox', () => {
 describe('code guessing', () => {
   async function withCode(p: P) {
     await call(p.requestCode, { email: 'ann@example.com' });
-    return emailedCode();
+    return codeFrom(await p.sendQueued());
   }
 
   it('stores only a hash of the emailed code', async () => {

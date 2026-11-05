@@ -53,10 +53,24 @@ describe('authorization is centralised', () => {
     const src = readFileSync(path.join(root, 'app/share/[token]/page.tsx'), 'utf8');
     expect(src).toMatch(/PUBLIC_COMMENT_FILTER/);
   });
-  it('email bodies are built only through the escaping templates', () => {
-    const src = readFileSync(path.join(root, 'app/api/inquiries/route.ts'), 'utf8');
-    expect(src).not.toMatch(/\$\{inquiry\.(name|email|description|company)\}/);
-    expect(src).toMatch(/buildAdminInquiryEmail/);
+  it('nothing sends email directly: only lib/mailer.ts talks to SMTP, everything else queues', () => {
+    const offenders = files.filter((f) => !/lib\/mailer\.ts$/.test(f) && /from 'nodemailer'|\.sendMail\(/.test(readFileSync(f, 'utf8')));
+    expect(offenders.map(rel)).toEqual([]);
+  });
+  it('the routes that cause email queue it through the outbox', () => {
+    for (const f of ['app/api/inquiries/route.ts', 'app/api/auth/forgot-password/route.ts', 'app/api/auth/request-code/route.ts', 'app/api/admin/clients/route.ts', 'app/api/inquiries/[id]/approve/route.ts']) {
+      expect(readFileSync(path.join(root, f), 'utf8'), f).toMatch(/enqueueEmail\(/);
+    }
+  });
+  it('no fire-and-forget email promise is left in a route', () => {
+    const offenders = files.filter((f) => /app\/api\//.test(f) && /after\(async/.test(readFileSync(f, 'utf8')));
+    expect(offenders.map(rel)).toEqual([]);
+  });
+  it('the outbox never stores a secret: jobs carry ids, and tokens/codes are created at send time', () => {
+    for (const f of ['app/api/auth/forgot-password/route.ts', 'app/api/auth/request-code/route.ts']) {
+      const src = readFileSync(path.join(root, f), 'utf8');
+      expect(src, f).not.toMatch(/issueResetToken|hashRecoveryCode|generateCode/);
+    }
   });
   it('every file route delivers bytes through the one shared delivery path', () => {
     for (const f of ['app/api/deliverables/[id]/route.ts', 'app/api/share/[token]/files/[id]/route.ts', 'app/api/admin/inquiries/[id]/attachments/[attachmentId]/route.ts']) {

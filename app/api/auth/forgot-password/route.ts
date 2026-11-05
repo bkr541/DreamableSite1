@@ -1,50 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/prisma';
-import { issueResetToken } from '@/lib/resetTokens';
 import { canUsePasswordFlow } from '@/lib/accountStatus';
 import { getClientIp } from '@/lib/clientIp';
-import { RULES, check, consume, firstDenied, tooManyRequests } from '@/lib/rateLimit';
+import { RULES, consume, firstDenied, tooManyRequests } from '@/lib/rateLimit';
 import { logRef, logSecurity } from '@/lib/securityLog';
-
-
-async function sendResetEmail(to: string, resetUrl: string) {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, INQUIRY_FROM_EMAIL } = process.env;
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) throw new Error('SMTP not configured.');
-
-  const port = Number(SMTP_PORT ?? 587);
-  const fromAddress = INQUIRY_FROM_EMAIL ?? SMTP_USER;
-
-  const transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port,
-    secure: port === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
-  });
-
-  await transporter.sendMail({
-    from: `"Dreamable.studio" <${fromAddress}>`,
-    to,
-    subject: 'Reset your Dreamable.studio password',
-    html: `
-      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1a1a1a;">
-        <h2 style="font-size:22px;font-weight:600;margin-bottom:16px;">Reset your password</h2>
-        <p style="color:#555;line-height:1.6;margin-bottom:28px;">
-          We received a request to reset the password for your Dreamable.studio account.
-          Click the button below to choose a new password. This link works once and expires in 1 hour.
-        </p>
-        <a href="${resetUrl}"
-           style="display:inline-block;padding:14px 32px;background:#1a2030;color:#fff;border-radius:999px;text-decoration:none;font-size:14px;font-weight:500;">
-          Reset Password
-        </a>
-        <p style="color:#aaa;font-size:12px;margin-top:32px;line-height:1.6;">
-          If you didn&apos;t request this, you can safely ignore this email.
-          Your password will not change until you click the link above.
-        </p>
-      </div>
-    `,
-  });
-}
+import { enqueueEmail } from '@/lib/emailOutbox';
+import { dispatchOutbox } from '@/lib/dispatch';
 
 export async function POST(req: NextRequest) {
   try {
@@ -53,34 +14,31 @@ export async function POST(req: NextRequest) {
     if (!email || typeof email !== 'string') {
       return NextResponse.json({ ok: false, error: 'Email is required.' }, { status: 400 });
     }
-
+    const normalized = email.toLowerCase().trim();
 
     // One budget per mailbox and per source, shared by "email me a link" and "email me a code", so neither
     // route can be used to flood someone's inbox. The answer never depends on whether the account exists.
     const ip = getClientIp(req.headers);
     const sendBlocked = firstDenied(
       await consume(RULES.recoveryEmailIp, ip),
-      await consume(RULES.recoveryEmail, email.toLowerCase().trim()),
+      await consume(RULES.recoveryEmail, normalized),
     );
     if (sendBlocked) {
-      logSecurity('recovery.send_throttled', { ref: logRef(email.toLowerCase().trim()), ip: logRef(ip) });
+      logSecurity('recovery.send_throttled', { ref: logRef(normalized), ip: logRef(ip) });
       return tooManyRequests(sendBlocked, 'reset requests for this account');
     }
 
-    // Always answer ok so the response never reveals which emails exist or what state they are in.
-    // Suspended / unknown-status accounts silently get no link.
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
-
+    // Always answer ok so the response never reveals which emails exist or what state they are in. For a real
+    // account we only queue a job (a reference, not the link): the link is created when the email is sent, so
+    // no token ever sits in the queue, and the request takes the same time whether or not the account exists.
+    const user = await prisma.user.findUnique({ where: { email: normalized }, select: { id: true, email: true, status: true } });
     if (user && canUsePasswordFlow(user.status)) {
-      const token = await issueResetToken(user.id); // also retires any earlier unused links
-      const appUrl = process.env.APP_URL ?? 'http://localhost:3000';
-      const resetUrl = `${appUrl}/portal/reset-password?token=${encodeURIComponent(token)}`;
-
-      try {
-        await sendResetEmail(user.email, resetUrl);
-      } catch (mailErr) {
-        console.error('[forgot-password] email failed:', mailErr);
-      }
+      await enqueueEmail(prisma, {
+        eventType: 'auth.reset_link', recipient: user.email,
+        dedupeKey: `reset-link:${user.id}:${Math.floor(Date.now() / 15_000)}`, // a double click within a few seconds is one email
+        payload: { userId: user.id }, entityType: 'user', entityId: user.id,
+      });
+      dispatchOutbox();
     }
 
     return NextResponse.json({ ok: true });

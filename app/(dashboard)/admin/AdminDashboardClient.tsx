@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import type { SessionPayload } from '@/lib/session';
 import { useToast } from '@/components/Toast';
 import RecordList, { Avatar, StatusDot } from '@/components/RecordList';
+import NotificationsPanel from '@/components/NotificationsPanel';
 import DatePicker from '@/components/DatePicker';
 import { statusOptions, serviceOptions } from '@/components/dropdowns/options';
 import Dropdown from '@/components/dropdowns/Dropdown';
@@ -20,7 +21,6 @@ import {
   ChartRoseIcon,
   UserGroup02Icon,
   Briefcase06Icon,
-  WorkflowSquare03Icon,
   CreditCardPosIcon,
   ComplaintIcon,
   Invoice03Icon,
@@ -157,6 +157,7 @@ interface Props {
   projects: ProjectRecord[];
   invoices: InvoiceRecord[];
   adminCompany: { id: string; name: string; website: string | null } | null;
+  unreadNotifications: number;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -259,7 +260,6 @@ const NAV_ITEMS = [
   { id: 'inquiries',     label: 'Inquiries',     icon: Mail01Icon },
   { id: 'clients',       label: 'Clients',       icon: UserGroup02Icon },
   { id: 'projects',      label: 'Projects',      icon: Briefcase06Icon },
-  { id: 'workspace',     label: 'Workspace',     icon: WorkflowSquare03Icon },
   { id: 'billing',       label: 'Billing',       icon: CreditCardPosIcon },
   { id: 'notifications', label: 'Notifications', icon: ComplaintIcon },
 ] as const;
@@ -277,9 +277,8 @@ const VIEW_META: Record<ViewId, { title: string; subtitle: string }> = {
   inquiries:     { title: 'Inquiries',        subtitle: 'Review incoming project requests' },
   clients:       { title: 'Clients',          subtitle: 'Manage your client accounts and relationships' },
   projects:      { title: 'Projects',         subtitle: 'Track and manage all active projects' },
-  workspace:     { title: 'Workspace',        subtitle: 'Tools and shared resources for your team' },
   billing:       { title: 'Billing',          subtitle: 'Invoices, payments, and subscription details' },
-  notifications: { title: 'Notifications',   subtitle: 'Stay up to date with recent activity' },
+  notifications: { title: 'Notifications',   subtitle: 'New inquiries, approvals, uploads, comments and email delivery' },
   profile:       { title: 'User Information', subtitle: 'Your account details' },
 };
 
@@ -301,9 +300,10 @@ function getDefaultInvoiceForm() {
   };
 }
 
-export default function AdminDashboardClient({ session, initialView, initialInquiryId, initialProjectId, initialTab, initialBilling, stats, recentInquiries, inquiries, deliverables, folders, comments, initialFolderId, recentUsers, clients, companies, services, projects, invoices, adminCompany }: Props) {
+export default function AdminDashboardClient({ session, initialView, initialInquiryId, initialProjectId, initialTab, initialBilling, stats, recentInquiries, inquiries, deliverables, folders, comments, initialFolderId, recentUsers, clients, companies, services, projects, invoices, adminCompany, unreadNotifications }: Props) {
   const router = useRouter();
   const [activeView, setActiveView] = useState<ViewId>(initialView);
+  const [unread, setUnread] = useState(unreadNotifications);
   const [billingSubView, setBillingSubView] = useState<'invoices' | null>(initialBilling);
   const [inquiryFilter, setInquiryFilter] = useState({ search: '', status: '', service: '' });
   function openProject(id: string) {
@@ -330,6 +330,21 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
   const [inquiryDirection, setInquiryDirection] = useState(1);
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
   const selectedInquiry = inquiries.find(i => i.id === selectedInquiryId) ?? null;
+
+  /** Opens an in-app link such as /admin?view=inquiries&inquiry=… (used by notifications) without a page load. */
+  function openLink(url: string) {
+    const q = new URL(url, window.location.origin).searchParams;
+    const view = q.get('view');
+    if (!view || !(NAV_ITEMS as readonly { id: string }[]).some((n) => n.id === view)) return;
+    setActiveView(view as ViewId);
+    setBillingSubView(null);
+    setInquiryDirection(1);
+    setProjectDirection(1);
+    setSelectedInquiryId(view === 'inquiries' ? q.get('inquiry') : null);
+    setSelectedProjectId(view === 'projects' ? q.get('project') : null);
+    setDetailTab(q.get('tab') === 'deliverables' ? 'deliverables' : 'info');
+    setSelectedFolderId(q.get('folder'));
+  }
 
   // Mirror the open screen into the URL (without navigating) so a data refresh or reload returns to it.
   useEffect(() => {
@@ -882,6 +897,11 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                       transition={{ type: 'spring', stiffness: 380, damping: 32 }}
                     />
                   )}
+                  {id === 'notifications' && unread > 0 && (
+                    <span className="absolute -top-1 -right-1 z-20 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#e05252] px-1 text-[10px] font-bold leading-none text-white" aria-label={`${unread} unread notifications`}>
+                      {unread > 9 ? '9+' : unread}
+                    </span>
+                  )}
                   <span className="relative z-10 flex items-center justify-center gap-1.5">
                     <HugeiconsIcon
                       icon={icon}
@@ -1286,22 +1306,8 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
           )}
         </AnimatePresence>
 
-        {activeView === 'workspace' && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <button
-              onClick={() => { resetInvoiceForm(); setShowInvoice(true); }}
-              className="bg-white rounded-2xl border border-[#EBEBEB] p-6 text-left hover:border-[#1a2030]/25 hover:shadow-md transition-all group"
-            >
-              <p className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">Generate Invoices</p>
-              <HugeiconsIcon
-                icon={Invoice03Icon}
-                size={32}
-                color="#1a2030"
-                strokeWidth={1.5}
-                className="group-hover:scale-110 transition-transform"
-              />
-            </button>
-          </div>
+        {activeView === 'notifications' && (
+          <NotificationsPanel onOpen={openLink} onUnreadChange={setUnread} />
         )}
 
         {activeView === 'clients' && (
@@ -1821,11 +1827,6 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
           </div>
         )}
 
-        {activeView !== 'dashboard' && activeView !== 'workspace' && activeView !== 'inquiries' && activeView !== 'clients' && activeView !== 'projects' && activeView !== 'billing' && activeView !== 'profile' && (
-          <div className="bg-white rounded-2xl border border-[#EBEBEB] p-10 text-center">
-            <p className="text-sm text-[#AAA]">Coming soon</p>
-          </div>
-        )}
           </motion.div>
         </AnimatePresence>
       </div>

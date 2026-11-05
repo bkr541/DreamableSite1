@@ -6,7 +6,7 @@ import { req, setSecrets, RESET } from './helpers';
 type Tok = { id: string; userId: string; tokenHash: string; expiresAt: Date; consumedAt: Date | null };
 type Usr = Record<string, any>;
 
-const mem = vi.hoisted(() => ({ tokens: [] as any[], users: [] as any[], n: 0 }));
+const mem = vi.hoisted(() => ({ tokens: [] as any[], users: [] as any[], notes: [] as any[], n: 0 }));
 
 // A small stateful stand-in for the Prisma calls the reset flow uses. Conditional updateMany calls are
 // evaluated and applied synchronously, which mirrors the single-statement atomicity of the real UPDATE.
@@ -26,13 +26,14 @@ vi.mock('@/lib/prisma', () => {
   const model = (rows: () => any[]) => ({
     updateMany: async ({ where, data }: any) => { const hit = rows().filter((r) => match(r, where)); hit.forEach((r) => apply(r, data)); return { count: hit.length }; },
     create: async ({ data }: any) => { const r = { id: `t${++mem.n}`, consumedAt: null, ...data }; rows().push(r); return r; },
+    createMany: async ({ data, skipDuplicates }: any) => { for (const d of data) if (!(skipDuplicates && rows().some((x) => x.dedupeKey === d.dedupeKey))) rows().push({ id: `n${++mem.n}`, ...d }); return { count: data.length }; },
     findUnique: async ({ where }: any) => {
       const r = rows().find((x) => match(x, where));
       if (!r) return null;
       return r.userId ? { ...r, user: mem.users.find((u) => u.id === r.userId) } : r;
     },
   });
-  const prisma: any = { passwordResetToken: model(() => mem.tokens), user: model(() => mem.users) };
+  const prisma: any = { passwordResetToken: model(() => mem.tokens), user: model(() => mem.users), adminNotification: model(() => mem.notes) };
   prisma.$transaction = async (arg: any) => (typeof arg === 'function' ? arg(prisma) : Promise.all(arg));
   return { prisma };
 });
@@ -52,7 +53,7 @@ const verify = async (token: string) => (await verifyToken(req('/x', { body: { t
 beforeEach(() => {
   setRateLimitStore(new NoopStore());
   setSecrets();
-  mem.tokens.length = 0; mem.users.length = 0; mem.n = 0;
+  mem.tokens.length = 0; mem.users.length = 0; mem.notes.length = 0; mem.n = 0;
   mem.users.push(user());
 });
 
@@ -130,6 +131,15 @@ describe('account state is respected by both reset flows', () => {
     const t = await issueResetToken('u1');
     expect((await set(t)).status).toBe(200);
     expect(mem.users[0].status).toBe('ACTIVE');
+    // Staff are told once, and a replay of the same link doesn't tell them again.
+    expect(mem.notes.map((n: any) => n.type)).toEqual(['client.activated']);
+    expect((await set(t)).status).toBe(400);
+    expect(mem.notes).toHaveLength(1);
+  });
+  it('a password reset for an already-active account is not an "activation"', async () => {
+    const t = await issueResetToken('u1');
+    await set(t);
+    expect(mem.notes).toHaveLength(0);
   });
   it('an active account stays active', async () => {
     const t = await issueResetToken('u1');

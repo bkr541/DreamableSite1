@@ -1,16 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makePg } from './pg';
 import { setSecrets } from './helpers';
-import { FakeStorage, table } from './fakes';
+import { FakeStorage, mailTables, table } from './fakes';
 import * as f from './files';
 
-const h = vi.hoisted(() => ({ db: {} as any, mails: [] as any[], pending: [] as Promise<unknown>[] }));
+const h = vi.hoisted(() => ({ db: {} as any }));
 vi.mock('@/lib/prisma', () => ({ prisma: new Proxy({}, { get: (_t, k) => h.db[k as string] }) }));
-vi.mock('nodemailer', () => ({ default: { createTransport: () => ({ sendMail: async (m: unknown) => { h.mails.push(m); } }) } }));
-vi.mock('next/server', async (orig) => {
-  const m = await orig<typeof import('next/server')>();
-  return { ...m, after: (fn: () => Promise<void>) => { h.pending.push(fn()); } };
-});
+vi.mock('@/lib/dispatch', () => ({ dispatchOutbox: vi.fn() }));
 
 import { setStorageProvider } from '@/lib/storage';
 
@@ -39,17 +35,16 @@ beforeEach(async () => {
     SMTP_HOST: 's', SMTP_USER: 'u', SMTP_PASS: 'p', INQUIRY_TO_EMAIL: 'studio@example.com',
   });
   delete process.env.VERCEL; delete process.env.TRUSTED_PROXY;
-  h.mails.length = 0;
   const attachments = table([], { defaults: () => ({ status: 'READY', createdAt: new Date(), storageKey: null, data: null, inquiryId: null }) });
   const inquiries = table();
   h.db = {
     inquiryAttachment: attachments,
     inquiry: inquiries,
-    $transaction: async (fn: any) => fn({
-      inquiry: { create: async ({ data }: any) => { const r = { id: 'inq-1', ...data }; inquiries.rows.push(r); return r; } },
-      inquiryAttachment: attachments,
-    }),
+    $transaction: async (fn: any) => fn(h.db),
+    ...mailTables(),
   };
+  h.db.inquiry.create = async ({ data }: any) => { const r = { id: 'inq-1', ...data, attachments: [] }; inquiries.rows.push(r); return r; };
+  h.db.inquiry.findUnique = async () => inquiries.rows[0] ? { ...inquiries.rows[0], attachments: attachments.rows.filter((a: any) => a.inquiryId === 'inq-1' && a.status === 'READY') } : null;
 });
 
 const grant = async (POST: any, files: object[], headers = {}) => POST(json('/api/inquiries/uploads', { files }, headers));
@@ -111,9 +106,10 @@ describe('submitting an inquiry with uploaded files', () => {
     const row = pendingRows()[0];
     expect(row).toMatchObject({ status: 'READY', inquiryId: 'inq-1', contentType: 'image/png' });
     expect(row.sha256).toMatch(/^[0-9a-f]{64}$/);
-    await Promise.all(h.pending.splice(0));
-    const admin = h.mails.find((m) => m.to === 'studio@example.com');
-    expect(admin.attachments).toEqual([]);
+    const { processOutbox } = await import('@/lib/emailOutbox');
+    await processOutbox({ limit: 10 });
+    const admin = (await import('@/lib/mailer')).fakeInbox.find((m) => m.to === 'studio@example.com')!;
+    expect(admin).not.toHaveProperty('attachments');   // files are listed, never attached
     expect(admin.html).toContain('logo.png');
   });
 

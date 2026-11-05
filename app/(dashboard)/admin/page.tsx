@@ -2,10 +2,11 @@ import { requireAdminPage } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import AdminDashboardClient from './AdminDashboardClient';
 import { ToastProvider } from '@/components/Toast';
+import { dispatchOutbox } from '@/lib/dispatch';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-const VIEWS = ['dashboard', 'inquiries', 'clients', 'projects', 'workspace', 'billing', 'notifications', 'profile'] as const;
+const VIEWS = ['dashboard', 'inquiries', 'clients', 'projects', 'billing', 'notifications', 'profile'] as const;
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
@@ -15,7 +16,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
   // The open screen lives in the URL, so refreshing the data after an add/edit keeps the admin where they were.
   const sp = await searchParams;
-  const view = one(sp.view);
+  // The old Workspace screen only held a shortcut to invoices, so its bookmarks now land on Billing.
+  const rawView = one(sp.view);
+  const view = rawView === 'workspace' ? 'billing' : rawView;
   const initialView = (VIEWS as readonly string[]).includes(view ?? '') ? (view as (typeof VIEWS)[number]) : 'dashboard';
 
   const [totalUsers, totalProjects, activeProjects, openInquiries, allInquiries, deliverables, folders, comments, recentInquiries, recentUsers, clients, companies, services, projects, invoices, adminUser] =
@@ -105,6 +108,13 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       }),
     ]);
 
+  const unreadNotifications = await prisma.adminNotification
+    .count({ where: { reads: { none: { userId: admin.id } } } })
+    .catch(() => 0); // a not-yet-migrated database shows no badge instead of breaking the page
+
+  // Whenever staff open the admin, anything queued and due (e.g. after a mail outage) gets another try.
+  dispatchOutbox();
+
   return (
     <ToastProvider>
     <AdminDashboardClient
@@ -131,6 +141,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       projects={projects.map((p) => ({ ...p, createdAt: p.createdAt.toISOString() }))}
       invoices={invoices.map((inv) => ({ ...inv, createdAt: inv.createdAt.toISOString() }))}
       adminCompany={adminUser?.company ?? null}
+      unreadNotifications={unreadNotifications}
     />
     </ToastProvider>
   );

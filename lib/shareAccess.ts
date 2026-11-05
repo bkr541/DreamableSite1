@@ -13,7 +13,9 @@ export async function findSharedFile(token: string, fileId: string) {
     where: { id: fileId, status: 'READY', folder: { shareToken: token, isPublic: true } },
     select: {
       id: true,
-      folder: { select: { id: true, commentsEnabled: true, commentsModerated: true } },
+      title: true,
+      fileName: true,
+      folder: { select: { id: true, name: true, inquiryId: true, projectId: true, commentsEnabled: true, commentsModerated: true } },
       _count: { select: { comments: true } },
     },
   });

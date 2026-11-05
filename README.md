@@ -112,11 +112,12 @@ Copy `.env.example` to `.env.local` and fill in all values.
 | `SUPABASE_URL` | For large files | Project URL of the Supabase project that holds the file bucket |
 | `SUPABASE_SERVICE_ROLE_KEY` | For large files | Server-only key used to issue upload/download links. Never expose to the browser. |
 | `STORAGE_BUCKET` | No | Private bucket name (default `dreamable-files`) |
-| `CRON_SECRET` | For cleanup | Authorises the daily `/api/cron/cleanup-uploads` job (≥ 16 chars) |
+| `CRON_SECRET` | For cron jobs | Authorises `/api/cron/cleanup-uploads` and `/api/cron/process-email-outbox` (≥ 16 chars) |
+| `EMAIL_TRANSPORT` / `EMAIL_DEV_ALLOWLIST` | No | Local/preview email behaviour — see *Email*. Real email is only sent from production. |
 | `TRUSTED_PROXY` | No | Which proxy headers identify the visitor's IP for rate limiting (`vercel`, `hops:N`, or unset). Automatic on Vercel. |
 | `RESET_SECRET` | **Yes** | Keys the stored hash of password-reset links. ≥ 32 random chars, different from `SESSION_SECRET`. |
 
-Email sending is **optional** — if SMTP vars are missing the app logs a warning and continues normally.
+Outgoing email is queued and retried (see *Email, notifications & the admin menu*). Without SMTP settings, production emails fail visibly in the admin instead of being skipped silently; non-production environments never send to real recipients.
 
 ---
 
@@ -305,4 +306,55 @@ Run on the deployed site after the setup above:
 
 ### Tests
 `npm test` covers content validation (including disguised/corrupt/bomb-like inputs), the upload → verify → ready flow and its cleanup, signed-link and cross-client authorization, watermark fail-closed behaviour, link rotation/revocation, archive/purge guards, the existing-file migration tool, and — on a real in-process Postgres built from the migration files — the FK and idempotency guarantees. **Not covered:** real Supabase Storage behaviour and real Vercel limits; that is what `scripts/verify-storage.mjs` and the checklist above are for.
+
+---
+
+## Email, notifications & the admin menu
+
+### How email is sent (`lib/emailOutbox.ts`)
+Nothing is sent from inside a request any more. Instead:
+1. **Queue.** The thing that needs an email writes a row to `email_outbox` *in the same database transaction*: a saved inquiry queues the staff alert and the customer acknowledgement; approving an inquiry or adding a client queues the portal invitation; "forgot password" / "email me a code" queue a reset email. If the inquiry is saved, its emails are queued — and if SMTP is down, the inquiry is still saved and its emails wait.
+2. **Send.** The worker (`processOutbox`) sends due rows. It is started right after the response (`after()`, Next's supported post-response hook) for speed, **and** by the retry job, **and** whenever staff open the admin (anything due gets another try), **and** by the *Retry* buttons. Each row is claimed with a compare-and-set update, so any number of workers can run at once and each email is sent by one of them; a worker that dies mid-send just lets its 2-minute claim expire.
+3. **Retry.** A failure waits 1 min → 5 min → 20 min → 1 h → 3 h → 6 h → 12 h, then after 8 attempts the email is `DEAD`: staff get an **Email failed** notification (and an alert-level `[security]` log line `email.gave_up`) and see it under *Notifications → Email delivery* with **Retry now** / **Retry all failed**. A `SENT` email can never be retried or re-sent.
+4. **What is stored.** A job holds the event type, recipient, a dedupe key and **references (ids) only**. The email text is built from current data when it is sent, and reset links / recovery codes are *created at send time*, so no token, code or password is ever in the queue (only the recipient address, which is needed). Errors are stored with addresses, long tokens and SMTP credentials redacted; the admin list masks recipients (`j••@example.com`) and shows no content. Sent/suppressed rows are deleted after 90 days.
+5. **No duplicates.** Each event has a unique dedupe key (`inquiry.notification:<id>`, `invite:<userId>`, …), so a retried request or a double click queues one email; reset/code requests are additionally bucketed per 15 seconds and rate limited. Delivery is *at-least-once*: if a server dies in the instant after SMTP accepted a message but before the row was marked sent, it could be sent again; every message carries a stable `Message-ID` (`outbox-<id>@…`) so that is recognisable.
+
+**Reset / code requests never reveal whether an account exists:** the route only checks eligibility and queues, takes the same time, and always answers `ok`.
+
+### Execution: what runs the retries
+`vercel.json` runs `/api/cron/process-email-outbox` and `/api/cron/cleanup-uploads` **once a day** — the most the Vercel Hobby plan allows (a more frequent schedule would make a Hobby deployment fail). Because that is slow for retries, the immediate `after()` send and the "admin opened" trigger do the real work; the daily job is the backstop. **For minutes-level retries**, change the schedule to `*/5 * * * *` on Vercel Pro, or call the endpoint from any scheduler (GitHub Actions, Supabase `pg_cron` + `pg_net`, an uptime pinger) with `Authorization: Bearer $CRON_SECRET`.
+
+### SMTP and where email is really sent
+Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `INQUIRY_FROM_EMAIL`, `INQUIRY_TO_EMAIL` in Vercel (Production). Connection/greeting/socket timeouts are bounded so a dead mail server can't hang a function. In production a missing setting is no longer silently skipped: the email fails, retries, and shows up for staff.
+
+Real delivery happens **only on a production deployment**:
+
+| Environment | Behaviour |
+|---|---|
+| Production | real SMTP |
+| Vercel preview, local dev | **suppressed** (recorded as "not sent: this environment does not deliver real email") |
+| …with `EMAIL_DEV_ALLOWLIST=you@x.com,@yourteam.com` | really sent, but **only** to those addresses/domains |
+| …with `EMAIL_TRANSPORT=console` (dev only) | printed to the server console, incl. reset links |
+| Automated tests | kept in memory; nothing leaves the process |
+
+### Admin notifications
+*Notifications* shows real events only, newest first, with an unread badge on the menu icon, All / Unread filter, **Mark all as read** and "Show older" paging. Per-admin read state is stored on the server (survives refresh; one admin reading an item doesn't hide it from another). Clicking an item opens the record (inquiry, project/folder, clients) without a page load. Events (each recorded once, via a unique key): a **new inquiry**, an **approval** (with the invitation queued), a **client activating** their account, a **file uploaded** to a folder, a **guest comment** (flagged if it awaits review), and **email delivery failure**. Everything is served from admin-only endpoints (`/api/admin/notifications`, `/api/admin/email-outbox`); anonymous → 401, customer → 403. Notifications older than 180 days are removed by the daily job.
+
+Deferred: project status/edit events, per-user notification preferences, email/push digests.
+
+### Admin menu
+The *Workspace* entry held a single shortcut (Generate invoice) that Billing → Invoices already provides ("New invoice"), so it has been removed rather than renamed; old `?view=workspace` links open Billing. The *Notifications* screen no longer shows "Coming soon". Nothing else in the navigation changed.
+
+### Deploying
+1. Run `prisma/migrations/20261105020000_email_outbox_notifications/migration.sql` in the Supabase SQL editor **first** (additive; the inquiry form writes to the new tables).
+2. Make sure the SMTP variables and `CRON_SECRET` are set for Production, then deploy.
+3. Rollback: redeploying the previous version is safe — the new tables are simply unused. (Emails queued but unsent at that moment stay in the table; you can send them later by redeploying.)
+
+### Manual verification (what the tests can't prove)
+1. Submit the contact form in production: the staff alert and the customer acknowledgement arrive; *Notifications* shows "New inquiry from …" with an unread badge; clicking it opens the inquiry.
+2. Break SMTP (wrong password in Vercel env, redeploy), submit again: the inquiry still appears in the admin; *Notifications → Email delivery* shows the emails waiting, then (after 8 failed attempts, or you can check the 1st retry) an *Email failed* alert. Restore the password and press **Retry all failed**: the emails arrive, once each.
+3. Approve an inquiry: the client receives "Your Dreamable.studio client portal is ready"; setting a password creates a "… activated their account" notification.
+4. On a preview deployment or locally, confirm a test inquiry does **not** email the customer.
+
+`npm test` covers the outbox (outage, backoff, give-up, retry, concurrency, crash recovery, no secrets in the queue), mail-mode safety, notification endpoints and event wiring, and — on a real in-process Postgres built from the migrations — the unique-key guarantees. **Not covered:** a real SMTP server, real Vercel Cron timing, and the visual layout of the new screen in a browser.
 

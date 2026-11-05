@@ -1,53 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
-import nodemailer from 'nodemailer';
 import { prisma } from '@/lib/prisma';
 import { canUsePasswordFlow } from '@/lib/accountStatus';
 import { getClientIp } from '@/lib/clientIp';
-import { RULES, check, consume, firstDenied, tooManyRequests } from '@/lib/rateLimit';
+import { RULES, consume, firstDenied, tooManyRequests } from '@/lib/rateLimit';
 import { logRef, logSecurity } from '@/lib/securityLog';
-import { hashRecoveryCode } from '@/lib/recoveryCode';
-
-function generateCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  const bytes = randomBytes(8);
-  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
-}
-
-async function sendCodeEmail(to: string, code: string) {
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, INQUIRY_FROM_EMAIL } = process.env;
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) throw new Error('SMTP not configured.');
-
-  const port = Number(SMTP_PORT ?? 587);
-  const fromAddress = INQUIRY_FROM_EMAIL ?? SMTP_USER;
-
-  const transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port,
-    secure: port === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
-  });
-
-  await transporter.sendMail({
-    from: `"Dreamable.studio" <${fromAddress}>`,
-    to,
-    subject: 'Your Dreamable.studio verification code',
-    html: `
-      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1a1a1a;">
-        <h2 style="font-size:22px;font-weight:600;margin-bottom:16px;">Password reset code</h2>
-        <p style="color:#555;line-height:1.6;margin-bottom:28px;">
-          Use the code below to reset your Dreamable.studio password. This code is single-use.
-        </p>
-        <div style="font-size:32px;font-weight:700;letter-spacing:8px;text-align:center;padding:24px;background:#f5f5f7;border-radius:12px;margin-bottom:28px;">
-          ${code}
-        </div>
-        <p style="color:#aaa;font-size:12px;line-height:1.6;">
-          If you didn&apos;t request this, you can safely ignore this email.
-        </p>
-      </div>
-    `,
-  });
-}
+import { enqueueEmail } from '@/lib/emailOutbox';
+import { dispatchOutbox } from '@/lib/dispatch';
 
 export async function POST(req: NextRequest) {
   try {
@@ -59,8 +17,7 @@ export async function POST(req: NextRequest) {
 
     const normalized = email.toLowerCase().trim();
 
-    // One budget per mailbox and per source, shared by "email me a link" and "email me a code", so neither
-    // route can be used to flood someone's inbox. The answer never depends on whether the account exists.
+    // Shared budget with forgot-password (see there). The answer never depends on whether the account exists.
     const ip = getClientIp(req.headers);
     const sendBlocked = firstDenied(
       await consume(RULES.recoveryEmailIp, ip),
@@ -71,21 +28,15 @@ export async function POST(req: NextRequest) {
       return tooManyRequests(sendBlocked, 'reset requests for this account');
     }
 
-    const user = await prisma.user.findUnique({ where: { email: normalized } });
-
+    // The code itself is generated (and only its hash stored) when the email is sent, so it never sits in the queue.
+    const user = await prisma.user.findUnique({ where: { email: normalized }, select: { id: true, email: true, status: true } });
     if (user && canUsePasswordFlow(user.status)) {
-      const code = generateCode();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { templogincode: hashRecoveryCode(user.email, code), tempLoginCodeExpiresAt: expiresAt },
+      await enqueueEmail(prisma, {
+        eventType: 'auth.recovery_code', recipient: user.email,
+        dedupeKey: `recovery-code:${user.id}:${Math.floor(Date.now() / 15_000)}`,
+        payload: { userId: user.id }, entityType: 'user', entityId: user.id,
       });
-
-      try {
-        await sendCodeEmail(user.email, code);
-      } catch (mailErr) {
-        console.error('[request-code] email failed:', mailErr);
-      }
+      dispatchOutbox();
     }
 
     // Always return ok — don't reveal whether the email exists.

@@ -1,6 +1,5 @@
-import { after, NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import nodemailer from 'nodemailer';
 import { Prisma } from '@prisma/client';
 import { getClientIp } from '@/lib/clientIp';
 import { RULES, consume, firstDenied, tooManyRequests } from '@/lib/rateLimit';
@@ -10,51 +9,9 @@ import { INQUIRY_EXT, safeFileName } from '@/lib/fileTypes';
 import { validateUpload } from '@/lib/fileValidation';
 import { storageConfigured } from '@/lib/storage';
 import { INQUIRY_UPLOAD_MAX_FILES, verifyInquiryUploads } from '@/lib/uploadFlow';
-import { buildAdminInquiryEmail, buildConfirmationEmail, type InquiryEmailData } from '@/lib/inquiryEmails';
-
-/* ── Email delivery ───────────────────────────────────────────────────────────
-   Bodies and headers are built (and escaped) in lib/inquiryEmails.ts; this only talks to SMTP.        */
-type InquiryPayload = InquiryEmailData & { attachments: { filename: string; content: Buffer; contentType: string }[] };
-
-function transport() {
-    const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, INQUIRY_TO_EMAIL, INQUIRY_FROM_EMAIL } = process.env;
-    if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
-    const port = Number(SMTP_PORT) || 587;
-    return {
-        mailer: nodemailer.createTransport({ host: SMTP_HOST, port, secure: port === 465, auth: { user: SMTP_USER, pass: SMTP_PASS } }),
-        from: { name: 'Dreamable.studio', address: INQUIRY_FROM_EMAIL || SMTP_USER },
-        to: INQUIRY_TO_EMAIL,
-    };
-}
-
-async function sendInquiryEmail(inquiry: InquiryPayload): Promise<void> {
-    const t = transport();
-    if (!t || !t.to) {
-        console.warn('[sendInquiryEmail] SMTP not fully configured — skipping email notification.');
-        return;
-    }
-    const mail = buildAdminInquiryEmail(inquiry);
-    await t.mailer.sendMail({
-        from: t.from,
-        to: t.to,
-        replyTo: mail.replyTo,
-        subject: mail.subject,
-        html: mail.html,
-        text: mail.text,
-        attachments: inquiry.attachments.map(({ filename, content, contentType }) => ({ filename, content, contentType })),
-    });
-}
-
-async function sendConfirmationEmail(to: string, name: string, projectName: string | null): Promise<void> {
-    const t = transport();
-    const address = safeEmailAddress(to);
-    if (!t || !address) {
-        console.warn('[sendConfirmationEmail] SMTP not configured or address unusable — skipping confirmation email.');
-        return;
-    }
-    const mail = buildConfirmationEmail(name, projectName);
-    await t.mailer.sendMail({ from: t.from, to: address, subject: mail.subject, html: mail.html, text: mail.text });
-}
+import { enqueueEmail } from '@/lib/emailOutbox';
+import { dispatchOutbox } from '@/lib/dispatch';
+import { links, notify } from '@/lib/notifications';
 
 /* ── Helpers ── */
 const MAX_DESC = 5_000;
@@ -264,6 +221,22 @@ export async function POST(req: NextRequest) {
                     },
                     select: { id: true },
                 });
+                // The emails and the admin notification are written in the SAME transaction as the inquiry: if the
+                // inquiry is saved, so are they — and a mail outage afterwards can delay them but not lose them.
+                await enqueueEmail(tx, [
+                    {
+                        eventType: 'inquiry.notification', recipient: process.env.INQUIRY_TO_EMAIL || '(staff inbox)',
+                        dedupeKey: `inquiry.notification:${created.id}`, payload: { inquiryId: created.id }, entityType: 'inquiry', entityId: created.id,
+                    },
+                    {
+                        eventType: 'inquiry.confirmation', recipient: email,
+                        dedupeKey: `inquiry.confirmation:${created.id}`, payload: { inquiryId: created.id }, entityType: 'inquiry', entityId: created.id,
+                    },
+                ]);
+                await notify(tx, {
+                    type: 'inquiry.new', title: `New inquiry from ${name}`, body: `${service}${projectName ? ` — ${projectName}` : ''}`,
+                    entityType: 'inquiry', entityId: created.id, url: links.inquiry(created.id), dedupeKey: `inquiry.new:${created.id}`,
+                });
                 // Claim the pre-uploaded files in the same transaction: they become visible only if the inquiry is saved.
                 for (const f of storedFiles) {
                     const { count } = await tx.inquiryAttachment.updateMany({
@@ -289,36 +262,9 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // Emails run after the response is sent. On serverless hosts a bare un-awaited promise can be
-        // killed once the response returns, so after() keeps the function alive until they finish.
-        after(async () => {
-            await sendInquiryEmail({
-            inquiryId,
-            name,
-            email,
-            company,
-            website,
-            service,
-            description,
-            budgetRange,
-            timeline,
-            phone,
-            projectName,
-            utmSource,
-            utmMedium,
-            utmCampaign,
-            utmTerm,
-            utmContent,
-            referrer,
-            attachments,
-            storedAttachments: storedFiles.map((f) => ({ name: f.fileName, size: f.size })),
-            }).catch((err) => {
-                console.error('[sendInquiryEmail] Failed to send notification:', err);
-            });
-            await sendConfirmationEmail(email, name, projectName).catch((err) => {
-                console.error('[sendConfirmationEmail] Failed to send confirmation:', err);
-            });
-        });
+        // Try to send right away (after the response). If that doesn't happen for any reason, the queued emails
+        // are picked up by the retry job — the visitor's inquiry is already saved either way.
+        if (process.env.DATABASE_URL) dispatchOutbox();
 
         return NextResponse.json({ ok: true, inquiryId });
     } catch (error) {

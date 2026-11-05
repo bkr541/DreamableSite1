@@ -5,6 +5,7 @@ import { getClientIp } from '@/lib/clientIp';
 import { RULES, consume, tooManyRequests } from '@/lib/rateLimit';
 import { consumeResetToken, lookupResetToken } from '@/lib/resetTokens';
 import { statusAfterPasswordFlow } from '@/lib/accountStatus';
+import { links, notify } from '@/lib/notifications';
 
 const INVALID = { ok: false, error: 'Reset link is invalid or expired.' };
 
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
     const nextStatus = statusAfterPasswordFlow(found.user.status);
     if (!nextStatus) return NextResponse.json(INVALID, { status: 400 }); // suspended etc.: a link never reactivates
 
+    const wasInvited = found.user.status === 'INVITED';
     const passwordHash = await hashPassword(password);
 
     const done = await prisma.$transaction(async (tx) => {
@@ -43,6 +45,15 @@ export async function POST(req: NextRequest) {
         },
       });
       if (count !== 1) throw new Rollback();
+
+      // The first time an invited client sets a password they become active — staff want to know.
+      if (wasInvited) {
+        const u = await tx.user.findUnique({ where: { id: found.user.id }, select: { name: true } });
+        await notify(tx, {
+          type: 'client.activated', title: `${u?.name ?? 'A client'} activated their account`, body: 'They set a password and can now sign in to the portal.',
+          entityType: 'user', entityId: found.user.id, url: links.clients(), dedupeKey: `client.activated:${found.user.id}`,
+        });
+      }
 
       // Any other link for this user is now stale.
       await tx.passwordResetToken.updateMany({ where: { userId: found.user.id, consumedAt: null }, data: { consumedAt: new Date() } });

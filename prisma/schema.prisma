@@ -356,3 +356,68 @@ model RateLimit {
   @@index([updatedAt])
   @@map("rate_limits")
 }
+
+// Durable queue of emails to send. A row is written in the same transaction as the thing that caused it, so an
+// SMTP outage can delay an email but never lose it. `payload` holds REFERENCES (ids) only — never tokens, codes
+// or passwords; those are generated at send time. Text is rendered from current database data when sent.
+model EmailOutbox {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  eventType String @map("event_type")
+  recipient String
+  // One row per logical email: enqueueing the same event twice (a retried request, a double click) is a no-op.
+  dedupeKey String @unique @map("dedupe_key")
+  payload   Json?
+
+  // PENDING | SENDING | RETRY | SENT | DEAD (gave up) | SUPPRESSED (deliberately not sent)
+  status        String    @default("PENDING")
+  attempts      Int       @default(0)
+  maxAttempts   Int       @default(8) @map("max_attempts")
+  manualRetries Int       @default(0) @map("manual_retries")
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at") @db.Timestamptz()
+  lockedUntil   DateTime? @map("locked_until") @db.Timestamptz()
+  lastError     String?   @map("last_error")
+  sentAt        DateTime? @map("sent_at") @db.Timestamptz()
+
+  entityType String? @map("entity_type")
+  entityId   String? @map("entity_id")
+
+  @@index([status, nextAttemptAt])
+  @@index([createdAt(sort: Desc)])
+  @@map("email_outbox")
+}
+
+// What happened, for the admin Notifications screen. Real events only; `dedupeKey` makes each event appear once.
+model AdminNotification {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  type       String
+  title      String
+  body       String?
+  entityType String? @map("entity_type")
+  entityId   String? @map("entity_id")
+  url        String
+  actorId    String? @map("actor_id") @db.Uuid
+  dedupeKey  String  @unique @map("dedupe_key")
+
+  reads NotificationRead[]
+
+  @@index([createdAt(sort: Desc)])
+  @@map("admin_notifications")
+}
+
+// Per-admin read state, so one admin reading an item doesn't hide it from another.
+model NotificationRead {
+  notificationId String   @map("notification_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  readAt         DateTime @default(now()) @map("read_at") @db.Timestamptz()
+
+  notification AdminNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@id([notificationId, userId])
+  @@index([userId])
+  @@map("notification_reads")
+}
