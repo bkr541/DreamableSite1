@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation';
 import { requireClientPage } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import CustomerDashboardClient from './CustomerDashboardClient';
+import { customerInvoiceWhere, toInvoiceView, totalsFor } from '@/lib/invoiceService';
+import { canonicalServiceLabel } from '@/lib/services';
 
 export default async function DashboardPage() {
   const current = await requireClientPage();
@@ -57,17 +59,40 @@ export default async function DashboardPage() {
     select: { id: true, inquiryId: true, projectId: true, name: true, description: true },
   });
 
+  // Only invoices linked to THIS account, and only once issued (drafts are internal). Read-only: the customer can look at
+  // and download them; nothing here collects or records a payment.
+  const today = new Date().toISOString().slice(0, 10);
+  const invoiceRows = await prisma.invoice
+    .findMany({
+      where: customerInvoiceWhere(user.id),
+      orderBy: [{ issueDate: 'desc' }, { createdAt: 'desc' }],
+      include: { lineItems: true },
+    })
+    .catch((err) => {
+      console.error('[dashboard] could not load invoices:', err);
+      return [];
+    });
+  const invoices = invoiceRows.map((row) => {
+    const view = toInvoiceView(row);
+    return {
+      id: view.id, invoiceNumber: view.invoiceNumber, projectName: view.projectName, issueDate: view.issueDate, dueDate: view.dueDate,
+      status: view.status, total: totalsFor(view)?.total ?? null, pastDue: view.status === 'Not Paid' && view.dueDate < today,
+    };
+  });
+
   return (
     <CustomerDashboardClient
       session={session}
       deliverables={deliverables}
       folders={folders}
+      invoices={invoices}
       user={{
         ...user,
-        inquiryService: user.inquiry?.service ?? null,
+        inquiryService: user.inquiry?.service ? canonicalServiceLabel(user.inquiry.service) : null,
         company: user.company ?? null,
         projects: user.projects.map((p) => ({
           ...p,
+          service: canonicalServiceLabel(p.service),
           startDate: p.startDate?.toISOString() ?? null,
           targetEndDate: p.targetEndDate?.toISOString() ?? null,
           createdAt: p.createdAt.toISOString(),

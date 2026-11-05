@@ -61,3 +61,23 @@ h1 {
 .record-title {
   transition: color 0.15s ease;
 }
+
+/* Visitors who ask their device for less motion get no smooth-scroll, no text sweep and (via <MotionPreferences>) no
+   transform animations. Content is simply shown in its final state. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+
+  .animate-gradient-sweep {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-duration: 0.01ms !important;
+  }
+}

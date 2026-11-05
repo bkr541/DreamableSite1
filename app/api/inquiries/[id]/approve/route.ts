@@ -7,6 +7,7 @@ import { enqueueEmail } from '@/lib/emailOutbox';
 import { dispatchOutbox } from '@/lib/dispatch';
 import { links, notify } from '@/lib/notifications';
 import { canReview } from '@/lib/inquiryReview';
+import { canonicalServiceLabel } from '@/lib/services';
 
 const REQUIRED_FIELDS = ['name', 'email', 'service', 'description'] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -75,7 +76,7 @@ export async function POST(
         update: {},
         create: {
           inquiryId: id, companyId: company.id, primaryUserId: user.id,
-          name: `${inquiry.service} Project`, service: inquiry.service, description: inquiry.description,
+          name: `${canonicalServiceLabel(inquiry.service)} Project`, service: canonicalServiceLabel(inquiry.service), description: inquiry.description,
           budgetRange: inquiry.budgetRange ?? undefined, timeline: inquiry.timeline ?? undefined, status: 'ONBOARDING',
         },
       });

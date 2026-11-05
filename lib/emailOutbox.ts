@@ -8,6 +8,7 @@ import { issueResetToken } from './resetTokens';
 import { hashRecoveryCode } from './recoveryCode';
 import { canUsePasswordFlow } from './accountStatus';
 import { notify } from './notifications';
+import { canonicalServiceLabel } from './services';
 import { logRef, logSecurity } from './securityLog';
 
 // Email is written down before it is sent. The row is created in the same transaction as whatever caused it
@@ -102,7 +103,7 @@ async function render(job: Job): Promise<{ to: string; mail: BuiltMail }> {
       return { to: inquiry.email, mail: buildConfirmationEmail(inquiry.name, meta.projectName ?? null) };
     }
     const data: InquiryEmailData = {
-      inquiryId: inquiry.id, name: inquiry.name, email: inquiry.email, company: inquiry.company, website: inquiry.website, service: inquiry.service,
+      inquiryId: inquiry.id, name: inquiry.name, email: inquiry.email, company: inquiry.company, website: inquiry.website, service: canonicalServiceLabel(inquiry.service),
       description: inquiry.description, budgetRange: inquiry.budgetRange, timeline: inquiry.timeline, phone: meta.phone ?? null, projectName: meta.projectName ?? null,
       utmSource: inquiry.utmSource, utmMedium: inquiry.utmMedium, utmCampaign: inquiry.utmCampaign, utmTerm: inquiry.utmTerm, utmContent: inquiry.utmContent,
       referrer: inquiry.referrer, storedAttachments: inquiry.attachments.map((a) => ({ name: a.fileName, size: a.size })),

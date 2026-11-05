@@ -1,5 +1,6 @@
 'use client';
 
+import { intakeOptions } from '@/lib/services';
 import { useState } from 'react';
 import CustomSelect from '@/components/CustomSelect';
 
@@ -107,7 +108,7 @@ export default function Contact() {
         {/* Right Side (Form) */}
         <div className="w-full lg:w-1/2 px-6 py-24 lg:py-32 flex flex-col justify-center bg-[#F9F9F9] lg:bg-transparent">
           {status === 'success' ? (
-            <div className="w-full max-w-[480px] mx-auto lg:mx-0">
+            <div role="status" className="w-full max-w-[480px] mx-auto lg:mx-0">
               <p className="text-2xl font-semibold mb-3">We got it!</p>
               <p className="text-[#707070]">We&apos;ll be in touch within 24 hours.</p>
               <button
@@ -140,13 +141,15 @@ export default function Contact() {
                 <input
                   type="text"
                   id="name"
+                  aria-invalid={fieldError?.field === 'name'}
+                  aria-describedby={fieldError?.field === 'name' ? 'name-error' : undefined}
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
                   className={`w-full bg-transparent border-b py-3 text-[#000000] placeholder:text-[#CCCCCC] focus:outline-none transition-colors ${fieldError?.field === 'name' ? 'border-[#e05252] focus:border-[#e05252]' : 'border-[#E5E5E5] focus:border-[#000000]'}`}
                   placeholder="Jane Doe"
                 />
-                {fieldError?.field === 'name' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                {fieldError?.field === 'name' && <p id="name-error" role="alert" className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
               </div>
 
               <div className="flex flex-col">
@@ -154,6 +157,8 @@ export default function Contact() {
                 <input
                   type="text"
                   id="email"
+                  aria-invalid={fieldError?.field === 'email'}
+                  aria-describedby={fieldError?.field === 'email' ? 'email-error' : undefined}
                   name="email"
                   autoComplete="email"
                   value={formData.email}
@@ -161,7 +166,7 @@ export default function Contact() {
                   className={`w-full bg-transparent border-b py-3 text-[#000000] placeholder:text-[#CCCCCC] focus:outline-none transition-colors ${fieldError?.field === 'email' ? 'border-[#e05252] focus:border-[#e05252]' : 'border-[#E5E5E5] focus:border-[#000000]'}`}
                   placeholder="jane@example.com"
                 />
-                {fieldError?.field === 'email' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                {fieldError?.field === 'email' && <p id="email-error" role="alert" className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
               </div>
 
               <div className="flex flex-col">
@@ -183,18 +188,20 @@ export default function Contact() {
                   id="service"
                   value={formData.service}
                   onChange={(v) => { setFormData({ ...formData, service: v }); setFieldError(null); }}
-                  options={[{ value: 'App or Web Development', label: 'App or Web Development' }, { value: 'Branding & Logo', label: 'Branding & Logo' }, { value: 'UI/UX Design', label: 'UI/UX Design' }, { value: 'Marketing & Ads', label: 'Marketing & Ads' }, { value: 'Consulting', label: 'Consulting' }, { value: 'Other', label: 'Other' }]}
+                  options={intakeOptions().map(({ value, label }) => ({ value, label }))}
                   placeholder="Select a project type"
                   variant="underline"
                   invalid={fieldError?.field === 'service'}
                 />
-                {fieldError?.field === 'service' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                {fieldError?.field === 'service' && <p role="alert" className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
               </div>
 
               <div className="flex flex-col">
                 <label htmlFor="description" className="text-sm font-medium text-[#707070] mb-2">What are you building?</label>
                 <textarea
                   id="description"
+                  aria-invalid={fieldError?.field === 'description'}
+                  aria-describedby={fieldError?.field === 'description' ? 'description-error' : undefined}
                   name="description"
                   rows={3}
                   maxLength={5000}
@@ -203,7 +210,7 @@ export default function Contact() {
                   className={`w-full bg-transparent border-b py-3 text-[#000000] placeholder:text-[#CCCCCC] focus:outline-none transition-colors resize-none ${fieldError?.field === 'description' ? 'border-[#e05252] focus:border-[#e05252]' : 'border-[#E5E5E5] focus:border-[#000000]'}`}
                   placeholder="Tell us about your project..."
                 />
-                {fieldError?.field === 'description' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                {fieldError?.field === 'description' && <p id="description-error" role="alert" className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
               </div>
 
               <div className="flex flex-col">
@@ -230,12 +237,12 @@ export default function Contact() {
                 />
               </div>
 
-              <p className="text-sm text-[#AAAAAA]">
+              <p className="text-sm text-[#707070]">
                 Attachments can be shared after we reply.
               </p>
 
               {status === 'error' && (
-                <p className="text-sm text-red-500">
+                <p role="alert" className="text-sm text-red-500">
                   {errorMessage || 'Something went wrong. Please try again.'}
                 </p>
               )}

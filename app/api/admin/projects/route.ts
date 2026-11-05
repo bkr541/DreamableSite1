@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { canonicalServiceLabel } from '@/lib/services';
 
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
           name: name.trim(),
           companyId: projectCompanyId,
           primaryUserId: client?.id ?? null,
-          service: service.trim(),
+          service: canonicalServiceLabel(service),
           subCategory: subCategory?.trim() || null,
           description: description.trim(),
           budgetRange: budgetRange?.trim() || null,

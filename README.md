@@ -107,7 +107,7 @@ Copy `.env.example` to `.env.local` and fill in all values.
 | `SMTP_PASS` | For email | SMTP login password |
 | `INQUIRY_TO_EMAIL` | For email | Address that receives new inquiry notifications |
 | `INQUIRY_FROM_EMAIL` | No | From address (defaults to `SMTP_USER`) |
-| `APP_URL` | No | Canonical URL of the deployed site |
+| `APP_URL` | **Yes** for SEO | Public origin of the deployed site (e.g. `https://dreamable.studio`). Canonical links, `sitemap.xml`, `robots.txt`, Open Graph URLs and structured data are built from it; unset, they point at `http://localhost:3000`. Must be set at **build** time too (static pages bake it in) |
 | `SESSION_SECRET` | **Yes** | Signs session cookies. ≥ 32 random chars. `openssl rand -hex 32` |
 | `SUPABASE_URL` | For large files | Project URL of the Supabase project that holds the file bucket |
 | `SUPABASE_SERVICE_ROLE_KEY` | For large files | Server-only key used to issue upload/download links. Never expose to the browser. |
@@ -408,3 +408,128 @@ The user and company changes are one transaction (an email conflict after the co
 
 `npm test` covers all of the above — including the full inquiry → approval → invitation email → activation → sign-in journey, expired/reused/replaced/suspended-holder invitations, outage and resend paths, atomic rollbacks, privilege-escalation attempts and the migration backfill on a real in-process Postgres. **Not covered:** real email delivery and how the new dialogs look in a browser.
 
+
+---
+
+## Invoices & billing
+
+Invoices are created and edited by staff (**Admin → Billing → Invoices**); customers can see and download their own issued invoices (**Dashboard → Invoices**). **There is no payment processing of any kind** — no checkout, card or provider integration, and no pay button; "Paid" is just a status staff record.
+
+### Money rules (`lib/money.ts`)
+US dollars, calculated without floating point (amounts are parsed from text into scaled integers; the same code runs on the server, in the admin form and in the PDF):
+
+* **Quantity** up to 4 decimals, **rate** up to 4 decimals, **tax rate** stored as a *fraction* with 6 decimals (`0.082500` = 8.25%; the form takes a percent).
+* **Line total** = quantity × rate, rounded **half-up to the cent**. **Subtotal** = sum of the rounded line totals. **Tax** = subtotal × tax rate, rounded half-up once. **Total** = subtotal + tax. So the printed lines always add up to the printed total.
+* Stored as `numeric` (`qty` 12,4 · `rate` 14,4 · `tax_rate` 9,6); the API carries them as text, never as JS numbers. Examples: 0.1 + 0.2 = $0.30 · 3 × $0.10 = $0.30 · 1.5 × $33.333 = $50.00 · 3 × $0.005 = $0.03.
+
+### Numbering
+`DS-YYYY-NNN`, assigned **by the server** from a per-year counter in the same transaction that saves the invoice, so simultaneous creations queue and each gets the next number; a failed save hands its number back. The form's number is only a suggestion (`GET /api/admin/invoices/next-number`, reserves nothing): while it is untouched the server assigns a fresh one, so a stale suggestion can't collide. A number typed by hand must be unused (clear 409, also case/space-insensitive); the counter skips hand-typed numbers. Gaps are possible (a number typed by hand that the counter skips; an invoice later removed) but numbers are **never reused**. A unique index backs this up at the database. **An issued invoice (anything but Unsent) keeps its number**; a draft may be renumbered.
+
+### Validation (`lib/invoiceValidation.ts`, same rules for create and edit; field-level 422s)
+Real calendar dates (`YYYY-MM-DD`, due ≥ issue) · status ∈ Unsent / Not Paid / Paid · client required (a real, non-admin account) · quantity > 0 and ≤ 1,000,000 · rate ≥ 0 and ≤ $10,000,000 · tax 0–50% · 1–100 line items · total > $0 and ≤ $1 billion · no NaN/Infinity/negative/exponent values, no more decimals than stored (input is refused, never silently rounded) · 64 KB request cap.
+**Status changes:** Unsent → Not Paid → Paid, and **Paid → Not Paid** as a correction. An issued invoice never goes back to Unsent. **A Paid invoice is closed**: nothing can change until it is put back to Not Paid (on its own), then edited. The database also has `CHECK` backstops (`NOT VALID`, so they apply to new/edited rows without touching old ones).
+
+### Clients & projects
+Each invoice is **linked** to a real client account (required for new invoices; optional project). The project must be that client's own or belong to their company — another customer's project is refused. The printed billing name, email, company and project name are kept as **snapshots** on the invoice, so history survives renames. Deleting a client/project never deletes an invoice (links are set to null).
+
+### Customers
+*Dashboard → Invoices* lists invoices linked to **the signed-in account**, once **issued** (Not Paid / Paid; drafts are internal), with number, project, issued/due dates, amount, status and a derived "Past due" chip. **View** / **Download PDF** fetch `GET /api/invoices/:id`, which answers only for invoices linked to that account — anything else is a plain 404, so ids can't be probed. Company membership alone grants nothing. One shared rule (`customerInvoiceWhere`) decides visibility for both the page and the endpoint.
+
+### Deploying (data first)
+1. **Look before you leap (read-only):** run `prisma/audits/invoices_before_migration.sql` in the Supabase SQL editor to see duplicate numbers, invalid amounts/dates/statuses and which invoices could be linked.
+2. **Run the SQL:** `prisma/migrations/20261105040000_invoice_integrity/migration.sql` (or the combined `prisma/APPLY_ALL_PENDING.sql`). It is idempotent and non-destructive: it converts Float → Decimal, then:
+   * **Duplicate numbers are flagged (`number_conflict`), never renumbered.** The oldest keeps the number; the others show "Duplicate number — needs review" in the admin and must be given a new unused number by hand (Edit invoice).
+   * **Links** are made only when an email belongs to exactly one client **and** the billed name, company or one of their projects also matches; a project is attached only if that client has exactly one project with that name. Everything else stays unlinked ("Not linked to a client" chip) and **customers cannot see it** until you edit it and choose the client.
+   * Everything it finds is written to `invoice_migration_audit` (kinds: `DUPLICATE_NUMBER`, `LINKED_TO_CLIENT`, `LINKED_TO_PROJECT`, `LINK_UNMATCHED`, `LINK_AMBIGUOUS`, `LINK_UNCORROBORATED`, `TOTAL_WOULD_CHANGE`, `LOSSY_AMOUNT`, `INVALID_AMOUNT`, `INVALID_TAX`, `INVALID_DATE_OR_STATUS`).
+3. **Review:** `SELECT kind, count(*) FROM invoice_migration_audit GROUP BY 1;` then fix the flagged invoices in the admin. **`TOTAL_WOULD_CHANGE`** lists any invoice whose total moves by a cent because lines are now rounded one by one (old: sum, then round) — a PDF regenerated for it will show the new figure; nothing in the database was rewritten. **`LOSSY_AMOUNT`** lists values with more than 4 decimals (rounded to 4 on conversion).
+4. Deploy. Existing invoices keep working throughout; unlinked ones remain editable and downloadable by admins.
+5. Rollback: the previous release can't read the new numeric types' text form cleanly, so roll *forward* (the data is intact); don't drop the new columns.
+
+### Manual verification
+1. Billing → New Invoice: the number is suggested; open a second browser tab, create an invoice there, then save the first: it gets the *next* number, not a duplicate. Type an existing number: clear "already in use" message.
+2. Create an invoice with 1.5 × $33.333 and 3 × $0.10 at 8.25%: form total, list total and PDF all show $54.45.
+3. Try a negative quantity or a due date before the issue date by editing the request in the browser dev tools: the server refuses it.
+4. Create an invoice for a client, set it to *Not Paid*: sign in as that client — it appears under Invoices; download the PDF. Sign in as another client: it doesn't. Set it back to *Unsent*… it can't (Not Paid → Unsent is refused); a *Unsent* draft is not visible to the client.
+5. Mark an invoice *Paid*, then try to edit it: refused until set back to *Not Paid*.
+
+### Known limitations / deferred
+* The PDF's **"Payment methods"** block (bank transfer / card / PayPal wording) is the studio's existing static text and is unchanged; it describes how to pay offline and is not connected to anything. Edit `lib/generateInvoice.ts` if you want it reworded now that customers can download invoices.
+* Invoices can't be deleted (they are records). Company-wide invoice access (several users of one company seeing the same invoices) isn't implemented — access is per client account.
+* Currency is USD only. There is no emailing of invoices.
+* `npm test` covers the money vectors, validation, numbering under parallel load on a real Postgres, the migration on a messy legacy dataset, authorization and the PDF/API/form agreement. **Not covered:** the visual layout of the new form and customer panel, and the PDF file's appearance (the test checks the figures it would print).
+
+## Website consistency, SEO, performance & accessibility
+
+### Service names (one catalog)
+`lib/services.catalog.mjs` is the only list of services. Each has a permanent `id` (`web-development`, `brand-identity`, `ui-ux-design`, `marketing`, `consulting`, `support`, `other`), a display `label`, legacy `aliases`, its deliverable categories and its sub-categories. The home and contact forms (`intakeOptions()`), the intake and approve APIs, the admin project API, deliverable categories, admin pickers/icons, emails, `prisma/seed.mjs` and the SQL migration all read it. What is stored in `inquiries.service`, `projects.service` and `services.name` is the label, so a label is a stable key: to rename one, keep the old text in `aliases` and add a migration like the one below.
+* **"Branding & Identity" / "Branding & Logo" are now "Brand Identity".** Matching ignores case, spacing and `&`/`and`. Unrecognised values are never rewritten, dropped or blanked.
+* "Marketing & Ads" was offered on the contact form but defined nowhere else; it is now a real service. **The home form therefore shows a sixth card, "Marketing & Ads"** (an intentional, visible change).
+* The services *page* headings ("Logo & Branding Design", "Software Development", …) are marketing copy, not intake names, and were left alone.
+
+### Deploying (data first)
+1. **Run the SQL first.** In the Supabase SQL editor run the last section of `prisma/APPLY_ALL_PENDING.sql` (`20261105050000_canonical_services`), or the earlier sections too if you haven't applied them. Additive and idempotent: it rewrites only recognised legacy spellings, folds a duplicate legacy row in `services` into the canonical one (moving its sub-categories), deletes nothing else, and logs every change to `service_migration_audit`. Review it with the queries at the end of the file.
+2. Deploy the code, then optionally `npm run seed` (idempotent; it reconciles legacy rows and fills in missing services/sub-categories).
+3. Set `APP_URL` (build and runtime).
+
+### Removed: `public/cast/`
+`public/cast/sender|receiver/index.html` were an unrelated "DRMVYZ" Google Cast demo. Nothing in the app, config or middleware referenced them. They are deleted; `tests/publicAssets.test.ts` fails if they return, if any `/images/…` or `/fonts/…` path in the code points at a missing file, or if an oversized or unreferenced file appears in `public/`. `public/images/hero.jpg` is referenced nowhere; it was left for you to decide. The 2 MB master logo moved to `design-source/logo_transparent.png`; the site uses a 256 px `public/images/logo.png` (63 KB).
+
+### SEO (`lib/site.ts`)
+* Every indexable page (`/`, `/about`, `/services`, `/contact`) has its own title, description, canonical URL and Open Graph/Twitter metadata, all built from `INDEXABLE_PAGES` and `APP_URL`. `app/sitemap.ts` is generated from the same list; `app/robots.ts` points at it.
+* **Not indexed:** `/admin`, `/dashboard`, `/portal` (sign-in and reset links), `/share/*` and `/api/*`: `noindex` metadata, an `X-Robots-Tag` header (`next.config.ts`) and, for reset/share links, `Referrer-Policy: no-referrer` because their address carries a token. The portal sign-in page is noindex on purpose (no search value), which is why Lighthouse's SEO score for `/portal` is 66. **`robots.txt` is a request to crawlers, not access control**; those areas are protected by sign-in or unguessable tokens.
+* `public/og.png` (1200×630) and `app/icon.png` / `app/apple-icon.png` are generated by `node scripts/generate-brand-images.mjs` from the master logo.
+* Structured data is a single `Organization` on the home page with only facts published on the site (name, URL, logo, description). No address, phone or e-mail is claimed because none is published.
+* Verified on a production build: titles/canonicals/OG/Twitter/JSON-LD per page, `sitemap.xml`, `robots.txt`, 404 status with `noindex`, `/og.png` resolving, `/cast/…` returning 404.
+
+### Performance
+* The animated backdrop (`SplineBackground`, now a still gradient/glow/curves version that lazy-loads `AnimatedBackground`), the hero ribbons, the hero cube and the home page's interactive illustrations only run after first paint, **while on screen and while the tab is visible**, and are unmounted otherwise (`components/OnlyWhenActive.tsx`, `hooks/use-animation-active.ts`). Their code is fetched on demand (`next/dynamic`). The backdrops and ribbons show a still version for visitors who prefer reduced motion or have data-saver on; the illustrations render with movement switched off. If the animation code fails to load, the still version stays; the portal does not depend on it.
+* The whole site is wrapped in `MotionConfig reducedMotion="user"`; `globals.css` disables smooth-scroll and CSS animations under `prefers-reduced-motion`.
+* Fixed: the hero's connection lines used percentage coordinates inside SVG path data (invalid; 6 console errors per load). They are now `<line>` elements, so **those dashed lines and their travelling dots are now actually visible** (a small intentional visual change). The services page's five 220 KB carousel `<img>` tags now go through `next/image`.
+* Measured on production builds served locally (`next start`), Lighthouse via its Node API with the system Google Chrome (headless), *mobile* = Lighthouse's default Moto G Power emulation with simulated slow 4G and 4× CPU slowdown, *desktop* = 1350×940, 10 Mbps / 40 ms RTT, no CPU slowdown. Home: median of 3 runs; other pages: one run each, so small differences (a few hundred ms of LCP) are within noise. Idle CPU/heap: Playwright + CDP `Performance.getMetrics` over a 3 s idle window after load, 390×844 mobile and 1350×940 desktop. The measurement scripts were throwaway and are not in the repo.
+
+| Page (device) | Perf before → after | LCP ms | TBT ms | CLS | Transfer KB | JS KB | Image KB | Main-thread ms | Console errors |
+|---|---|---|---|---|---|---|---|---|---|
+| Home (mobile) | 95 → 96 | 2862 → 2826 | 18 → 12 | 0 → 0 | 355 → 403 | 194 → 197 | 47 → 47 | 2602 → 1307 | 6 → 0 |
+| Home (desktop) | 100 → 100 | 245 → 245 | 0 → 0 | 0 → 0 | 337 → 387 | 194 → 198 | 29 → 29 | 635 → 374 | 6 → 0 |
+| Services (mobile) | 100 → 100 | 904 → 904 | 18 → 12 | 0 → 0 | **1438 → 356** | 194 → 195 | **1135 → 2** | 667 → 586 | 1 → 0 |
+| Services (desktop) | 100 → 100 | 246 → 246 | 0 → 0 | 0 → 0 | **1437 → 383** | 194 → 195 | **1134 → 29** | 148 → 194 | 1 → 0 |
+| Contact (mobile) | 100 → 100 | 904 → 904 | 36 → 10 | 0 → 0 | 309 → 364 | 197 → 203 | 2 → 2 | 334 → 324 | 1 → 0 |
+| Portal (mobile) | 94 → 92 | 3021 → 3311 | 22 → 21 | 0 → 0 | 310 → 368 | 197 → 205 | 2 → 2 | 966 → 943 | 1 → 0 |
+| Portal (desktop) | 100 → 100 | 632 → 692 | 0 → 0 | 0 → 0 | 309 → 367 | 197 → 205 | 1 → 1 | 269 → 250 | 1 → 0 |
+
+| Idle (3 s, after load) | CPU % before → after | Script % | Heap MB | JS errors |
+|---|---|---|---|---|
+| Home, mobile | 20.7 → 13.1 | 6.2 → 2.7 | 8.2 → 5.4 | 6 → 0 |
+| Home, desktop | 19.3 → 11.7 | 4.4 → 2.4 | 5.7 → 5.6 | 6 → 0 |
+| Portal, mobile | 9.6 → 6.7 | 2.1 → 1.5 | 5.9 → 6.8 | 1 → 0 |
+| Portal, desktop | 9.2 → 7.5 | 2.0 → 1.6 | 5.8 → 6.1 | 1 → 0 |
+
+Reading the numbers honestly: the big wins are the services page payload (−1.1 MB), main-thread time and idle CPU on the home page, and no console errors. **Transfer rose ~50 KB on every page** because the site now has a favicon (before, `/favicon.ico` was a 404); that table was captured with a 50 KB icon, which was then shrunk to 5 KB and **not re-measured**. Shared JS grew 1–8 KB (motion preferences + animation gating). **Portal mobile LCP and score are slightly worse (about +300 ms, 94 → 92)**; with one run per page I can't tell whether that is noise or real, and I didn't investigate. Remaining idle CPU on the home page is mostly rendering (blurred glows, backdrop blur), not script. Performance numbers were taken before the final navbar and accessibility edits and were not repeated.
+
+### Accessibility & mobile
+Scanned with axe-core (WCAG 2.0/2.1/2.2 A+AA and best-practice rules) at 390 px and 1350 px, plus Playwright checks for reflow (320 px, 360 px, 200 % zoom), tap targets, tab order/focus indicators and form error announcements, on a production build of `/`, `/about`, `/services`, `/contact`, `/portal` and `/portal/reset-password`.
+
+| | Before | After |
+|---|---|---|
+| axe violations (6 pages × 2 widths) | 7 of 12 page-width scans had violations (hidden focusable element, 1.9:1 select placeholders and 2.3:1 / 3.5:1 grey text, **unnamed Remember-me switch (critical)**) | **0** |
+| Horizontal overflow at 320 px | all pages (nav 357 px wide; About heading 418 px) | none at 320 / 360 / 200 % zoom |
+| Nav links | 18–20 px tall | 44 px tall hit areas |
+| Empty contact form submit | nothing announced | "Name is required." announced (`role="alert"`), `aria-invalid` + `aria-describedby` set |
+| Keyboard focus on portal | Remember-me switch and password toggle had no indicator / were skipped | visible indicators; password toggle is now reachable by keyboard |
+
+What changed: contrast fixes (placeholder and helper greys to `#6b6b6b`/`#707070`); accessible names; `aria-invalid`/`aria-describedby`/`role="alert"` on both inquiry forms; `<DialogFocus>` (`components/DialogFocus.tsx`, `hooks/use-dialog-focus.ts`) added to all five modal dialogs (file preview, deliverables dialogs, archive confirmation, inquiry review dialogs, shared-folder comments) so focus moves in, Tab stays inside, Escape closes and focus returns to the opener; the navbar compacts and wraps below 380 px; the About heading wraps on tiny screens.
+
+**Not verified by tools:** the admin and customer dashboards and the share page need a database login/token, so they were *not* scanned. The dialog focus behaviour is implemented but was **not exercised in a browser** (only its build and type-check). Please run this smoke test by hand:
+1. Tab through each public page: focus order follows the page and every stop is visible. Zoom to 200 % and resize to 320 px: no sideways scrolling.
+2. Submit the contact form empty with a screen reader (or VoiceOver): the error is announced and the field is marked invalid.
+3. Admin → Inquiries → Archive: focus lands inside the dialog, Tab/Shift+Tab stay inside, Escape closes it and returns focus to the Archive button. Repeat for the file preview, a folder dialog, and the shared-folder comments dialog.
+4. Turn on "Reduce motion" in the OS: the home page backdrop and hero are still, nothing drifts, the site otherwise works.
+5. Check tap targets on a phone: nav links, Remember-me, Forgot password.
+
+### Tests
+`npx vitest run` (service catalog, seed, migration on a messy legacy dataset in an in-process Postgres, SQL ↔ catalog sync, SEO metadata/sitemap/robots/OG image/structured data, public-folder hygiene). `npx tsc --noEmit` is clean. `npx eslint .` still reports 4 errors and 1 warning that were already there (two `react-hooks/refs` in `AdminDashboardClient.tsx`, one `set-state-in-effect` in the reset-password page, one unused disable directive).
+
+### Known limitations / deferred
+* `@splinetool/react-spline` and `@splinetool/runtime` are still in `package.json` but nothing imports them; removing them is a separate dependency change.
+* `components/HeroCarousel.tsx` is unused dead code (its import was removed from the home page).
+* A route-level `not-found` page and a `prefers-reduced-motion` setting for the infinite animations inside the illustrations (they render without movement, but gentle opacity pulses can remain) are not done.

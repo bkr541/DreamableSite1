@@ -8,6 +8,7 @@ import type { SessionPayload } from '@/lib/session';
 import FileTile from '@/components/FileTile';
 import FilePreviewModal, { PreviewFile } from '@/components/FilePreviewModal';
 import AccountPanel from '@/components/AccountPanel';
+import InvoicesPanel, { type CustomerInvoice } from '@/components/InvoicesPanel';
 
 interface Deliverable {
   id: string;
@@ -54,6 +55,7 @@ interface Props {
   user: UserData;
   deliverables: Deliverable[];
   folders: Folder[];
+  invoices: CustomerInvoice[];
 }
 
 const STATUS_META: Record<string, { label: string; color: string; step: number }> = {
@@ -138,7 +140,7 @@ function DeliverableGroups({ folders, items, onPreview }: { folders: Folder[]; i
   );
 }
 
-export default function CustomerDashboardClient({ session, user, deliverables, folders }: Props) {
+export default function CustomerDashboardClient({ session, user, deliverables, folders, invoices }: Props) {
   const router = useRouter();
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
   const inquiryDeliverables = deliverables.filter((d) => d.inquiryId && d.inquiryId === user.inquiryId);
@@ -156,7 +158,7 @@ export default function CustomerDashboardClient({ session, user, deliverables, f
       <header className="sticky top-0 z-40 w-full px-4 pt-4">
         <div className="max-w-[1100px] mx-auto bg-white/80 backdrop-blur-md rounded-full shadow-[0_2px_20px_rgba(0,0,0,0.08)] border border-[#E8E8E8]/60 px-8 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <Image src="/images/logo_transparent.png" alt="Dreamable.studio logo" width={28} height={28} className="rounded-md" />
+            <Image src="/images/logo.png" alt="Dreamable.studio logo" width={28} height={28} className="rounded-md" />
             <span className="text-sm font-semibold tracking-tight text-[#1a1a1a]">
               Dreamable<span className="text-[#999]">.</span>studio
             </span>
@@ -252,13 +254,15 @@ export default function CustomerDashboardClient({ session, user, deliverables, f
 
         <FilePreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
 
+        <InvoicesPanel invoices={invoices} />
+
         <AccountPanel name={user.name} email={user.email} company={user.company?.name ?? null} />
 
         {/* Help footer */}
         <div className="mt-10 p-6 bg-white rounded-2xl border border-[#EBEBEB] flex flex-col sm:flex-row items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-[#1a1a1a]">Need to reach us?</p>
-            <p className="text-sm text-[#888]">We're here to help — just send a message.</p>
+            <p className="text-sm text-[#888]">We&apos;re here to help — just send a message.</p>
           </div>
           <Link
             href="/contact"

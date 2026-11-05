@@ -7,6 +7,7 @@ import { Cancel01Icon, File02Icon, Folder01Icon, Message01Icon } from '@hugeicon
 import ArtifactThumb from '@/components/ArtifactThumb';
 import { Avatar } from '@/components/RecordList';
 import FilePreviewModal, { PreviewFile, formatBytes, previewKind } from '@/components/FilePreviewModal';
+import DialogFocus from '@/components/DialogFocus';
 
 interface SharedFile {
   id: string;
@@ -112,6 +113,7 @@ function CommentsDialog({
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div role="dialog" aria-modal="true" aria-label={`Comments on ${label}`} className="relative flex max-h-[90vh] w-full max-w-[560px] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+        <DialogFocus />
         <div className="flex items-center gap-4 border-b border-[#F0F0F0] px-6 py-5">
           <ArtifactThumb src={`/api/share/${token}/files/${file.id}?inline=1`} fileName={file.fileName} size={56} />
           <div className="min-w-0 flex-1">
@@ -213,7 +215,7 @@ export default function SharedFolderView({ token, name, description, projectName
       <div className="mx-auto w-full max-w-[1000px]">
         {/* Brand */}
         <div className="mb-8 flex items-center gap-2.5">
-          <Image src="/images/logo_transparent.png" alt="" width={32} height={32} className="rounded-md" priority />
+          <Image src="/images/logo.png" alt="" width={32} height={32} className="rounded-md" priority />
           <span className="text-base font-semibold tracking-tight text-[#1a1a1a]">
             Dreamable<span className="text-[#999]">.</span>studio
           </span>

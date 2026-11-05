@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { CancelCircleIcon } from '@hugeicons/core-free-icons';
+import DialogFocus from '@/components/DialogFocus';
 
 export interface PreviewFile {
   url: string;
@@ -73,6 +74,7 @@ export default function FilePreviewModal({ file, onClose }: { file: PreviewFile 
               transition={{ duration: 0.2 }}
               className="relative bg-white rounded-2xl shadow-2xl w-full max-w-[860px] max-h-[88vh] flex flex-col overflow-hidden"
             >
+              <DialogFocus onClose={onClose} />
               <div className="px-6 py-4 flex items-center justify-between gap-4 border-b border-[#F0F0F0]">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-[#1a1a1a] truncate">{file.title || file.fileName}</p>

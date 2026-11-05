@@ -7,6 +7,7 @@ import { motion } from 'motion/react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Cancel01Icon, Tick02Icon, UserCheck01Icon } from '@hugeicons/core-free-icons';
 import { useToast } from '@/components/Toast';
+import DialogFocus from '@/components/DialogFocus';
 
 export interface ReviewTarget {
   id: string;
@@ -31,6 +32,7 @@ function Shell({ title, icon, tone, onClose, busy, children }: { title: string; 
         initial={{ opacity: 0, scale: 0.97, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.2 }}
         className="relative w-full max-w-[460px] rounded-2xl bg-white shadow-2xl border border-[#F0F0F0] p-6"
       >
+        <DialogFocus />
         <div className="flex items-center gap-3 mb-3">
           <span className={`flex h-10 w-10 items-center justify-center rounded-full ${tone === 'red' ? 'bg-red-50 text-[#e05252]' : 'bg-[#EEF2FF] text-[#4f6df5]'}`}>
             <HugeiconsIcon icon={icon} size={20} color="currentColor" strokeWidth={1.5} />

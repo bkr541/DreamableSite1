@@ -25,10 +25,9 @@ export default function PasswordInput({ className = '', leftIcon, ...props }: Pr
       />
       <button
         type="button"
-        tabIndex={-1}
         onClick={() => setVisible((v) => !v)}
         aria-label={visible ? 'Hide password' : 'Show password'}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#BBBBBB] hover:text-[#555] transition-colors"
+        className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded text-[#767676] hover:text-[#555] focus-visible:text-[#555] focus-visible:outline-2 focus-visible:outline-[#4f6df5] transition-colors"
       >
         <HugeiconsIcon icon={visible ? ViewOffIcon : ViewIcon} size={16} color="currentColor" strokeWidth={1.75} />
       </button>

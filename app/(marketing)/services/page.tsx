@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { motion } from 'motion/react';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ComputerPhoneSyncIcon, PaintBoardIcon, ThreeDViewIcon, AiInnovation02Icon } from '@hugeicons/core-free-icons';
@@ -48,11 +49,13 @@ export default function Services() {
                 y: { duration: 6 + i, delay: img.delay + 0.6, repeat: Infinity, ease: 'easeInOut' },
               }}
             >
-              <div className="w-full h-full rounded-[13px] overflow-hidden">
-                <img
+              <div className="relative w-full h-full rounded-[13px] overflow-hidden">
+                <Image
                   src={img.src}
                   alt={img.alt}
-                  className="w-full h-full object-cover"
+                  fill
+                  sizes="200px"
+                  className="object-cover"
                 />
               </div>
             </motion.div>

@@ -1,102 +1,42 @@
-import { PrismaClient } from '@prisma/client';
+// Seeds the `services` table from the one service catalog (lib/services.catalog.mjs).
+//
+//   node --env-file=.env.local prisma/seed.mjs        (or: npm run seed)
+//
+// Safe to run as often as you like: it only creates what is missing and never duplicates a service. Databases that still
+// hold an older spelling ("Branding & Identity") are reconciled first: the old row is renamed to the canonical name (or,
+// if the canonical row already exists, its sub-categories are moved across and the old row removed).
+import { SERVICES, LEGACY_ALIASES, serviceKey } from '../lib/services.catalog.mjs';
 
-const prisma = new PrismaClient();
+/** @param {{ service: any, serviceSubCategory: any }} prisma */
+export async function seedServices(prisma, log = console.log) {
+  // 1. Fold legacy spellings into their canonical service.
+  const existing = await prisma.service.findMany({ select: { id: true, name: true } });
+  for (const { alias, label } of LEGACY_ALIASES) {
+    const legacy = existing.filter((s) => serviceKey(s.name) === serviceKey(alias) && s.name !== label);
+    for (const row of legacy) {
+      const canonical = (await prisma.service.findMany({ select: { id: true, name: true } })).find((s) => s.name === label);
+      if (!canonical) {
+        await prisma.service.update({ where: { id: row.id }, data: { name: label } });
+        log(`  renamed "${row.name}" → "${label}"`);
+      } else {
+        const keep = new Set((await prisma.serviceSubCategory.findMany({ where: { serviceId: canonical.id }, select: { name: true } })).map((c) => c.name));
+        for (const sc of await prisma.serviceSubCategory.findMany({ where: { serviceId: row.id }, select: { id: true, name: true } })) {
+          if (!keep.has(sc.name)) await prisma.serviceSubCategory.update({ where: { id: sc.id }, data: { serviceId: canonical.id } });
+        }
+        await prisma.service.delete({ where: { id: row.id } });
+        log(`  merged "${row.name}" into "${label}"`);
+      }
+    }
+  }
 
-const SERVICES = [
-  {
-    name: 'App or Web Development',
-    subCategories: [
-      'Custom Web Applications',
-      'SaaS Development',
-      'Mobile App Development (iOS / Android / Cross-platform)',
-      'Landing Pages & Marketing Sites',
-      'E-commerce Development',
-      'API Development & Integrations',
-      'Database Architecture & Backend Systems',
-      'Performance Optimization & Scaling',
-      'Maintenance & Support',
-      'MVP Development',
-    ],
-  },
-  {
-    name: 'Branding & Identity',
-    subCategories: [
-      'Logo Design & Logo Systems',
-      'Brand Identity Systems',
-      'Brand Strategy & Positioning',
-      'Naming & Tagline Development',
-      'Visual Direction & Moodboards',
-      'Brand Guidelines / Style Guides',
-      'Rebranding / Brand Refresh',
-      'Social Media Branding Kits',
-      'Merchandise & Packaging Design',
-      'Creative Direction',
-    ],
-  },
-  {
-    name: 'UI/UX Design',
-    subCategories: [
-      'User Experience (UX) Research',
-      'Wireframing & User Flows',
-      'High-Fidelity UI Design',
-      'Design Systems & Component Libraries',
-      'Prototyping (Interactive Demos)',
-      'Usability Testing',
-      'Mobile App UI Design',
-      'Dashboard / SaaS Interface Design',
-      'Conversion Optimization (CRO)',
-      'Accessibility Design',
-    ],
-  },
-  {
-    name: 'Consulting',
-    subCategories: [
-      'Product Strategy',
-      'Startup MVP Planning',
-      'Technical Architecture Consulting',
-      'UX Audits & Heuristic Evaluations',
-      'Brand Strategy Consulting',
-      'Growth Strategy',
-      'Monetization Strategy',
-      'App / Website Performance Audits',
-      'Team & Workflow Optimization',
-      'Creative Direction Consulting',
-    ],
-  },
-  {
-    name: 'Support',
-    subCategories: [
-      'Technical Support',
-    ],
-  },
-  {
-    name: 'Other',
-    subCategories: [
-      'AI Integrations',
-      'Automation & Workflow Systems',
-      'Motion Graphics & Microinteractions',
-      '3D / Visual Assets',
-      'Content Creation',
-      'Pitch Deck & Presentation Design',
-      'DJ / Music Branding Packages',
-      'Experimental / Concept Projects',
-      'Custom Requests',
-    ],
-  },
-];
-
-async function main() {
-  console.log('Seeding services…');
-
+  // 2. Make sure every catalog service and sub-category exists, in catalog order.
   for (let si = 0; si < SERVICES.length; si++) {
-    const { name, subCategories } = SERVICES[si];
-
+    const { label, subCategories } = SERVICES[si];
     const service = await prisma.service.upsert({
-      where: { name },
+      where: { name: label },
       update: { order: si },
-      create: { name, order: si },
+      create: { name: label, order: si },
     });
-
     for (let ci = 0; ci < subCategories.length; ci++) {
       await prisma.serviceSubCategory.upsert({
         where: { serviceId_name: { serviceId: service.id, name: subCategories[ci] } },
@@ -104,13 +44,22 @@ async function main() {
         create: { serviceId: service.id, name: subCategories[ci], order: ci },
       });
     }
-
-    console.log(`  ✓ ${name} (${subCategories.length} sub-categories)`);
+    log(`  ✓ ${label} (${subCategories.length} sub-categories)`);
   }
-
-  console.log('Done.');
 }
 
-main()
-  .catch((e) => { console.error(e); process.exit(1); })
-  .finally(() => prisma.$disconnect());
+// Run only when invoked directly (not when imported by tests).
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const { PrismaClient } = await import('@prisma/client');
+  const prisma = new PrismaClient();
+  console.log('Seeding services…');
+  try {
+    await seedServices(prisma);
+    console.log('Done.');
+  } catch (e) {
+    console.error(e);
+    process.exitCode = 1;
+  } finally {
+    await prisma.$disconnect();
+  }
+}

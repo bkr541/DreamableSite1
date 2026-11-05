@@ -24,6 +24,7 @@ import { canWatermarkName } from '@/lib/watermarkTypes';
 import { PreviewFile, formatBytes } from '@/components/FilePreviewModal';
 import { getDeliverableCategories, OTHER_CATEGORY } from '@/lib/deliverables';
 import { pool, putFile } from '@/lib/clientUpload';
+import DialogFocus from '@/components/DialogFocus';
 
 export interface FolderRecord {
   id: string;
@@ -110,6 +111,7 @@ function Dialog({ title, onClose, children, busy = false }: { title: string; onC
         transition={{ duration: 0.2 }}
         className="relative w-full max-w-[520px] rounded-3xl bg-white shadow-xl border border-[#F0F0F0] p-7 max-h-[90vh] overflow-y-auto"
       >
+        <DialogFocus onClose={() => !busy && onClose()} />
         {children}
       </motion.div>
     </div>,

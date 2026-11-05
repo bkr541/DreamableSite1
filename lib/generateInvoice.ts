@@ -1,10 +1,12 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { QTY_SCALE, computeTotals, formatMoney, formatRate, formatScaled, parseScaled, taxPercentLabel, trimDecimal } from '@/lib/money';
 
+// Amounts are exact decimal text ("1.5", "33.3330"), never floats, so the PDF can't drift from the stored invoice.
 export interface InvoiceLineItem {
   description: string;
-  qty: number;
-  rate: number;
+  qty: string;
+  rate: string;
 }
 
 export interface InvoiceData {
@@ -16,7 +18,15 @@ export interface InvoiceData {
   clientCompany: string;
   projectName: string;
   lineItems: InvoiceLineItem[];
-  taxRate: number;
+  /** A fraction as text: "0.082500" is 8.25%. */
+  taxRate: string;
+}
+
+/** 2026-03-09 → "March 9, 2026" (no timezone shift). */
+export function formatInvoiceDate(iso: string): string {
+  const [year, month, day] = iso.split('-').map(Number);
+  if (!year) return iso;
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 const PURPLE  = [107,  33, 168] as [number, number, number];
@@ -29,10 +39,6 @@ const PAGE_W    = 210;
 const PAGE_H    = 297;
 const MARGIN    = 22;
 const CONTENT_W = PAGE_W - MARGIN * 2;
-
-function currency(n: number) {
-  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 async function fetchAsBase64(url: string): Promise<string> {
   const res = await fetch(url);
@@ -50,7 +56,7 @@ async function buildInvoiceDoc(data: InvoiceData): Promise<jsPDF> {
   const [fontRegular, fontBold, logoBase64] = await Promise.all([
     fetchAsBase64('/fonts/Quicksand-Regular.ttf'),
     fetchAsBase64('/fonts/Quicksand-Bold.ttf'),
-    fetchAsBase64('/images/logo_transparent.png'),
+    fetchAsBase64('/images/logo.png'),
   ]);
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -133,15 +139,18 @@ async function buildInvoiceDoc(data: InvoiceData): Promise<jsPDF> {
   y += 22;
 
   // ── ITEMIZED TABLE ─────────────────────────────────────────────────────────
+  // One calculation (lib/money.ts) feeds both the table and the summary, so every figure on the page agrees to the cent.
+  const totals = computeTotals(data.lineItems, data.taxRate);
+  if (!totals) throw new Error('Invoice amounts are not valid.');
   autoTable(doc, {
     startY: y,
     margin: { left: MARGIN, right: MARGIN },
     head: [['DESCRIPTION', 'QTY', 'RATE', 'TOTAL']],
-    body: data.lineItems.map(item => [
+    body: data.lineItems.map((item, i) => [
       item.description,
-      String(item.qty),
-      currency(item.rate),
-      currency(item.qty * item.rate),
+      trimDecimal(formatScaled(parseScaled(item.qty, QTY_SCALE) ?? BigInt(0), QTY_SCALE)),
+      formatRate(item.rate),
+      formatMoney(totals.lineTotals[i]),
     ]),
     headStyles: {
       fillColor: DARK,
@@ -172,9 +181,6 @@ async function buildInvoiceDoc(data: InvoiceData): Promise<jsPDF> {
   y = (doc as any).lastAutoTable.finalY + 10;
 
   // ── SUMMARY ───────────────────────────────────────────────────────────────
-  const subtotal  = data.lineItems.reduce((sum, item) => sum + item.qty * item.rate, 0);
-  const tax       = subtotal * data.taxRate;
-  const total     = subtotal + tax;
   const sumLabelX = PAGE_W - MARGIN - 72;
   const sumValX   = PAGE_W - MARGIN;
 
@@ -182,11 +188,11 @@ async function buildInvoiceDoc(data: InvoiceData): Promise<jsPDF> {
   doc.setFontSize(9.5);
   doc.setTextColor(...GRAY);
   doc.text('Subtotal', sumLabelX, y);
-  doc.text(currency(subtotal), sumValX, y, { align: 'right' });
+  doc.text(formatMoney(totals.subtotal), sumValX, y, { align: 'right' });
   y += 6.5;
 
-  doc.text(`Tax (${(data.taxRate * 100).toFixed(1)}%)`, sumLabelX, y);
-  doc.text(currency(tax), sumValX, y, { align: 'right' });
+  doc.text(`Tax (${taxPercentLabel(data.taxRate)}%)`, sumLabelX, y);
+  doc.text(formatMoney(totals.tax), sumValX, y, { align: 'right' });
   y += 4;
 
   doc.setDrawColor(215, 215, 220);
@@ -202,7 +208,7 @@ async function buildInvoiceDoc(data: InvoiceData): Promise<jsPDF> {
   doc.setFontSize(10);
   doc.setTextColor(...WHITE);
   doc.text('TOTAL DUE', sumLabelX, y + 3.5);
-  doc.text(currency(total), sumValX, y + 3.5, { align: 'right' });
+  doc.text(formatMoney(totals.total), sumValX, y + 3.5, { align: 'right' });
 
   y += 22;
 

@@ -275,9 +275,10 @@ export default function Portal() {
                     <button
                       type="button"
                       role="switch"
+                      aria-label="Remember me"
                       aria-checked={rememberMe}
                       onClick={() => setRememberMe((v) => !v)}
-                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${rememberMe ? 'bg-[#1a2030]' : 'bg-[#D0D0D0]'}`}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer focus-visible:ring-2 focus-visible:ring-[#4f6df5]/60 focus-visible:ring-offset-2 before:absolute before:-inset-2 before:content-['']  rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${rememberMe ? 'bg-[#1a2030]' : 'bg-[#D0D0D0]'}`}
                     >
                       <span
                         className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${rememberMe ? 'translate-x-4' : 'translate-x-0'}`}
@@ -287,7 +288,7 @@ export default function Portal() {
                   </div>
                   <button
                     type="button"
-                    className="text-sm text-[#AAAAAA] hover:text-[#1a2030] underline underline-offset-2 transition-colors"
+                    className="py-2 -my-2 text-sm text-[#707070] hover:text-[#1a2030] underline underline-offset-2 transition-colors"
                     onClick={openReset}
                   >
                     Forgot password?
@@ -380,7 +381,7 @@ export default function Portal() {
                     <button
                       type="button"
                       onClick={closeReset}
-                      className="text-sm text-[#AAAAAA] hover:text-[#000000] transition-colors"
+                      className="text-sm text-[#707070] hover:text-[#000000] transition-colors"
                     >
                       Cancel
                     </button>
@@ -423,7 +424,7 @@ export default function Portal() {
                     <button
                       type="button"
                       onClick={closeReset}
-                      className="text-sm text-[#AAAAAA] hover:text-[#000000] transition-colors"
+                      className="text-sm text-[#707070] hover:text-[#000000] transition-colors"
                     >
                       Cancel
                     </button>
@@ -474,7 +475,7 @@ export default function Portal() {
                     <button
                       type="button"
                       onClick={closeReset}
-                      className="text-sm text-[#AAAAAA] hover:text-[#000000] transition-colors"
+                      className="text-sm text-[#707070] hover:text-[#000000] transition-colors"
                     >
                       Cancel
                     </button>

@@ -4,6 +4,7 @@ import AdminDashboardClient from './AdminDashboardClient';
 import { ToastProvider } from '@/components/Toast';
 import { dispatchOutbox } from '@/lib/dispatch';
 import { invitationState, type InvitationState } from '@/lib/invitations';
+import { canonicalServiceLabel } from '@/lib/services';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -101,6 +102,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
           id: true, invoiceNumber: true, clientName: true, clientEmail: true,
           clientCompany: true, projectName: true, issueDate: true, dueDate: true,
           taxRate: true, status: true, createdAt: true,
+          clientUserId: true, projectId: true, numberConflict: true,
           lineItems: { select: { description: true, qty: true, rate: true } },
         },
       }),
@@ -143,9 +145,9 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       stats={{ totalUsers, totalProjects, activeProjects, openInquiries }}
       inquiries={allInquiries.map(({ metadata, createdAt, ...i }) => {
         const meta = (metadata ?? {}) as { phone?: string; projectName?: string };
-        return { ...i, user: undefined, clientUserId: i.user?.id ?? null, rejectedAt: i.rejectedAt?.toISOString() ?? null, archivedAt: i.archivedAt?.toISOString() ?? null, phone: meta.phone ?? null, projectName: meta.projectName ?? null, createdAt: createdAt.toISOString() };
+        return { ...i, service: canonicalServiceLabel(i.service), user: undefined, clientUserId: i.user?.id ?? null, rejectedAt: i.rejectedAt?.toISOString() ?? null, archivedAt: i.archivedAt?.toISOString() ?? null, phone: meta.phone ?? null, projectName: meta.projectName ?? null, createdAt: createdAt.toISOString() };
       })}
-      recentInquiries={recentInquiries.map((i) => ({ ...i, createdAt: i.createdAt.toISOString() }))}
+      recentInquiries={recentInquiries.map((i) => ({ ...i, service: canonicalServiceLabel(i.service), createdAt: i.createdAt.toISOString() }))}
       recentUsers={recentUsers.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}
       clients={clients.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() }))}
       companies={companies}
@@ -154,8 +156,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       initialFolderId={one(sp.folder) ?? null}
       folders={folders.map((f) => ({ ...f, shareRotatedAt: f.shareRotatedAt?.toISOString() ?? null, createdAt: f.createdAt.toISOString() }))}
       deliverables={deliverables.map((d) => ({ ...d, createdAt: d.createdAt.toISOString() }))}
-      projects={projects.map((p) => ({ ...p, createdAt: p.createdAt.toISOString() }))}
-      invoices={invoices.map((inv) => ({ ...inv, createdAt: inv.createdAt.toISOString() }))}
+      projects={projects.map((p) => ({ ...p, service: canonicalServiceLabel(p.service), createdAt: p.createdAt.toISOString() }))}
+      invoices={invoices.map(({ lineItems, taxRate, createdAt, ...inv }) => ({
+        ...inv,
+        createdAt: createdAt.toISOString(),
+        // Decimals travel as exact text, never as floating-point numbers.
+        taxRate: taxRate.toFixed(6),
+        lineItems: lineItems.map((l) => ({ description: l.description, qty: l.qty.toFixed(4), rate: l.rate.toFixed(4) })),
+      }))}
       adminCompany={adminUser?.company ?? null}
       unreadNotifications={unreadNotifications}
       invitations={invitations}

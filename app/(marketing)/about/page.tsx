@@ -1,11 +1,15 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import { pageMetadata } from '@/lib/site';
+
+export const metadata: Metadata = pageMetadata('/about');
 
 export default function About() {
   return (
     <div className="flex flex-col w-full">
       {/* Intro */}
       <section className="px-8 md:px-16 pt-32 pb-24 max-w-[1200px] mx-auto w-full">
-        <h1 className="text-5xl md:text-7xl font-semibold tracking-tight mb-8">About Dreamable.studio</h1>
+        <h1 className="text-4xl sm:text-5xl md:text-7xl break-words font-semibold tracking-tight mb-8">About Dreamable.studio</h1>
         <p className="text-xl md:text-2xl text-[#707070] leading-relaxed max-w-[800px]">
           We are a small, focused team of designers and engineers who believe that digital products should be as beautiful as they are functional. We don&apos;t do &quot;digital transformation.&quot; We build software that works and brands that matter.
         </p>

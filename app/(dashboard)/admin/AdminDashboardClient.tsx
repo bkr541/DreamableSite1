@@ -4,7 +4,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import PasswordInput from '@/components/PasswordInput';
-import { generateInvoicePDF, previewInvoicePDF } from '@/lib/generateInvoice';
+import { generateInvoicePDF, previewInvoicePDF, formatInvoiceDate } from '@/lib/generateInvoice';
+import InvoiceForm, { emptyInvoiceForm, formFromInvoice, invoicePayload, type InvoiceFormState } from '@/components/InvoiceForm';
+import { computeTotals, formatMoney } from '@/lib/money';
 import { useRouter } from 'next/navigation';
 import type { SessionPayload } from '@/lib/session';
 import { useToast } from '@/components/Toast';
@@ -19,6 +21,7 @@ import DeliverablesPanel, { CommentRecord, DeliverableRecord, FolderRecord } fro
 import FilePreviewModal, { PreviewFile, previewKind, formatBytes } from '@/components/FilePreviewModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { HugeiconsIcon } from '@hugeicons/react';
+import DialogFocus from '@/components/DialogFocus';
 import {
   ChartRoseIcon,
   UserGroup02Icon,
@@ -115,16 +118,20 @@ interface Company {
 interface InvoiceRecord {
   id: string;
   invoiceNumber: string;
+  numberConflict: boolean;
+  clientUserId: string | null;
+  projectId: string | null;
   clientName: string;
   clientEmail: string;
   clientCompany: string | null;
   projectName: string;
   issueDate: string;
   dueDate: string;
-  taxRate: number;
+  /** A fraction as exact text: "0.082500" = 8.25%. */
+  taxRate: string;
   createdAt: string;
   status: string;
-  lineItems: { description: string; qty: number; rate: number }[];
+  lineItems: { description: string; qty: string; rate: string }[];
 }
 
 interface Service {
@@ -286,28 +293,10 @@ const VIEW_META: Record<ViewId, { title: string; subtitle: string }> = {
   inquiries:     { title: 'Inquiries',        subtitle: 'Review incoming project requests' },
   clients:       { title: 'Clients',          subtitle: 'Manage your client accounts and relationships' },
   projects:      { title: 'Projects',         subtitle: 'Track and manage all active projects' },
-  billing:       { title: 'Billing',          subtitle: 'Invoices, payments, and subscription details' },
+  billing:       { title: 'Billing',          subtitle: 'Create and manage client invoices' },
   notifications: { title: 'Notifications',   subtitle: 'New inquiries, approvals, uploads, comments and email delivery' },
   profile:       { title: 'User Information', subtitle: 'Your account details' },
 };
-
-function getDefaultInvoiceForm() {
-  const now = new Date();
-  const due = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-  const toInput = (d: Date) => d.toISOString().split('T')[0];
-  return {
-    invoiceNumber: `DS-${now.getFullYear()}-001`,
-    issueDate: toInput(now),
-    dueDate: toInput(due),
-    clientName: '',
-    clientEmail: '',
-    clientCompany: '',
-    projectName: '',
-    taxRate: '0',
-    status: 'Unsent',
-    lineItems: [{ description: '', qty: '1', rate: '' }],
-  };
-}
 
 export default function AdminDashboardClient({ session, initialView, initialInquiryId, initialProjectId, initialTab, initialBilling, stats, recentInquiries, inquiries, deliverables, folders, comments, initialFolderId, recentUsers, clients, companies, services, projects, invoices, adminCompany, unreadNotifications, invitations }: Props) {
   const router = useRouter();
@@ -495,15 +484,15 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
   const [addSubmitting, setAddSubmitting] = useState(false);
 
   const [showInvoice, setShowInvoice] = useState(false);
-  const [invoiceForm, setInvoiceForm] = useState(getDefaultInvoiceForm());
-  const [invoiceFieldError, setInvoiceFieldError] = useState<{ field: string; message: string } | null>(null);
+  const [invoiceForm, setInvoiceForm] = useState<InvoiceFormState>(emptyInvoiceForm());
+  const [invoiceErrors, setInvoiceErrors] = useState<Record<string, string>>({});
   const [invoiceError, setInvoiceError] = useState('');
   const [invoiceSubmitting, setInvoiceSubmitting] = useState(false);
 
   const [showEditInvoice, setShowEditInvoice] = useState(false);
   const [editInvoiceId, setEditInvoiceId] = useState('');
-  const [editInvForm, setEditInvForm] = useState(getDefaultInvoiceForm());
-  const [editInvFieldError, setEditInvFieldError] = useState<{ field: string; message: string } | null>(null);
+  const [editInvForm, setEditInvForm] = useState<InvoiceFormState>(emptyInvoiceForm());
+  const [editInvErrors, setEditInvErrors] = useState<Record<string, string>>({});
   const [editInvError, setEditInvError] = useState('');
   const [editInvSubmitting, setEditInvSubmitting] = useState(false);
 
@@ -525,73 +514,37 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
 
   const toast = useToast();
 
-  function resetInvoiceForm() {
-    setInvoiceForm(getDefaultInvoiceForm());
-    setInvoiceFieldError(null);
+  // Who can be billed, and their projects, for the form's pickers.
+  const invoiceClients = clients.filter((c) => !c.admin).map((c) => ({ id: c.id, name: c.name, email: c.email, companyId: c.company?.id ?? null, companyName: c.company?.name ?? null }));
+  const invoiceProjects = projects.map((p) => ({ id: p.id, name: p.name, companyId: p.company?.id ?? null, primaryUserId: p.primaryUser?.id ?? null }));
+
+  /** Opens the new-invoice form. The number shown is only a suggestion; the server assigns the real one when it saves. */
+  function openNewInvoice(prefill?: Partial<InvoiceFormState>) {
+    setInvoiceForm({ ...emptyInvoiceForm(), ...prefill });
+    setInvoiceErrors({});
     setInvoiceError('');
+    setShowInvoice(true);
+    fetch('/api/admin/invoices/next-number')
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) setInvoiceForm((f) => (f.autoNumber && !f.invoiceNumber ? { ...f, invoiceNumber: d.invoiceNumber } : f)); })
+      .catch(() => {});
   }
+  function closeNewInvoice() { setShowInvoice(false); setInvoiceErrors({}); setInvoiceError(''); }
 
   function openEditInvoice(inv: InvoiceRecord) {
     setEditInvoiceId(inv.id);
-    setEditInvForm({
-      invoiceNumber: inv.invoiceNumber,
-      issueDate: inv.issueDate,
-      dueDate: inv.dueDate,
-      clientName: inv.clientName,
-      clientEmail: inv.clientEmail,
-      clientCompany: inv.clientCompany ?? '',
-      projectName: inv.projectName,
-      taxRate: String(inv.taxRate * 100),
-      status: inv.status,
-      lineItems: inv.lineItems.map(li => ({
-        description: li.description,
-        qty: String(li.qty),
-        rate: String(li.rate),
-      })),
-    });
-    setEditInvFieldError(null);
+    setEditInvForm(formFromInvoice(inv));
+    setEditInvErrors({});
     setEditInvError('');
     setShowEditInvoice(true);
   }
 
   async function handleUpdateInvoice(e: React.FormEvent) {
     e.preventDefault();
-    setEditInvFieldError(null);
+    if (editInvSubmitting) return;
+    setEditInvErrors({});
     setEditInvError('');
-
-    if (!editInvForm.invoiceNumber.trim()) { setEditInvFieldError({ field: 'invoiceNumber', message: 'Invoice number is required.' }); return; }
-    if (!editInvForm.clientName.trim()) { setEditInvFieldError({ field: 'clientName', message: 'Client name is required.' }); return; }
-    if (!editInvForm.clientEmail.trim()) { setEditInvFieldError({ field: 'clientEmail', message: 'Email is required.' }); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editInvForm.clientEmail)) { setEditInvFieldError({ field: 'clientEmail', message: 'Please enter a valid email address.' }); return; }
-    if (!editInvForm.projectName.trim()) { setEditInvFieldError({ field: 'projectName', message: 'Project name is required.' }); return; }
-    if (!editInvForm.issueDate) { setEditInvFieldError({ field: 'issueDate', message: 'Issue date is required.' }); return; }
-    if (!editInvForm.dueDate) { setEditInvFieldError({ field: 'dueDate', message: 'Due date is required.' }); return; }
-
-    for (let i = 0; i < editInvForm.lineItems.length; i++) {
-      const item = editInvForm.lineItems[i];
-      if (!item.description.trim()) { setEditInvError(`Line item ${i + 1}: description is required.`); return; }
-      const qty = parseFloat(item.qty);
-      if (isNaN(qty) || qty <= 0) { setEditInvError(`Line item ${i + 1}: quantity must be a positive number.`); return; }
-      const rate = parseFloat(item.rate);
-      if (isNaN(rate) || rate < 0) { setEditInvError(`Line item ${i + 1}: rate must be a valid amount.`); return; }
-    }
-
-    const payload = {
-      invoiceNumber: editInvForm.invoiceNumber.trim(),
-      issueDate: editInvForm.issueDate,
-      dueDate: editInvForm.dueDate,
-      clientName: editInvForm.clientName.trim(),
-      clientEmail: editInvForm.clientEmail.trim(),
-      clientCompany: editInvForm.clientCompany.trim(),
-      projectName: editInvForm.projectName.trim(),
-      taxRate: parseFloat(editInvForm.taxRate) / 100 || 0,
-      status: editInvForm.status,
-      lineItems: editInvForm.lineItems.map(item => ({
-        description: item.description.trim(),
-        qty: parseFloat(item.qty),
-        rate: parseFloat(item.rate),
-      })),
-    };
+    const payload = invoicePayload(editInvForm);
 
     setEditInvSubmitting(true);
     try {
@@ -601,8 +554,13 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) { setEditInvError(data.error || 'Failed to update invoice.'); return; }
-      toast.success('Invoice updated', `Invoice ${payload.invoiceNumber} for ${payload.clientName} was saved.`);
+      if (!res.ok) {
+        // Field messages come from the server's own validation, so they are shown exactly where they apply.
+        setEditInvErrors(data.errors ?? {});
+        setEditInvError(data.errors?._ || (data.errors && Object.keys(data.errors).length ? '' : data.error || 'Failed to update invoice.'));
+        return;
+      }
+      toast.success('Invoice updated', `Invoice ${data.invoiceNumber ?? payload.invoiceNumber} for ${payload.clientName} was saved.`);
       setShowEditInvoice(false);
       router.refresh();
     } catch {
@@ -618,15 +576,10 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
     setShowPreviewInvoice(true);
     setPreviewLoading(true);
     try {
-      const formatDate = (s: string) => {
-        const [year, month, day] = s.split('-').map(Number);
-        if (!year) return s;
-        return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-      };
       const url = await previewInvoicePDF({
         invoiceNumber: inv.invoiceNumber,
-        issueDate: formatDate(inv.issueDate),
-        dueDate: formatDate(inv.dueDate),
+        issueDate: formatInvoiceDate(inv.issueDate),
+        dueDate: formatInvoiceDate(inv.dueDate),
         clientName: inv.clientName,
         clientEmail: inv.clientEmail,
         clientCompany: inv.clientCompany ?? '',
@@ -647,62 +600,22 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
   }
 
   function openInvoiceForProject(p: ProjectRecord) {
-    const defaults = getDefaultInvoiceForm();
-    setInvoiceForm({
-      ...defaults,
+    openNewInvoice({
+      clientUserId: p.primaryUser?.id ?? '',
+      projectId: p.id,
       clientName: p.primaryUser?.name ?? '',
       clientEmail: p.primaryUser?.email ?? '',
       clientCompany: p.company?.name ?? '',
       projectName: p.name,
     });
-    setInvoiceFieldError(null);
-    setInvoiceError('');
-    setShowInvoice(true);
   }
 
   async function handleGenerateInvoice(e: React.FormEvent) {
     e.preventDefault();
-    setInvoiceFieldError(null);
+    if (invoiceSubmitting) return;                      // a second click while saving does nothing
+    setInvoiceErrors({});
     setInvoiceError('');
-
-    if (!invoiceForm.invoiceNumber.trim()) { setInvoiceFieldError({ field: 'invoiceNumber', message: 'Invoice number is required.' }); return; }
-    if (!invoiceForm.clientName.trim()) { setInvoiceFieldError({ field: 'clientName', message: 'Client name is required.' }); return; }
-    if (!invoiceForm.clientEmail.trim()) { setInvoiceFieldError({ field: 'clientEmail', message: 'Email is required.' }); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invoiceForm.clientEmail)) { setInvoiceFieldError({ field: 'clientEmail', message: 'Please enter a valid email address.' }); return; }
-    if (!invoiceForm.projectName.trim()) { setInvoiceFieldError({ field: 'projectName', message: 'Project name is required.' }); return; }
-    if (!invoiceForm.issueDate) { setInvoiceFieldError({ field: 'issueDate', message: 'Issue date is required.' }); return; }
-    if (!invoiceForm.dueDate) { setInvoiceFieldError({ field: 'dueDate', message: 'Due date is required.' }); return; }
-
-    for (let i = 0; i < invoiceForm.lineItems.length; i++) {
-      const item = invoiceForm.lineItems[i];
-      if (!item.description.trim()) { setInvoiceError(`Line item ${i + 1}: description is required.`); return; }
-      const qty = parseFloat(item.qty);
-      if (isNaN(qty) || qty <= 0) { setInvoiceError(`Line item ${i + 1}: quantity must be a positive number.`); return; }
-      const rate = parseFloat(item.rate);
-      if (isNaN(rate) || rate < 0) { setInvoiceError(`Line item ${i + 1}: rate must be a valid amount.`); return; }
-    }
-
-    const formatDate = (iso: string) => {
-      const [year, month, day] = iso.split('-').map(Number);
-      return new Date(year, month - 1, day).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-    };
-
-    const payload = {
-      invoiceNumber: invoiceForm.invoiceNumber.trim(),
-      issueDate: invoiceForm.issueDate,
-      dueDate: invoiceForm.dueDate,
-      clientName: invoiceForm.clientName.trim(),
-      clientEmail: invoiceForm.clientEmail.trim(),
-      clientCompany: invoiceForm.clientCompany.trim(),
-      projectName: invoiceForm.projectName.trim(),
-      taxRate: parseFloat(invoiceForm.taxRate) / 100 || 0,
-      status: invoiceForm.status,
-      lineItems: invoiceForm.lineItems.map(item => ({
-        description: item.description.trim(),
-        qty: parseFloat(item.qty),
-        rate: parseFloat(item.rate),
-      })),
-    };
+    const payload = invoicePayload(invoiceForm);
 
     setInvoiceSubmitting(true);
     try {
@@ -712,17 +625,27 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) { setInvoiceError(data.error || 'Failed to save invoice.'); return; }
+      if (!res.ok) {
+        setInvoiceErrors(data.errors ?? {});
+        setInvoiceError(data.errors?._ || (data.errors && Object.keys(data.errors).length ? '' : data.error || 'Failed to save invoice.'));
+        return;
+      }
 
+      // The PDF uses the number the server actually assigned.
       await generateInvoicePDF({
-        ...payload,
-        issueDate: formatDate(payload.issueDate),
-        dueDate: formatDate(payload.dueDate),
+        invoiceNumber: data.invoiceNumber,
+        issueDate: formatInvoiceDate(payload.issueDate),
+        dueDate: formatInvoiceDate(payload.dueDate),
+        clientName: payload.clientName,
+        clientEmail: payload.clientEmail,
+        clientCompany: payload.clientCompany,
+        projectName: payload.projectName,
+        taxRate: payload.taxRate,
+        lineItems: payload.lineItems,
       });
 
-      toast.success('Invoice created', `Invoice ${payload.invoiceNumber} for ${payload.clientName} was saved and the PDF was downloaded.`);
-      setShowInvoice(false);
-      resetInvoiceForm();
+      toast.success('Invoice created', `Invoice ${data.invoiceNumber} for ${payload.clientName} was saved and the PDF was downloaded.`);
+      closeNewInvoice();
       router.refresh();
     } catch {
       setInvoiceError('Unable to connect. Please try again.');
@@ -919,7 +842,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
 
           {/* Left: Logo + Admin badge */}
           <Link href="/" className="flex items-center">
-            <Image src="/images/logo_transparent.png" alt="Dreamable.studio logo" width={40} height={40} className="rounded-md" />
+            <Image src="/images/logo.png" alt="Dreamable.studio logo" width={40} height={40} className="rounded-md" />
           </Link>
 
           {/* Center: Navigation icons */}
@@ -1353,6 +1276,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 transition={{ duration: 0.2 }}
                 className="relative w-full max-w-[420px] rounded-2xl bg-white shadow-2xl border border-[#F0F0F0] p-6"
               >
+                <DialogFocus onClose={() => !archivingInquiry && setInquiryToArchive(null)} />
                 <div className="flex items-center gap-3 mb-3">
                   <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[#EEF2FF] text-[#4f6df5]">
                     <HugeiconsIcon icon={Archive02Icon} size={20} color="currentColor" strokeWidth={1.5} />
@@ -1364,7 +1288,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   {inquiryToArchive.projectName ? <> (<span className="font-medium text-[#1a1a1a]">{inquiryToArchive.projectName}</span>)</> : null}
                   {' '}will move out of the open list. Nothing is deleted: its attached files, deliverables, shared links, and any client or project created from it stay exactly as they are. You can restore it at any time.
                 </p>
-                {archiveError && <p className="text-sm text-[#e05252] mt-3">{archiveError}</p>}
+                {archiveError && <p role="alert" className="text-sm text-[#e05252] mt-3">{archiveError}</p>}
                 <div className="flex items-center justify-end gap-3 mt-6">
                   <button
                     type="button"
@@ -1712,7 +1636,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 </span>
               </div>
               <button
-                onClick={() => { resetInvoiceForm(); setShowInvoice(true); }}
+                onClick={() => openNewInvoice()}
                 className="inline-flex items-center gap-2 h-9 px-4 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
               >
                 <HugeiconsIcon icon={Invoice03Icon} size={16} color="#ffffff" strokeWidth={1.5} />
@@ -1764,22 +1688,23 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                       if (invoiceFilter.status && inv.status !== invoiceFilter.status) return false;
                       return true;
                     }).map((inv) => {
-                      const subtotal = inv.lineItems.reduce((sum, item) => sum + item.qty * item.rate, 0);
-                      const total = subtotal + subtotal * inv.taxRate;
+                      const totals = computeTotals(inv.lineItems, inv.taxRate);
                       return (
                         <li key={inv.id} className="grid grid-cols-[1fr_1fr_140px_120px_100px_100px_72px] gap-4 px-6 py-4 items-center hover:bg-[#FAFAFA] transition-colors">
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-[#1a1a1a] truncate">{inv.invoiceNumber}</p>
                             <p className="text-xs text-[#AAA] truncate">Due {inv.dueDate}</p>
+                            {inv.numberConflict && <p className="text-[11px] font-semibold text-[#c93f3f]" title="Another invoice has the same number. Edit this one to give it a new number.">Duplicate number — needs review</p>}
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm text-[#1a1a1a] truncate">{inv.clientName}</p>
                             {inv.clientCompany && <p className="text-xs text-[#AAA] truncate">{inv.clientCompany}</p>}
+                            {!inv.clientUserId && <p className="text-[11px] font-semibold text-[#b45309]" title="Not linked to a client account, so the client can’t see it. Edit the invoice to choose the client.">Not linked to a client</p>}
                           </div>
                           <p className="text-xs text-[#555] truncate">{inv.projectName}</p>
                           <p className="text-xs text-[#555]">{inv.issueDate}</p>
                           <p className="text-sm font-semibold text-[#1a1a1a] text-right">
-                            ${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            {totals ? formatMoney(totals.total) : '—'}
                           </p>
                           <Badge status={inv.status} />
                           <div className="flex items-center justify-center gap-2">
@@ -2173,7 +2098,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               className="absolute inset-0 bg-black/30 backdrop-blur-sm"
-              onClick={() => { setShowInvoice(false); resetInvoiceForm(); }}
+              onClick={closeNewInvoice}
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.96, y: 16 }}
@@ -2184,215 +2109,17 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
             >
               <button
                 type="button"
-                onClick={() => { setShowInvoice(false); resetInvoiceForm(); }}
+                onClick={closeNewInvoice}
                 className="absolute top-5 right-5 text-[#CCCCCC] hover:text-[#555] transition-colors z-10"
               >
                 <HugeiconsIcon icon={CancelCircleIcon} size={22} color="currentColor" strokeWidth={1.5} />
               </button>
-              <form onSubmit={handleGenerateInvoice} className="p-8 space-y-5" noValidate>
-                <div className="flex items-center gap-3">
-                  <HugeiconsIcon icon={Invoice03Icon} size={28} color="#1a2030" strokeWidth={2} />
-                  <p className="text-xl font-semibold text-[#1a1a1a]">Generate Invoice</p>
-                </div>
-
-                {/* Invoice Details */}
-                <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Invoice Details</p>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Invoice # <span className="text-red-400">*</span></label>
-                      <input
-                        value={invoiceForm.invoiceNumber}
-                        onChange={e => { setInvoiceForm(f => ({ ...f, invoiceNumber: e.target.value })); setInvoiceFieldError(null); }}
-                        placeholder="DS-2026-001"
-                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${invoiceFieldError?.field === 'invoiceNumber' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                      />
-                      {invoiceFieldError?.field === 'invoiceNumber' && <p className="text-xs text-[#e05252]">{invoiceFieldError.message}</p>}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Issue Date <span className="text-red-400">*</span></label>
-                      <DatePicker
-                        value={invoiceForm.issueDate}
-                        onChange={(v) => { setInvoiceForm(f => ({ ...f, issueDate: v })); setInvoiceFieldError(null); }}
-                        invalid={invoiceFieldError?.field === 'issueDate'}
-                      />
-                      {invoiceFieldError?.field === 'issueDate' && <p className="text-xs text-[#e05252]">{invoiceFieldError.message}</p>}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Due Date <span className="text-red-400">*</span></label>
-                      <DatePicker
-                        value={invoiceForm.dueDate}
-                        onChange={(v) => { setInvoiceForm(f => ({ ...f, dueDate: v })); setInvoiceFieldError(null); }}
-                        invalid={invoiceFieldError?.field === 'dueDate'}
-                      />
-                      {invoiceFieldError?.field === 'dueDate' && <p className="text-xs text-[#e05252]">{invoiceFieldError.message}</p>}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Client Information */}
-                <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Client Information</p>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Client Name <span className="text-red-400">*</span></label>
-                      <input
-                        value={invoiceForm.clientName}
-                        onChange={e => { setInvoiceForm(f => ({ ...f, clientName: e.target.value })); setInvoiceFieldError(null); }}
-                        placeholder="Jane Smith"
-                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${invoiceFieldError?.field === 'clientName' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                      />
-                      {invoiceFieldError?.field === 'clientName' && <p className="text-xs text-[#e05252]">{invoiceFieldError.message}</p>}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Client Email <span className="text-red-400">*</span></label>
-                      <input
-                        type="text"
-                        value={invoiceForm.clientEmail}
-                        onChange={e => { setInvoiceForm(f => ({ ...f, clientEmail: e.target.value })); setInvoiceFieldError(null); }}
-                        placeholder="jane@example.com"
-                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${invoiceFieldError?.field === 'clientEmail' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                      />
-                      {invoiceFieldError?.field === 'clientEmail' && <p className="text-xs text-[#e05252]">{invoiceFieldError.message}</p>}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Company</label>
-                      <input
-                        value={invoiceForm.clientCompany}
-                        onChange={e => setInvoiceForm(f => ({ ...f, clientCompany: e.target.value }))}
-                        placeholder="Acme Inc."
-                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Project */}
-                <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Project</p>
-                  <div className="grid grid-cols-[1fr_120px_120px] gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Project Name <span className="text-red-400">*</span></label>
-                      <input
-                        value={invoiceForm.projectName}
-                        onChange={e => { setInvoiceForm(f => ({ ...f, projectName: e.target.value })); setInvoiceFieldError(null); }}
-                        placeholder="Brand Identity & Website"
-                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${invoiceFieldError?.field === 'projectName' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                      />
-                      {invoiceFieldError?.field === 'projectName' && <p className="text-xs text-[#e05252]">{invoiceFieldError.message}</p>}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Tax Rate (%)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        value={invoiceForm.taxRate}
-                        onChange={e => setInvoiceForm(f => ({ ...f, taxRate: e.target.value }))}
-                        placeholder="0"
-                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Status</label>
-                      <Dropdown
-                label="Status"
-                value={invoiceForm.status}
-                onChange={(v) => setInvoiceForm(f => ({ ...f, status: v }))}
-                options={statusOptions([{ value: 'Unsent', label: 'Unsent' }, { value: 'Not Paid', label: 'Not Paid' }, { value: 'Paid', label: 'Paid' }])}
-                width="w-full"
+              <InvoiceForm
+                title="Generate Invoice" mode="create" submitLabel="Generate Invoice"
+                form={invoiceForm} setForm={setInvoiceForm} clients={invoiceClients} projects={invoiceProjects}
+                errors={invoiceErrors} clearError={() => { setInvoiceErrors({}); setInvoiceError(''); }} formError={invoiceError}
+                submitting={invoiceSubmitting} onSubmit={handleGenerateInvoice} onCancel={closeNewInvoice}
               />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Line Items */}
-                <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Line Items</p>
-                  <div className="grid grid-cols-[1fr_72px_96px_36px] gap-3 px-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#CCC]">Description</p>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#CCC] text-center">Qty</p>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#CCC] text-right">Rate ($)</p>
-                    <div />
-                  </div>
-                  <div className="space-y-2">
-                    {invoiceForm.lineItems.map((item, i) => (
-                      <div key={i} className="grid grid-cols-[1fr_72px_96px_36px] gap-3 items-center">
-                        <input
-                          value={item.description}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setInvoiceForm(f => { const items = [...f.lineItems]; items[i] = { ...items[i], description: val }; return { ...f, lineItems: items }; });
-                            setInvoiceError('');
-                          }}
-                          placeholder="Service description"
-                          className="w-full bg-white rounded-xl px-3 py-2 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                        />
-                        <input
-                          type="number"
-                          min="1"
-                          step="1"
-                          value={item.qty}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setInvoiceForm(f => { const items = [...f.lineItems]; items[i] = { ...items[i], qty: val }; return { ...f, lineItems: items }; });
-                            setInvoiceError('');
-                          }}
-                          className="w-full bg-white rounded-xl px-3 py-2 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all text-center"
-                        />
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={item.rate}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setInvoiceForm(f => { const items = [...f.lineItems]; items[i] = { ...items[i], rate: val }; return { ...f, lineItems: items }; });
-                            setInvoiceError('');
-                          }}
-                          placeholder="0.00"
-                          className="w-full bg-white rounded-xl px-3 py-2 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all text-right"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setInvoiceForm(f => ({ ...f, lineItems: f.lineItems.filter((_, idx) => idx !== i) }))}
-                          disabled={invoiceForm.lineItems.length === 1}
-                          className="flex items-center justify-center text-[#CCCCCC] hover:text-[#e05252] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                          <HugeiconsIcon icon={CancelCircleIcon} size={18} color="currentColor" strokeWidth={1.5} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setInvoiceForm(f => ({ ...f, lineItems: [...f.lineItems, { description: '', qty: '1', rate: '' }] }))}
-                    className="text-sm text-[#AAAAAA] hover:text-[#1a2030] transition-colors"
-                  >
-                    + Add Line Item
-                  </button>
-                </div>
-
-                {invoiceError && <p className="text-sm text-[#e05252]">{invoiceError}</p>}
-
-                <div className="flex items-center justify-between pt-2">
-                  <button
-                    type="button"
-                    onClick={() => { setShowInvoice(false); resetInvoiceForm(); }}
-                    className="text-sm text-[#AAAAAA] hover:text-[#000] transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={invoiceSubmitting}
-                    className="px-8 py-3 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
-                  >
-                    {invoiceSubmitting ? 'Saving…' : 'Generate Invoice'}
-                  </button>
-                </div>
-              </form>
             </motion.div>
           </div>
         )}
@@ -2564,197 +2291,13 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               >
                 <HugeiconsIcon icon={CancelCircleIcon} size={22} color="currentColor" strokeWidth={1.5} />
               </button>
-              <form onSubmit={handleUpdateInvoice} className="p-8 space-y-5" noValidate>
-                <div className="flex items-center gap-3">
-                  <HugeiconsIcon icon={TaskEdit01Icon} size={28} color="#1a2030" strokeWidth={2} />
-                  <p className="text-xl font-semibold text-[#1a1a1a]">Edit Invoice</p>
-                </div>
-
-                {/* Invoice Details */}
-                <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Invoice Details</p>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Invoice # <span className="text-red-400">*</span></label>
-                      <input
-                        value={editInvForm.invoiceNumber}
-                        onChange={e => { setEditInvForm(f => ({ ...f, invoiceNumber: e.target.value })); setEditInvFieldError(null); }}
-                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${editInvFieldError?.field === 'invoiceNumber' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                      />
-                      {editInvFieldError?.field === 'invoiceNumber' && <p className="text-xs text-[#e05252]">{editInvFieldError.message}</p>}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Issue Date <span className="text-red-400">*</span></label>
-                      <DatePicker
-                        value={editInvForm.issueDate}
-                        onChange={(v) => { setEditInvForm(f => ({ ...f, issueDate: v })); setEditInvFieldError(null); }}
-                        invalid={editInvFieldError?.field === 'issueDate'}
-                      />
-                      {editInvFieldError?.field === 'issueDate' && <p className="text-xs text-[#e05252]">{editInvFieldError.message}</p>}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Due Date <span className="text-red-400">*</span></label>
-                      <DatePicker
-                        value={editInvForm.dueDate}
-                        onChange={(v) => { setEditInvForm(f => ({ ...f, dueDate: v })); setEditInvFieldError(null); }}
-                        invalid={editInvFieldError?.field === 'dueDate'}
-                      />
-                      {editInvFieldError?.field === 'dueDate' && <p className="text-xs text-[#e05252]">{editInvFieldError.message}</p>}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Client Information */}
-                <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Client Information</p>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Client Name <span className="text-red-400">*</span></label>
-                      <input
-                        value={editInvForm.clientName}
-                        onChange={e => { setEditInvForm(f => ({ ...f, clientName: e.target.value })); setEditInvFieldError(null); }}
-                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${editInvFieldError?.field === 'clientName' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                      />
-                      {editInvFieldError?.field === 'clientName' && <p className="text-xs text-[#e05252]">{editInvFieldError.message}</p>}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Client Email <span className="text-red-400">*</span></label>
-                      <input
-                        type="text"
-                        value={editInvForm.clientEmail}
-                        onChange={e => { setEditInvForm(f => ({ ...f, clientEmail: e.target.value })); setEditInvFieldError(null); }}
-                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${editInvFieldError?.field === 'clientEmail' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                      />
-                      {editInvFieldError?.field === 'clientEmail' && <p className="text-xs text-[#e05252]">{editInvFieldError.message}</p>}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Company</label>
-                      <input
-                        value={editInvForm.clientCompany}
-                        onChange={e => setEditInvForm(f => ({ ...f, clientCompany: e.target.value }))}
-                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Project */}
-                <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Project</p>
-                  <div className="grid grid-cols-[1fr_120px_120px] gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Project Name <span className="text-red-400">*</span></label>
-                      <input
-                        value={editInvForm.projectName}
-                        onChange={e => { setEditInvForm(f => ({ ...f, projectName: e.target.value })); setEditInvFieldError(null); }}
-                        className={`w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all ${editInvFieldError?.field === 'projectName' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
-                      />
-                      {editInvFieldError?.field === 'projectName' && <p className="text-xs text-[#e05252]">{editInvFieldError.message}</p>}
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Tax Rate (%)</label>
-                      <input
-                        type="number" min="0" max="100" step="0.1"
-                        value={editInvForm.taxRate}
-                        onChange={e => setEditInvForm(f => ({ ...f, taxRate: e.target.value }))}
-                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Status</label>
-                      <Dropdown
-                label="Status"
-                value={editInvForm.status}
-                onChange={(v) => setEditInvForm(f => ({ ...f, status: v }))}
-                options={statusOptions([{ value: 'Unsent', label: 'Unsent' }, { value: 'Not Paid', label: 'Not Paid' }, { value: 'Paid', label: 'Paid' }])}
-                width="w-full"
+              <InvoiceForm
+                title="Edit Invoice" mode="edit" submitLabel="Save Changes"
+                form={editInvForm} setForm={setEditInvForm} clients={invoiceClients} projects={invoiceProjects}
+                original={(() => { const o = invoices.find((i) => i.id === editInvoiceId); return o ? { status: o.status, numberConflict: o.numberConflict, linked: !!o.clientUserId } : undefined; })()}
+                errors={editInvErrors} clearError={() => { setEditInvErrors({}); setEditInvError(''); }} formError={editInvError}
+                submitting={editInvSubmitting} onSubmit={handleUpdateInvoice} onCancel={() => setShowEditInvoice(false)}
               />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Line Items */}
-                <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#AAA]">Line Items</p>
-                  <div className="grid grid-cols-[1fr_72px_96px_36px] gap-3 px-1">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#CCC]">Description</p>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#CCC] text-center">Qty</p>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#CCC] text-right">Rate ($)</p>
-                    <div />
-                  </div>
-                  <div className="space-y-2">
-                    {editInvForm.lineItems.map((item, i) => (
-                      <div key={i} className="grid grid-cols-[1fr_72px_96px_36px] gap-3 items-center">
-                        <input
-                          value={item.description}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setEditInvForm(f => { const items = [...f.lineItems]; items[i] = { ...items[i], description: val }; return { ...f, lineItems: items }; });
-                            setEditInvError('');
-                          }}
-                          placeholder="Service description"
-                          className="w-full bg-white rounded-xl px-3 py-2 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                        />
-                        <input
-                          type="number" min="1" step="1"
-                          value={item.qty}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setEditInvForm(f => { const items = [...f.lineItems]; items[i] = { ...items[i], qty: val }; return { ...f, lineItems: items }; });
-                            setEditInvError('');
-                          }}
-                          className="w-full bg-white rounded-xl px-3 py-2 text-sm text-[#1a1a1a] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all text-center"
-                        />
-                        <input
-                          type="number" min="0" step="0.01"
-                          value={item.rate}
-                          onChange={e => {
-                            const val = e.target.value;
-                            setEditInvForm(f => { const items = [...f.lineItems]; items[i] = { ...items[i], rate: val }; return { ...f, lineItems: items }; });
-                            setEditInvError('');
-                          }}
-                          placeholder="0.00"
-                          className="w-full bg-white rounded-xl px-3 py-2 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all text-right"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setEditInvForm(f => ({ ...f, lineItems: f.lineItems.filter((_, idx) => idx !== i) }))}
-                          disabled={editInvForm.lineItems.length === 1}
-                          className="flex items-center justify-center text-[#CCCCCC] hover:text-[#e05252] transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                          <HugeiconsIcon icon={CancelCircleIcon} size={18} color="currentColor" strokeWidth={1.5} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setEditInvForm(f => ({ ...f, lineItems: [...f.lineItems, { description: '', qty: '1', rate: '' }] }))}
-                    className="text-sm text-[#AAAAAA] hover:text-[#1a2030] transition-colors"
-                  >
-                    + Add Line Item
-                  </button>
-                </div>
-
-                {editInvError && <p className="text-sm text-[#e05252]">{editInvError}</p>}
-
-                <div className="flex items-center justify-between pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowEditInvoice(false)}
-                    className="text-sm text-[#AAAAAA] hover:text-[#000] transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={editInvSubmitting}
-                    className="px-8 py-3 rounded-full bg-[#1a2030] text-white text-sm font-medium hover:-translate-y-0.5 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
-                  >
-                    {editInvSubmitting ? 'Saving…' : 'Update Invoice'}
-                  </button>
-                </div>
-              </form>
             </motion.div>
           </div>
         )}

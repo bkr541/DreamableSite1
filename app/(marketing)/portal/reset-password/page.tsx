@@ -82,13 +82,13 @@ function ResetPasswordContent() {
       className="w-full rounded-3xl p-8 bg-white shadow-lg border border-[#F0F0F0]"
     >
       {status === 'validating' && (
-        <p className="text-sm text-[#888] text-center py-4">Verifying your link…</p>
+        <p className="text-sm text-[#707070] text-center py-4">Verifying your link…</p>
       )}
 
       {status === 'valid' && (
         <div>
           <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-2">{invite ? 'Set up your account' : 'Set your password'}</p>
-          <p className="text-sm text-[#888] mb-8">
+          <p className="text-sm text-[#707070] mb-8">
             {invite ? 'Welcome to your client portal. Choose a password to finish setting up your account.' : 'Choose a new password for your account.'} This link can only be used once. {PASSWORD_HINT}
           </p>
 
@@ -149,7 +149,7 @@ function ResetPasswordContent() {
       {status === 'expired' && (
         <div className="text-center">
           <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-8">Link expired</p>
-          <p className="text-sm text-[#888] leading-relaxed">
+          <p className="text-sm text-[#707070] leading-relaxed">
             This link has expired. If it was an invitation, ask Dreamable.studio to send a new one; if you were resetting your password, request a new link from the sign-in page.
           </p>
           <div className="flex justify-center pt-6">
@@ -166,7 +166,7 @@ function ResetPasswordContent() {
       {status === 'invalid' && (
         <div className="text-center">
           <p className="text-xs font-bold text-[#1a2030] uppercase tracking-widest mb-8">Invalid link</p>
-          <p className="text-sm text-[#888] leading-relaxed">
+          <p className="text-sm text-[#707070] leading-relaxed">
             This link is not valid. It may have already been used, been replaced by a newer one, or been malformed.
           </p>
           <div className="flex justify-center pt-6">
@@ -206,7 +206,7 @@ export default function ResetPasswordPage() {
 
           <Suspense fallback={
             <div className="w-full rounded-3xl p-8 bg-white shadow-lg border border-[#F0F0F0]">
-              <p className="text-sm text-[#888] text-center py-4">Verifying your link…</p>
+              <p className="text-sm text-[#707070] text-center py-4">Verifying your link…</p>
             </div>
           }>
             <ResetPasswordContent />

@@ -23,7 +23,7 @@ const publicPath = (name: string) => path.join(process.cwd(), 'public', 'images'
 let logoCache: Buffer | null = null;
 async function logoPng() {
   // The source logo is huge; embed a small copy so watermarked files stay light.
-  logoCache ??= await sharp(await readFile(publicPath('logo_transparent.png'))).resize({ width: 256 }).png().toBuffer();
+  logoCache ??= await sharp(await readFile(publicPath('logo.png'))).resize({ width: 256 }).png().toBuffer();
   return logoCache;
 }
 

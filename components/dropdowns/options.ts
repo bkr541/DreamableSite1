@@ -13,15 +13,17 @@ import type { DropdownOption } from './shared';
 export const statusOptions = (opts: { value: string; label: string }[]): DropdownOption[] =>
   opts.map((o) => ({ ...o, dot: o.value ? STATUS_DOT[o.value] : undefined }));
 
+import { serviceIdOf } from '@/lib/services';
+
 const SERVICE_ICONS: Record<string, DropdownOption['icon']> = {
-  'App or Web Development': SourceCodeSquareIcon,
-  'Brand Identity': PaintBoardIcon,
-  'Branding & Identity': PaintBoardIcon,
-  'UI/UX Design': PencilRulerIcon,
-  Consulting: Message01Icon,
-  Other: MoreHorizontalCircle01Icon,
+  'web-development': SourceCodeSquareIcon,
+  'brand-identity': PaintBoardIcon,
+  'ui-ux-design': PencilRulerIcon,
+  marketing: Message01Icon,
+  consulting: Message01Icon,
+  other: MoreHorizontalCircle01Icon,
 };
 
-/** Adds a service-type icon to each option; unknown services fall back to a briefcase. */
+/** Adds a service-type icon to each option (any spelling of a service gets its icon); unknown services fall back to a briefcase. */
 export const serviceOptions = (opts: { value: string; label: string }[]): DropdownOption[] =>
-  opts.map((o) => ({ ...o, icon: SERVICE_ICONS[o.value] ?? Briefcase06Icon }));
+  opts.map((o) => ({ ...o, icon: SERVICE_ICONS[serviceIdOf(o.value) ?? ''] ?? Briefcase06Icon }));

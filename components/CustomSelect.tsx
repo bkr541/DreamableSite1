@@ -161,7 +161,7 @@ export default function CustomSelect({
         onKeyDown={handleKeyDown}
         className={`flex items-center justify-between text-left focus:outline-none transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${TRIGGER[variant]} ${border}`}
       >
-        <span className={`truncate ${selected ? '' : 'text-[#bbb]'}`}>{selected ? selected.label : placeholder ?? ''}</span>
+        <span className={`truncate ${selected ? '' : 'text-[#6b6b6b]'}`}>{selected ? selected.label : placeholder ?? ''}</span>
         <HugeiconsIcon
           icon={ArrowDown01Icon}
           size={16}

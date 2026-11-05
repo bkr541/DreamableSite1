@@ -10,6 +10,7 @@ import { validateUpload } from '@/lib/fileValidation';
 import { storageConfigured } from '@/lib/storage';
 import { INQUIRY_UPLOAD_MAX_FILES, verifyInquiryUploads } from '@/lib/uploadFlow';
 import { enqueueEmail } from '@/lib/emailOutbox';
+import { canonicalServiceLabel } from '@/lib/services';
 import { dispatchOutbox } from '@/lib/dispatch';
 import { links, notify } from '@/lib/notifications';
 
@@ -74,7 +75,8 @@ export async function POST(req: NextRequest) {
         // Extract and normalize fields
         const name = trim(body.name, 120);
         const email = trim(body.email, 254);
-        const service = trim(body.service, MAX_SHORT);
+        // Older spellings ("Branding & Logo") become the canonical name; a value we don't recognise is kept exactly as sent.
+        const service = canonicalServiceLabel(trim(body.service, MAX_SHORT));
         const description = trim(body.description, MAX_DESC);
         const company = trim(body.company, MAX_SHORT) || null;
         const website = trim(body.website) || null;

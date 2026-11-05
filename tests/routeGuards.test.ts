@@ -105,4 +105,23 @@ describe('authorization is centralised', () => {
     expect(offenders.map(rel)).toEqual([]);
     expect(readFileSync(path.join(root, 'app/api/admin/clients/route.ts'), 'utf8')).not.toMatch(/hashPassword/);
   });
+  it('invoice money is exact: no Float columns on invoices, and no floating-point parsing in the invoice paths', () => {
+    const schema = readFileSync(path.join(root, 'prisma/schema.prisma'), 'utf8');
+    for (const model of ['Invoice', 'InvoiceLineItem']) {
+      const block = schema.slice(schema.indexOf(`model ${model} {`), schema.indexOf('\n}\n', schema.indexOf(`model ${model} {`)));
+      expect(block, model).not.toMatch(/\bFloat\b/);
+    }
+    for (const f of ['app/api/admin/invoices/route.ts', 'app/api/admin/invoices/[id]/route.ts', 'app/api/invoices/[id]/route.ts', 'lib/generateInvoice.ts', 'components/InvoiceForm.tsx', 'components/InvoicesPanel.tsx', 'lib/invoiceService.ts']) {
+      expect(readFileSync(path.join(root, f), 'utf8'), f).not.toMatch(/parseFloat\(|Number\(\s*(item|l|line)\.(qty|rate)/);
+    }
+  });
+  it('the customer invoice endpoint is read-only and signed-in only', () => {
+    const src = readFileSync(path.join(root, 'app/api/invoices/[id]/route.ts'), 'utf8');
+    expect(src).toMatch(/requireUser\(req\)/);
+    expect(src).not.toMatch(/export async function (POST|PUT|PATCH|DELETE)/);
+  });
+  it('only one place decides what a customer may see', () => {
+    const offenders = files.filter((f) => /prisma\.invoice\./.test(readFileSync(f, 'utf8')) && !/app\/api\/admin\/invoices|app\/\(dashboard\)\/admin\/page|app\/api\/invoices|app\/\(dashboard\)\/dashboard\/page/.test(f));
+    expect(offenders.map(rel)).toEqual([]);
+  });
 });

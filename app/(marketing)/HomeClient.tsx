@@ -5,11 +5,10 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'motion/react';
 import SplineBackground from '@/components/SplineBackground';
-import InteractiveElement from '@/components/InteractiveElement';
 import HeroRibbons from '@/components/HeroRibbons';
-import CubePuzzle from '@/components/CubePuzzle';
-import HeroCarousel from '@/components/HeroCarousel';
+import { LazyCubePuzzle, LazyInteractiveElement } from '@/components/LazyIllustrations';
 import { formatPhone } from '@/lib/utils';
+import { intakeOptions } from '@/lib/services';
 import { pool, putFile } from '@/lib/clientUpload';
 import CustomSelect from '@/components/CustomSelect';
 import Image from 'next/image';
@@ -28,14 +27,17 @@ import {
   Attachment01Icon,
 } from '@hugeicons/core-free-icons';
 
-// Swap each `icon` for an <Image src="/…svg" /> once the custom artwork is ready.
-const PROJECT_TYPES = [
-  { value: 'App or Web Development', label: 'App or Web Development', icon: SourceCodeSquareIcon },
-  { value: 'Brand Identity', label: 'Brand Identity', icon: PaintBoardIcon },
-  { value: 'UI/UX Design', label: 'UI/UX Design', icon: PencilRulerIcon },
-  { value: 'Consulting', label: 'Consulting', icon: Message01Icon },
-  { value: 'Other', label: 'Other', icon: MoreHorizontalCircle01Icon },
-];
+// The choices come from the one service catalog (lib/services.catalog.mjs), so this form and the contact form always
+// list the same services. Swap each `icon` for an <Image src="/…svg" /> once the custom artwork is ready.
+const TYPE_ICONS = {
+  'web-development': SourceCodeSquareIcon,
+  'brand-identity': PaintBoardIcon,
+  'ui-ux-design': PencilRulerIcon,
+  marketing: Message01Icon,
+  consulting: Message01Icon,
+  other: MoreHorizontalCircle01Icon,
+} as const;
+const PROJECT_TYPES = intakeOptions().map((o) => ({ value: o.value, label: o.label, icon: TYPE_ICONS[o.id as keyof typeof TYPE_ICONS] ?? MoreHorizontalCircle01Icon }));
 
 const stepVariants = {
   enter: (dir: number) => ({ opacity: 0, x: dir * 48 }),
@@ -205,7 +207,7 @@ export default function Home() {
 
           {/* Right – 3D Cube Puzzle */}
           <div className="hidden md:flex items-center justify-center h-[520px] w-[620px] absolute right-0 lg:-right-28 z-10 opacity-60 lg:opacity-100 pointer-events-none md:pointer-events-auto">
-            <CubePuzzle />
+            <LazyCubePuzzle />
           </div>
         </div>
       </section>
@@ -306,7 +308,7 @@ export default function Home() {
                         transition={{ duration: 0.7, delay: 0.15, ease: "easeOut" }}
                         className={`absolute inset-0 md:relative md:inset-auto z-0 h-full md:h-[320px] w-full flex items-center justify-center opacity-10 md:opacity-100 pointer-events-none md:pointer-events-auto overflow-hidden md:overflow-visible ${isEven ? '' : 'md:order-1'}`}
                       >
-                        <InteractiveElement theme={item.theme} />
+                        <LazyInteractiveElement theme={item.theme} />
                       </motion.div>
                     </div>
                   </div>
@@ -359,31 +361,37 @@ export default function Home() {
                           <input
                             type="text"
                             id="contact-name"
+                            aria-invalid={fieldError?.field === 'name'}
+                            aria-describedby={fieldError?.field === 'name' ? 'contact-name-error' : undefined}
                             value={formData.name}
                             onChange={(e) => { setFormData({ ...formData, name: e.target.value }); setFieldError(null); }}
                             className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all ${fieldError?.field === 'name' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                             placeholder="Jane Doe"
                           />
-                          {fieldError?.field === 'name' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                          {fieldError?.field === 'name' && <p id="contact-name-error" role="alert" className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
                         </div>
                         <div className="flex flex-col">
                           <label htmlFor="contact-email" className="text-sm font-medium text-[#555] mb-2">Email</label>
                           <input
                             type="text"
                             id="contact-email"
+                            aria-invalid={fieldError?.field === 'email'}
+                            aria-describedby={fieldError?.field === 'email' ? 'contact-email-error' : undefined}
                             autoComplete="email"
                             value={formData.email}
                             onChange={(e) => { setFormData({ ...formData, email: e.target.value }); setFieldError(null); }}
                             className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all ${fieldError?.field === 'email' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                             placeholder="jane@example.com"
                           />
-                          {fieldError?.field === 'email' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                          {fieldError?.field === 'email' && <p id="contact-email-error" role="alert" className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
                         </div>
                         <div className="flex flex-col">
                           <label htmlFor="contact-phone" className="text-sm font-medium text-[#555] mb-2">Phone Number</label>
                           <input
                             type="text"
                             id="contact-phone"
+                            aria-invalid={fieldError?.field === 'phone'}
+                            aria-describedby={fieldError?.field === 'phone' ? 'contact-phone-error' : undefined}
                             autoComplete="tel"
                             inputMode="tel"
                             value={formData.phone}
@@ -391,7 +399,7 @@ export default function Home() {
                             className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all ${fieldError?.field === 'phone' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                             placeholder="(555)-123-4567"
                           />
-                          {fieldError?.field === 'phone' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                          {fieldError?.field === 'phone' && <p id="contact-phone-error" role="alert" className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
                         </div>
 
                       </motion.div>
@@ -411,12 +419,14 @@ export default function Home() {
                           <input
                             type="text"
                             id="contact-project-name"
+                            aria-invalid={fieldError?.field === 'projectName'}
+                            aria-describedby={fieldError?.field === 'projectName' ? 'contact-project-name-error' : undefined}
                             value={formData.projectName}
                             onChange={(e) => { setFormData({ ...formData, projectName: e.target.value }); setFieldError(null); }}
                             className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all ${fieldError?.field === 'projectName' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                             placeholder="My Next Big Idea"
                           />
-                          {fieldError?.field === 'projectName' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                          {fieldError?.field === 'projectName' && <p id="contact-project-name-error" role="alert" className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
                         </div>
 
                         <div className="flex flex-col">
@@ -489,13 +499,15 @@ export default function Home() {
                           <label htmlFor="contact-message" className="text-sm font-medium text-[#555] mb-2">Project Description</label>
                           <textarea
                             id="contact-message"
+                            aria-invalid={fieldError?.field === 'message'}
+                            aria-describedby={fieldError?.field === 'message' ? 'contact-message-error' : undefined}
                             rows={3}
                             value={formData.message}
                             onChange={(e) => { setFormData({ ...formData, message: e.target.value }); setFieldError(null); }}
                             className={`w-full bg-white/60 rounded-xl px-4 py-3 text-[#1a1a1a] placeholder:text-[#bbb] focus:outline-none focus:ring-2 focus:ring-cyan-200/50 border transition-all resize-none ${fieldError?.field === 'message' ? 'border-[#e05252]' : 'border-[#D0D0D0]'}`}
                             placeholder="Tell us about your project..."
                           />
-                          {fieldError?.field === 'message' && <p className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
+                          {fieldError?.field === 'message' && <p id="contact-message-error" role="alert" className="text-sm text-[#e05252] mt-1.5">{fieldError.message}</p>}
                         </div>
 
                         {attachments.length > 0 && (
@@ -592,7 +604,7 @@ export default function Home() {
                   </div>
                 </div>
                 {submitStatus === 'error' && (
-                  <p className="text-sm text-red-500 font-medium text-center mt-4">{submitError}</p>
+                  <p role="alert" className="text-sm text-red-500 font-medium text-center mt-4">{submitError}</p>
                 )}
               </form>
             </div>
