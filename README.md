@@ -539,6 +539,6 @@ What changed: contrast fixes (placeholder and helper greys to `#6b6b6b`/`#707070
 
 Apply `prisma/migrations/20261116000000_deliverables_sharing/migration.sql` (also appended to `prisma/APPLY_ALL_PENDING.sql`), regenerate Prisma Client, then deploy. No existing project becomes shared automatically.
 
-In a project’s **Deliverables** overview, choose **Create deliverables link**, then **Copy link**. The client sees every folder for that project, opens a folder, and previews, downloads, or comments on its ready files. New folders appear at the same URL. This project link grants access independently of each folder’s individual link switch; this is stated beside the control. Unfiled and pending artifacts are excluded.
+In a project’s **Deliverables** overview, open the share icon beside **New folder**, choose **Create deliverables link**, then **Copy link**. The client sees every folder for that project, opens a folder, and previews, downloads, or comments on its ready files. New folders appear at the same URL. This project link grants access independently of each folder’s individual link switch; this is stated beside the control. Unfiled and pending artifacts are excluded.
 
 **Replace link** retires the old URL, and **Turn sharing off** closes the overview, folder pages, previews, downloads, and comment posting through that link. Individual folder links have their own controls. As with existing folder links, a storage download URL already issued may remain usable for its 30-second lifetime. Folder comment and moderation settings continue to apply.

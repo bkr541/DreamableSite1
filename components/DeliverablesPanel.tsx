@@ -811,7 +811,6 @@ export default function DeliverablesPanel({ targetType, targetId, service, folde
 
   return (
     <div>
-      {!openFolder && targetType === 'project' && <DeliverablesSharing key={targetId} projectId={targetId} />}
       <AnimatePresence mode="wait" initial={false} custom={direction}>
         {!openFolder ? (
           <motion.div
@@ -826,14 +825,17 @@ export default function DeliverablesPanel({ targetType, targetId, service, folde
           >
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-[#666]">{mine.length} {mine.length === 1 ? 'folder' : 'folders'}</p>
-              <button
-                type="button"
-                onClick={() => setDialog({ mode: 'create' })}
-                className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
-              >
-                <HugeiconsIcon icon={FolderAddIcon} size={16} color="#ffffff" strokeWidth={1.5} />
-                New folder
-              </button>
+              <div className="flex items-center gap-2">
+                {targetType === 'project' && <DeliverablesSharing key={targetId} projectId={targetId} />}
+                <button
+                  type="button"
+                  onClick={() => setDialog({ mode: 'create' })}
+                  className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
+                >
+                  <HugeiconsIcon icon={FolderAddIcon} size={16} color="#ffffff" strokeWidth={1.5} />
+                  New folder
+                </button>
+              </div>
             </div>
 
             {mine.length === 0 && unfiled.length === 0 ? (
