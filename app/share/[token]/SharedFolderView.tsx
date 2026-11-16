@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { File02Icon, Folder01Icon, Message01Icon } from '@hugeicons/core-free-icons';
 import ArtifactThumb from '@/components/ArtifactThumb';
@@ -33,14 +34,14 @@ const formatWhen = (iso: string) =>
 
 /** Dialog where anyone with the link can read and add comments about one file. */
 function CommentsDialog({
-  token,
+  apiBase,
   file,
   comments,
   enabled,
   onPosted,
   onClose,
 }: {
-  token: string;
+  apiBase: string;
   file: SharedFile;
   comments: SharedComment[];
   /** false when the folder owner has turned comments off: existing comments stay readable, posting is closed. */
@@ -85,7 +86,7 @@ function CommentsDialog({
     setError('');
     setNotice('');
     try {
-      const res = await fetch(`/api/share/${token}/files/${file.id}/comments`, {
+      const res = await fetch(`${apiBase}/files/${file.id}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, body: text, website }),
@@ -116,7 +117,7 @@ function CommentsDialog({
       <div role="dialog" aria-modal="true" aria-label={`Comments on ${label}`} className="relative flex max-h-[90vh] w-full max-w-[560px] flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
         <DialogFocus />
         <div className="flex items-center gap-4 border-b border-[#F0F0F0] px-6 py-5">
-          <ArtifactThumb src={`/api/share/${token}/files/${file.id}?inline=1`} fileName={file.fileName} size={56} />
+          <ArtifactThumb src={`${apiBase}/files/${file.id}?inline=1`} fileName={file.fileName} size={56} />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold uppercase tracking-widest text-[#999]">Comments</p>
             <p className="truncate text-base font-semibold text-[#1a1a1a]" title={label}>{label}</p>
@@ -197,14 +198,16 @@ interface Props {
   files: SharedFile[];
   comments: SharedComment[];
   commentsEnabled: boolean;
+  apiBase?: string;
+  backHref?: string;
 }
 
-export default function SharedFolderView({ token, name, description, projectName, files, comments: initialComments, commentsEnabled }: Props) {
+export default function SharedFolderView({ token, name, description, projectName, files, comments: initialComments, commentsEnabled, apiBase = `/api/share/${token}`, backHref }: Props) {
   const [preview, setPreview] = useState<PreviewFile | null>(null);
   const [comments, setComments] = useState<SharedComment[]>(initialComments);
   const [commentFileId, setCommentFileId] = useState<string | null>(null);
   const commentFile = files.find((f) => f.id === commentFileId) ?? null;
-  const urlFor = (id: string) => `/api/share/${token}/files/${id}`;
+  const urlFor = (id: string) => `${apiBase}/files/${id}`;
 
   return (
     <main
@@ -219,6 +222,8 @@ export default function SharedFolderView({ token, name, description, projectName
             Dreamable<span className="text-[#999]">.</span>studio
           </span>
         </div>
+
+        {backHref && <Link href={backHref} className="mb-5 inline-flex rounded-full px-2 py-1 text-sm font-medium text-[#4f6df5] hover:underline">← All folders</Link>}
 
         {/* Folder header */}
         <section className="rounded-3xl bg-white p-7 sm:p-10 shadow-lg border border-[#F0F0F0]">
@@ -308,7 +313,7 @@ export default function SharedFolderView({ token, name, description, projectName
 
       {commentFile && (
         <CommentsDialog
-          token={token}
+          apiBase={apiBase}
           file={commentFile}
           comments={comments.filter((c) => c.deliverableId === commentFile.id)}
           enabled={commentsEnabled}

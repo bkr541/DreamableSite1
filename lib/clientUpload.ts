@@ -24,3 +24,52 @@ export async function pool(count: number, limit: number, worker: (index: number)
     }),
   );
 }
+
+/** Upload endpoints may receive plain-text or HTML errors from the host before our API runs. */
+export async function readUploadResponse<T>(response: Response, fallback = 'Upload failed.'): Promise<T> {
+  if (response.status === 413) {
+    throw new Error('The server rejected this upload because it is too large. Larger files require direct file storage to be configured.');
+  }
+  const data: unknown = await response.json().catch(() => null);
+  if (!response.ok || !data || typeof data !== 'object' || !('ok' in data) || data.ok !== true) {
+    const message = data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+      ? data.error : `${fallback} (HTTP ${response.status}).`;
+    throw new Error(message);
+  }
+  return data as T;
+}
+
+interface LegacyDeliverable {
+  file: File;
+  title: string;
+  description: string;
+  watermark: boolean;
+}
+
+/** Keep fallback requests small too: one file per request, with the same retry behaviour as direct uploads. */
+export async function uploadLegacyDeliverables(
+  folderId: string,
+  items: LegacyDeliverable[],
+  update: (index: number, state: { state: 'uploading' | 'failed'; progress?: number; failure?: string }) => void,
+): Promise<Set<number>> {
+  const done = new Set<number>();
+  await pool(items.length, 3, async (i) => {
+    const item = items[i];
+    update(i, { state: 'uploading', progress: 0, failure: undefined });
+    try {
+      const body = new FormData();
+      body.append('folderId', folderId);
+      body.append('files', item.file);
+      body.append('titles', JSON.stringify([item.title]));
+      body.append('descriptions', JSON.stringify([item.description]));
+      body.append('watermarks', JSON.stringify([item.watermark]));
+      const response = await fetch('/api/admin/deliverables', { method: 'POST', body });
+      const data = await readUploadResponse<{ count: number }>(response);
+      if (data.count !== 1) throw new Error('The server did not confirm that the file was uploaded.');
+      done.add(i);
+    } catch (err) {
+      update(i, { state: 'failed', failure: err instanceof Error ? err.message : 'Upload failed.' });
+    }
+  });
+  return done;
+}

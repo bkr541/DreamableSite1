@@ -136,6 +136,19 @@ model DeliverableComment {
   @@map("deliverable_comments")
 }
 
+// An opt-in bearer link covering all folders of one project.
+model DeliverablesShare {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId      String    @unique @map("project_id") @db.Uuid
+  isPublic       Boolean   @default(false) @map("is_public")
+  shareToken     String    @unique @map("share_token")
+  shareRotatedAt DateTime? @map("share_rotated_at") @db.Timestamptz()
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("deliverables_shares")
+}
+
 model DeliverableFolder {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
@@ -382,6 +395,7 @@ model Project {
 
   deliverables Deliverable[]
   deliverableFolders DeliverableFolder[]
+  deliverablesShare DeliverablesShare?
   invoices    Invoice[]
   inquiry     Inquiry? @relation(fields: [inquiryId], references: [id])
   company     Company  @relation(fields: [companyId], references: [id])

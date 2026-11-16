@@ -24,7 +24,18 @@ export default function ArtifactThumb({ src, fileName, size = 72, className = ''
     >
       {kind === 'image' && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          className="absolute inset-0 h-full w-full object-cover"
+          // Transparent pixels reveal the checkerboard; opaque images cover it naturally.
+          style={{
+            backgroundColor: '#7D8592',
+            backgroundImage: 'repeating-conic-gradient(#B8BEC8 0% 25%, #7D8592 0% 50%)',
+            backgroundSize: '16px 16px',
+          }}
+        />
       )}
       {kind === 'video' && (
         <video src={`${src}#t=0.1`} preload="metadata" muted playsInline className="absolute inset-0 h-full w-full object-cover pointer-events-none" />

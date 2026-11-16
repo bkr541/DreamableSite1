@@ -516,3 +516,16 @@ END $$;
 --   SELECT service, count(*) FROM projects GROUP BY 1 ORDER BY 1;
 --   SELECT name FROM services ORDER BY "order";
 --   SELECT table_name, old_value, new_value, count(*) FROM service_migration_audit GROUP BY 1, 2, 3;
+
+
+-- 20261116000000_deliverables_sharing
+-- Project deliverables sharing is opt-in and independent of individual folder links.
+CREATE TABLE IF NOT EXISTS "deliverables_shares" (
+  "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+  "project_id" UUID NOT NULL UNIQUE REFERENCES "projects"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "is_public" BOOLEAN NOT NULL DEFAULT false,
+  "share_token" TEXT NOT NULL UNIQUE,
+  "share_rotated_at" TIMESTAMPTZ,
+  CONSTRAINT "deliverables_shares_pkey" PRIMARY KEY ("id")
+);
+ALTER TABLE "deliverables_shares" ENABLE ROW LEVEL SECURITY;

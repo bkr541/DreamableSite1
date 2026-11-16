@@ -19,11 +19,12 @@ import {
 import { useToast } from '@/components/Toast';
 import Toggle from '@/components/Toggle';
 import ArtifactThumb from '@/components/ArtifactThumb';
+import DeliverablesSharing from '@/components/DeliverablesSharing';
 import { Avatar } from '@/components/RecordList';
 import { canWatermarkName } from '@/lib/watermarkTypes';
 import { PreviewFile, formatBytes } from '@/components/FilePreviewModal';
-import { getDeliverableCategories, OTHER_CATEGORY } from '@/lib/deliverables';
-import { pool, putFile } from '@/lib/clientUpload';
+import { DELIVERABLE_MAX_FILES, getDeliverableCategories, OTHER_CATEGORY } from '@/lib/deliverables';
+import { pool, putFile, readUploadResponse, uploadLegacyDeliverables } from '@/lib/clientUpload';
 import DialogFocus from '@/components/DialogFocus';
 import { MODAL_CANCEL_CLASS } from '@/components/ModalParts';
 
@@ -393,19 +394,6 @@ function UploadSection({ folder }: { folder: FolderRecord }) {
   const patch = (index: number, change: Partial<PendingFile>) =>
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...change } : it)));
 
-  async function uploadLegacy() {
-    const body = new FormData();
-    body.append('folderId', folder.id);
-    items.forEach((it) => body.append('files', it.file));
-    body.append('titles', JSON.stringify(items.map((it) => it.title)));
-    body.append('descriptions', JSON.stringify(items.map((it) => it.description)));
-    body.append('watermarks', JSON.stringify(items.map((it) => it.watermark)));
-    const res = await fetch('/api/admin/deliverables', { method: 'POST', body });
-    const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || 'Upload failed.');
-    return data.count as number;
-  }
-
   /** Each file goes straight to storage with its own progress, then the server verifies it before it appears. */
   async function uploadDirect(grants: { id: string; uploadUrl: string; contentType: string }[]) {
     const done = new Set<number>();
@@ -417,8 +405,7 @@ function UploadSection({ folder }: { folder: FolderRecord }) {
         await putFile(grant.uploadUrl, it.file, grant.contentType, (p) => patch(i, { progress: p }));
         patch(i, { state: 'verifying', progress: 1 });
         const res = await fetch(`/api/admin/deliverables/${grant.id}/complete`, { method: 'POST' });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.ok) throw new Error(data.error || 'The file could not be verified.');
+        await readUploadResponse(res, 'The file could not be verified.');
         done.add(i);
       } catch (err) {
         patch(i, { state: 'failed', failure: err instanceof Error ? err.message : 'Upload failed.' });
@@ -431,6 +418,7 @@ function UploadSection({ folder }: { folder: FolderRecord }) {
 
   async function upload() {
     if (items.length === 0) { setError('Choose at least one file.'); return; }
+    if (items.length > DELIVERABLE_MAX_FILES) { setError(`Upload up to ${DELIVERABLE_MAX_FILES} files at a time.`); return; }
     const missing = items.findIndex((it) => !it.title.trim());
     if (missing !== -1) { setError(`Add a title for ${items[missing].file.name}.`); return; }
 
@@ -445,23 +433,20 @@ function UploadSection({ folder }: { folder: FolderRecord }) {
           files: items.map((it) => ({ name: it.file.name, size: it.file.size, contentType: it.file.type, title: it.title, description: it.description, watermark: it.watermark })),
         }),
       });
-      const plan = await init.json();
-      if (!init.ok || !plan.ok) throw new Error(plan.error || 'Upload failed.');
-
-      let count: number;
-      let failed = 0;
-      if (plan.mode === 'legacy') {
-        count = await uploadLegacy();
-      } else {
-        const done = await uploadDirect(plan.files);
-        count = done.size;
-        failed = items.length - done.size;
-        // Successful files leave the list; failed ones stay (with the reason) so they can be retried.
-        setItems((prev) => {
-          prev.forEach((it, i) => { if (done.has(i)) URL.revokeObjectURL(it.previewUrl); });
-          return prev.filter((_, i) => !done.has(i)).map((it) => ({ ...it, state: it.state === 'failed' ? 'failed' : undefined, progress: undefined }));
-        });
-      }
+      const plan = await readUploadResponse<
+        | { mode: 'legacy' }
+        | { mode: 'direct'; files: { id: string; uploadUrl: string; contentType: string }[] }
+      >(init);
+      const done = plan.mode === 'legacy'
+        ? await uploadLegacyDeliverables(folder.id, items, patch)
+        : await uploadDirect(plan.files);
+      const count = done.size;
+      const failed = items.length - done.size;
+      // Successful files leave the list; failed ones stay (with the reason) so they can be retried.
+      setItems((prev) => {
+        prev.forEach((it, i) => { if (done.has(i)) URL.revokeObjectURL(it.previewUrl); });
+        return prev.filter((_, i) => !done.has(i)).map((it) => ({ ...it, state: it.state === 'failed' ? 'failed' : undefined, progress: undefined }));
+      });
 
       if (count > 0) {
         toast.success(count === 1 ? 'File uploaded' : 'Files uploaded', `${count} ${count === 1 ? 'file was' : 'files were'} added to “${folder.name}”.`);
@@ -826,6 +811,7 @@ export default function DeliverablesPanel({ targetType, targetId, service, folde
 
   return (
     <div>
+      {!openFolder && targetType === 'project' && <DeliverablesSharing key={targetId} projectId={targetId} />}
       <AnimatePresence mode="wait" initial={false} custom={direction}>
         {!openFolder ? (
           <motion.div
