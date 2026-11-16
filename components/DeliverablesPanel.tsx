@@ -20,6 +20,8 @@ import { useToast } from '@/components/Toast';
 import Toggle from '@/components/Toggle';
 import ArtifactThumb from '@/components/ArtifactThumb';
 import DeliverablesSharing from '@/components/DeliverablesSharing';
+import DeliverablesDownloadButton from '@/components/DeliverablesDownloadButton';
+import DeliverablesAddMenu from '@/components/DeliverablesAddMenu';
 import { Avatar } from '@/components/RecordList';
 import { canWatermarkName } from '@/lib/watermarkTypes';
 import { PreviewFile, formatBytes } from '@/components/FilePreviewModal';
@@ -826,15 +828,9 @@ export default function DeliverablesPanel({ targetType, targetId, service, folde
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm text-[#666]">{mine.length} {mine.length === 1 ? 'folder' : 'folders'}</p>
               <div className="flex items-center gap-2">
+                {targetType === 'project' && <DeliverablesDownloadButton projectId={targetId} disabled={mine.length === 0} />}
                 {targetType === 'project' && <DeliverablesSharing key={targetId} projectId={targetId} />}
-                <button
-                  type="button"
-                  onClick={() => setDialog({ mode: 'create' })}
-                  className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-[#1a2030] text-white text-sm font-semibold hover:-translate-y-0.5 hover:shadow-md transition-all"
-                >
-                  <HugeiconsIcon icon={FolderAddIcon} size={16} color="#ffffff" strokeWidth={1.5} />
-                  New folder
-                </button>
+                <DeliverablesAddMenu onNewFolder={() => setDialog({ mode: 'create' })} />
               </div>
             </div>
 
@@ -943,19 +939,17 @@ export default function DeliverablesPanel({ targetType, targetId, service, folde
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {targetType === 'project' && <DeliverablesDownloadButton projectId={targetId} folderId={openFolder.id} disabled={folderFiles.length === 0} compact />}
                 {openFolder.isPublic && (
-                  <button type="button" onClick={() => copyLink(openFolder)} className="inline-flex items-center gap-1.5 h-9 rounded-full border border-[#D5D9E4] px-4 text-xs font-semibold text-[#4f6df5] hover:bg-[#EEF2FF] transition-colors">
-                    <HugeiconsIcon icon={Copy01Icon} size={14} color="currentColor" strokeWidth={1.75} />
-                    Copy link
+                  <button type="button" onClick={() => copyLink(openFolder)} title="Copy folder link" aria-label={`Copy link for ${openFolder.name}`} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#D5D9E4] text-[#4f6df5] transition-colors hover:bg-[#EEF2FF] focus-visible:outline-2 focus-visible:outline-[#4f6df5]">
+                    <HugeiconsIcon icon={Copy01Icon} size={18} color="currentColor" strokeWidth={1.75} />
                   </button>
                 )}
-                <button type="button" onClick={() => setDialog({ mode: 'edit', folder: openFolder })} className="inline-flex items-center gap-1.5 h-9 rounded-full border border-[#D5D9E4] px-4 text-xs font-semibold text-[#444] hover:bg-[#F5F6FA] transition-colors">
-                  <HugeiconsIcon icon={Edit02Icon} size={14} color="currentColor" strokeWidth={1.5} />
-                  Edit
+                <button type="button" onClick={() => setDialog({ mode: 'edit', folder: openFolder })} title="Edit folder" aria-label={`Edit folder ${openFolder.name}`} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#D5D9E4] text-[#444] transition-colors hover:bg-[#F5F6FA] focus-visible:outline-2 focus-visible:outline-[#4f6df5]">
+                  <HugeiconsIcon icon={Edit02Icon} size={18} color="currentColor" strokeWidth={1.5} />
                 </button>
-                <button type="button" onClick={() => setToDelete(openFolder)} className="inline-flex items-center gap-1.5 h-9 rounded-full border border-red-200 px-4 text-xs font-semibold text-[#e05252] hover:bg-red-50 transition-colors">
-                  <HugeiconsIcon icon={Delete02Icon} size={14} color="currentColor" strokeWidth={1.5} />
-                  Delete
+                <button type="button" onClick={() => setToDelete(openFolder)} title="Delete folder" aria-label={`Delete folder ${openFolder.name}`} className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-red-200 text-[#e05252] transition-colors hover:bg-red-50 focus-visible:outline-2 focus-visible:outline-[#e05252]">
+                  <HugeiconsIcon icon={Delete02Icon} size={18} color="currentColor" strokeWidth={1.5} />
                 </button>
               </div>
             </div>
