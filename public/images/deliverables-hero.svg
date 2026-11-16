@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="340" viewBox="0 0 1080 340" fill="none">
+  <defs>
+    <radialGradient id="aura"><stop stop-color="#c3eff9" stop-opacity=".82"/><stop offset="1" stop-color="#e9e9ff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="folder" x1="358" y1="160" x2="711" y2="320" gradientUnits="userSpaceOnUse"><stop stop-color="#8ae6ee"/><stop offset=".52" stop-color="#b3c7ff"/><stop offset="1" stop-color="#d5b4f7"/></linearGradient>
+    <linearGradient id="paper" x1="460" y1="45" x2="632" y2="180" gradientUnits="userSpaceOnUse"><stop stop-color="#ffffff"/><stop offset="1" stop-color="#f5f2ff"/></linearGradient>
+    <linearGradient id="swatch" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d4b1fa"/><stop offset="1" stop-color="#f7cbe6"/></linearGradient>
+    <filter id="shadow" x="-40%" y="-40%" width="180%" height="200%"><feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#68779e" flood-opacity=".15"/></filter>
+    <filter id="soft"><feGaussianBlur stdDeviation="5"/></filter>
+  </defs>
+  <ellipse cx="548" cy="176" rx="448" ry="164" fill="url(#aura)"/>
+  <ellipse cx="546" cy="315" rx="242" ry="12" fill="#b8c5e5" opacity=".23" filter="url(#soft)"/>
+  <path d="M161 165C184 29 778 9 914 137M207 240C329 329 764 327 895 232" stroke="#b7c8e6" stroke-width="1.5" stroke-dasharray="5 8"/>
+  <circle cx="162" cy="163" r="5" fill="#b5d9f5"/><circle cx="899" cy="234" r="5" fill="#d7c3f4"/>
+
+  <!-- Floating vector artboard and its editable Bezier controls. -->
+  <g transform="rotate(-10 242 143)" filter="url(#shadow)">
+    <rect x="139" y="64" width="203" height="162" rx="20" fill="white" stroke="#d6ddef" stroke-width="1.4"/>
+    <path d="M139 99H342" stroke="#edf0f7"/>
+    <circle cx="159" cy="83" r="4" fill="#c3b4f7"/><circle cx="173" cy="83" r="4" fill="#9de6e8"/><circle cx="187" cy="83" r="4" fill="#f6d7b2"/>
+    <path d="M175 185L178 124M306 185L304 124" stroke="#d1c2f4" stroke-width="1.2"/>
+    <path d="M175 185C178 103 304 103 306 185" stroke="#a87be1" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="178" cy="124" r="5" fill="#d8c4f6"/><circle cx="304" cy="124" r="5" fill="#d8c4f6"/>
+    <rect x="169" y="179" width="12" height="12" rx="2" fill="white" stroke="#7f8eda" stroke-width="2"/>
+    <rect x="300" y="179" width="12" height="12" rx="2" fill="white" stroke="#7f8eda" stroke-width="2"/>
+  </g>
+
+  <!-- A project folder with a small stack of finished creative assets. -->
+  <path d="M352 141V119C352 107 361 98 373 98H456L479 121H701C714 121 723 130 723 143V284C723 297 713 306 700 306H375C362 306 352 297 352 284V141Z" fill="#dce4ff" stroke="#aebeea" stroke-width="1.5"/>
+  <g transform="rotate(9 603 136)" filter="url(#shadow)">
+    <rect x="502" y="35" width="191" height="203" rx="17" fill="white" stroke="#d6ddef" stroke-width="1.4"/>
+    <rect x="526" y="58" width="73" height="7" rx="3.5" fill="#e1e6f4"/>
+    <rect x="526" y="76" width="115" height="5" rx="2.5" fill="#edf0f7"/>
+    <rect x="526" y="104" width="143" height="102" rx="12" fill="#edf5ff"/>
+    <circle cx="639" cy="127" r="13" fill="#edd3f5"/>
+    <path d="M526 181L565 140L603 170L627 151L669 191V206H526V181Z" fill="#c1d9f5"/>
+    <path d="M526 187L558 166L602 193L636 173L669 199V206H526V187Z" fill="#a8dfe9"/>
+  </g>
+  <g transform="rotate(-7 482 136)" filter="url(#shadow)">
+    <rect x="395" y="26" width="192" height="213" rx="18" fill="url(#paper)" stroke="#d6ddef" stroke-width="1.4"/>
+    <rect x="419" y="48" width="66" height="7" rx="3.5" fill="#dcdff3"/>
+    <rect x="419" y="66" width="105" height="5" rx="2.5" fill="#eceef6"/>
+    <circle cx="471" cy="133" r="35" fill="#d1a4ed"/>
+    <path d="M474 102L508 135L474 169L440 135L474 102Z" fill="#f5d7f3" stroke="#585475" stroke-width="2.5"/>
+    <rect x="469" y="97" width="10" height="10" rx="2" fill="white" stroke="#585475" stroke-width="2"/>
+    <rect x="503" y="130" width="10" height="10" rx="2" fill="white" stroke="#585475" stroke-width="2"/>
+    <rect x="469" y="164" width="10" height="10" rx="2" fill="white" stroke="#585475" stroke-width="2"/>
+    <rect x="435" y="130" width="10" height="10" rx="2" fill="white" stroke="#585475" stroke-width="2"/>
+    <rect x="431" y="198" width="111" height="5" rx="2.5" fill="#e1e3f1"/>
+  </g>
+  <g filter="url(#shadow)">
+    <path d="M337 181C335 169 344 159 356 159H716C729 159 738 170 735 182L714 289C712 302 703 309 690 309H384C371 309 362 302 359 289L337 181Z" fill="url(#folder)" stroke="#afc1eb" stroke-width="1.5"/>
+    <path d="M359 173H712" stroke="white" stroke-width="2" stroke-opacity=".65" stroke-linecap="round"/>
+    <circle cx="538" cy="233" r="32" fill="white" fill-opacity=".88"/>
+    <path d="M538 215V238M528 230L538 240L548 230M523 245V250H553V245" stroke="#6976cf" stroke-width="2.7" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Supporting file tiles and a brand palette. -->
+  <g transform="rotate(10 829 155)" filter="url(#shadow)">
+    <rect x="765" y="83" width="145" height="138" rx="20" fill="white" stroke="#d6ddef" stroke-width="1.4"/>
+    <rect x="785" y="102" width="105" height="75" rx="12" fill="#f2e9fd"/>
+    <path d="M805 157L823 121L841 157M812 145H834M852 137C870 133 877 141 877 153C877 165 856 166 853 156C850 144 870 142 877 146" stroke="#ac86dd" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="786" y="190" width="68" height="5" rx="2.5" fill="#e1e6f4"/>
+  </g>
+  <g transform="rotate(-6 247 268)" filter="url(#shadow)">
+    <rect x="165" y="242" width="174" height="53" rx="18" fill="white" stroke="#d6ddef"/>
+    <circle cx="192" cy="268" r="13" fill="#8fe1e9"/><circle cx="231" cy="268" r="13" fill="#b1b9f7"/><circle cx="270" cy="268" r="13" fill="#d6a8ed"/><circle cx="309" cy="268" r="13" fill="#f1d1a6"/>
+  </g>
+  <g transform="rotate(7 827 265)"><rect x="779" y="242" width="96" height="46" rx="23" fill="#e6f7ee" stroke="#cdebdc"/><path d="M812 265L822 274L842 254" stroke="#6bb69d" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>
+
+  <!-- Small orbital accents echo the site's playful hero. -->
+  <path d="M749 31L753 43L765 47L753 51L749 63L745 51L733 47L745 43L749 31Z" fill="#b9a1f1"/>
+  <path d="M109 222L112 231L121 234L112 237L109 246L106 237L97 234L106 231L109 222Z" fill="#9bdae6"/>
+  <path d="M938 74L941 83L950 86L941 89L938 98L935 89L926 86L935 83L938 74Z" fill="#efc6e5"/>
+  <circle cx="333" cy="40" r="6" fill="#b7dcf4"/><circle cx="946" cy="273" r="7" fill="#d7cbf6"/><circle cx="723" cy="327" r="4" fill="#b2dce8"/>
+</svg>

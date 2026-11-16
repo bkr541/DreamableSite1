@@ -1,20 +1,25 @@
-import type { Metadata } from 'next';
+import { cache } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Folder01Icon, ArrowRight01Icon } from '@hugeicons/core-free-icons';
 import { getSharedDeliverables } from '@/lib/deliverablesShare';
+import { sharedDeliverablesMetadata } from '@/lib/deliverablesMetadata';
 
 export const dynamic = 'force-dynamic';
-export const metadata: Metadata = {
-  title: 'Shared deliverables · Dreamable.studio',
-  robots: { index: false, follow: false }, referrer: 'no-referrer',
-};
+const getShared = cache(getSharedDeliverables);
+
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+  const shared = await getShared(token);
+  if (!shared) notFound();
+  return sharedDeliverablesMetadata(token, shared);
+}
 
 export default async function SharedDeliverablesPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const shared = await getSharedDeliverables(token);
+  const shared = await getShared(token);
   if (!shared) notFound();
   return (
     <main className="min-h-screen px-4 py-10 sm:py-16" style={{ background: 'linear-gradient(135deg, #eef2ff 0%, #e0e7ff 40%, #f0f4ff 100%)' }}>
