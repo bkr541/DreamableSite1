@@ -27,6 +27,7 @@ import { ModalCloseButton, ModalSectionHeader, MODAL_CANCEL_CLASS } from '@/comp
 import ClientNoticesScreen from '@/components/ClientNotices';
 import InboxPanel from '@/components/InboxPanel';
 import SearchSelect from '@/components/dropdowns/SearchSelect';
+import ClientCompanyInfo from '@/components/ClientCompanyInfo';
 import { noticeAlertLevel, type ClientNotice } from '@/lib/clientNotices';
 import {
   ChartRoseIcon,
@@ -493,8 +494,9 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
   const [showAddClient, setShowAddClient] = useState(false);
   const [addForm, setAddForm] = useState({
     name: '', email: '',
-    companyId: '',          // an existing company chosen from the list ('' = none / create a new one below)
-    companyName: '', companyWebsite: '',
+    hasExisting: 'no' as 'yes' | 'no', // "Existing company?" answer
+    companyId: '',          // the existing company chosen when the answer is Yes
+    companyName: '',        // the new company's name when the answer is No
     confirmNewCompany: false,
   });
   const [companyClash, setCompanyClash] = useState<{ id: string; name: string } | null>(null);
@@ -744,7 +746,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
   }
 
   function resetAddForm() {
-    setAddForm({ name: '', email: '', companyId: '', companyName: '', companyWebsite: '', confirmNewCompany: false });
+    setAddForm({ name: '', email: '', hasExisting: 'no', companyId: '', companyName: '', confirmNewCompany: false });
     setCompanyClash(null);
     setAddError('');
     setAddFieldError(null);
@@ -758,6 +760,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
     if (!addForm.name.trim()) { setAddFieldError({ field: 'name', message: 'Full name is required.' }); return; }
     if (!addForm.email.trim()) { setAddFieldError({ field: 'email', message: 'Email is required.' }); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addForm.email)) { setAddFieldError({ field: 'email', message: 'Please enter a valid email address.' }); return; }
+    if (addForm.hasExisting === 'yes' && !addForm.companyId) { setAddFieldError({ field: 'companyId', message: 'Choose a company, or switch Existing company to No.' }); return; }
     setAddSubmitting(true);
     try {
       const res = await fetch('/api/admin/clients', {
@@ -766,7 +769,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
         body: JSON.stringify({
           name: addForm.name,
           email: addForm.email,
-          ...(addForm.companyId ? { companyId: addForm.companyId } : { companyName: addForm.companyName, companyWebsite: addForm.companyWebsite, confirmNewCompany: addForm.confirmNewCompany }),
+          ...(addForm.hasExisting === 'yes' ? { companyId: addForm.companyId } : { companyName: addForm.companyName, confirmNewCompany: addForm.confirmNewCompany }),
         }),
       });
       const data = await res.json();
@@ -1458,7 +1461,10 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
             expanded={(c) => expandedClientIds.has(c.id)}
             renderExpanded={(c) => {
               const clientProjects = projects.filter(p => p.primaryUser?.id === c.id);
-              return clientProjects.length === 0 ? (
+              return (
+                <>
+                <ClientCompanyInfo key={`${c.company?.id}-${c.company?.website ?? ''}`} company={c.company ? { id: c.company.id, name: c.company.name, website: c.company.website } : null} onSaved={() => router.refresh()} />
+                {clientProjects.length === 0 ? (
                 <p className="px-6 pb-6 pt-1 text-center text-sm text-[#666]">There are currently no projects for {c.name}.</p>
               ) : (
                 <div className="mx-6 mb-5 rounded-xl bg-[#F3F5FB] border border-[#E4E8F3] p-4">
@@ -1476,6 +1482,8 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                     ))}
                   </ul>
                 </div>
+              )}
+                </>
               );
             }}
           />
@@ -2210,48 +2218,49 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 <div className="space-y-3">
                   <ModalSectionHeader icon={Building03Icon}>Company Information</ModalSectionHeader>
 
-                  {companies.length > 0 && (
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-sm font-medium text-[#555]">Existing company</label>
                       <Dropdown
-                        label="Company"
-                        value={addForm.companyId}
-                        onChange={(v) => { setAddForm(f => ({ ...f, companyId: v })); setCompanyClash(null); }}
-                        options={[{ value: '', label: 'New company (or none)' }, ...companies.map((c) => ({ value: c.id, label: c.name }))]}
+                        label="Existing company"
+                        value={addForm.hasExisting}
+                        onChange={(v) => { setAddForm(f => ({ ...f, hasExisting: v as 'yes' | 'no', companyId: '', companyName: '', confirmNewCompany: false })); setCompanyClash(null); setAddFieldError(null); }}
+                        options={[{ value: 'no', label: 'No' }, { value: 'yes', label: 'Yes' }]}
                         width="w-full"
                       />
                     </div>
-                  )}
-
-                  {!addForm.companyId && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Company Name</label>
-                      <input
-                        value={addForm.companyName}
-                        onChange={e => { setAddForm(f => ({ ...f, companyName: e.target.value, confirmNewCompany: false })); setCompanyClash(null); }}
-                        placeholder="Acme Inc."
-                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-sm font-medium text-[#555]">Website</label>
-                      <input
-                        type="text"
-                        value={addForm.companyWebsite}
-                        onChange={e => setAddForm(f => ({ ...f, companyWebsite: e.target.value }))}
-                        placeholder="https://acme.com"
-                        className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
-                      />
-                    </div>
+                    {addForm.hasExisting === 'yes' ? (
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-sm font-medium text-[#555]">Company</label>
+                        <SearchSelect
+                          label="Company"
+                          placeholder="Search companies…"
+                          value={addForm.companyId}
+                          onChange={(v) => { setAddForm(f => ({ ...f, companyId: v })); setAddFieldError(null); setCompanyClash(null); }}
+                          options={companies.map((c) => ({ value: c.id, label: c.name }))}
+                          invalid={addFieldError?.field === 'companyId'}
+                        />
+                        {addFieldError?.field === 'companyId' && <p role="alert" className="text-xs text-[#e05252]">{addFieldError.message}</p>}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-1.5">
+                        <label htmlFor="add-company-name" className="text-sm font-medium text-[#555]">Company Name</label>
+                        <input
+                          id="add-company-name"
+                          value={addForm.companyName}
+                          onChange={e => { setAddForm(f => ({ ...f, companyName: e.target.value, confirmNewCompany: false })); setCompanyClash(null); }}
+                          placeholder="Acme Inc."
+                          className="w-full bg-white rounded-xl px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] border border-[#D0D0D0] focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all"
+                        />
+                      </div>
+                    )}
                   </div>
-                  )}
 
                   {companyClash && (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-[#7a5200]" role="alert">
                       <p>A company called <span className="font-semibold">{companyClash.name}</span> already exists.</p>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        <button type="button" className="rounded-full bg-[#1a2030] px-3.5 py-1.5 text-xs font-semibold text-white" onClick={() => { setAddForm(f => ({ ...f, companyId: companyClash.id })); setCompanyClash(null); }}>Use that company</button>
+                        <button type="button" className="rounded-full bg-[#1a2030] px-3.5 py-1.5 text-xs font-semibold text-white" onClick={() => { setAddForm(f => ({ ...f, hasExisting: 'yes', companyId: companyClash.id, companyName: '' })); setCompanyClash(null); }}>Use that company</button>
                         <button type="button" className="rounded-full border border-[#1a2030] px-3.5 py-1.5 text-xs font-semibold text-[#1a2030]" onClick={() => { setAddForm(f => ({ ...f, confirmNewCompany: true })); setCompanyClash(null); }}>It’s a different company</button>
                       </div>
                     </div>
