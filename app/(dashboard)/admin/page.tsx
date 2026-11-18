@@ -10,7 +10,7 @@ import { EVENT_LABELS, type EmailEvent } from '@/lib/emailOutbox';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-const VIEWS = ['dashboard', 'inquiries', 'clients', 'projects', 'billing', 'notifications', 'profile'] as const;
+const VIEWS = ['dashboard', 'inquiries', 'clients', 'projects', 'billing', 'inbox', 'notifications', 'profile'] as const;
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 

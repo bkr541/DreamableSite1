@@ -25,6 +25,7 @@ import DialogFocus from '@/components/DialogFocus';
 import ProjectCard from '@/components/ProjectCard';
 import { ModalCloseButton, ModalSectionHeader, MODAL_CANCEL_CLASS } from '@/components/ModalParts';
 import ClientNoticesScreen from '@/components/ClientNotices';
+import InboxPanel from '@/components/InboxPanel';
 import SearchSelect from '@/components/dropdowns/SearchSelect';
 import { noticeAlertLevel, type ClientNotice } from '@/lib/clientNotices';
 import {
@@ -36,6 +37,7 @@ import {
   Invoice03Icon,
   UserAdd02Icon,
   User02Icon,
+  Mailbox01Icon,
   Notification03Icon,
   Building03Icon,
   Flag01Icon,
@@ -289,6 +291,7 @@ const NAV_ITEMS = [
   { id: 'clients',       label: 'Clients',       icon: UserGroup02Icon },
   { id: 'projects',      label: 'Projects',      icon: Briefcase06Icon },
   { id: 'billing',       label: 'Billing',       icon: CreditCardPosIcon },
+  { id: 'inbox',         label: 'Inbox',         icon: Mailbox01Icon },
   { id: 'notifications', label: 'Notifications', icon: ComplaintIcon },
 ] as const;
 
@@ -306,6 +309,7 @@ const VIEW_META: Record<ViewId, { title: string; subtitle: string }> = {
   clients:       { title: 'Clients',          subtitle: 'Manage your client accounts and relationships' },
   projects:      { title: 'Projects',         subtitle: 'Track and manage all active projects' },
   billing:       { title: 'Billing',          subtitle: 'Create and manage client invoices' },
+  inbox:         { title: 'Inbox',            subtitle: 'Recent mail to kody@dreamable.studio, read from Zoho' },
   notifications: { title: 'Notifications',   subtitle: 'New inquiries, approvals, uploads, comments and email delivery' },
   profile:       { title: 'User Information', subtitle: 'Your account details' },
 };
@@ -1325,6 +1329,8 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
             </div>
           )}
         </AnimatePresence>
+
+        {activeView === 'inbox' && <InboxPanel />}
 
         {activeView === 'notifications' && (
           <NotificationsPanel onOpen={openLink} onUnreadChange={setUnread} />

@@ -45,7 +45,7 @@ describe('authorization is centralised', () => {
     const must = [
       'app/api/auth/login/route.ts', 'app/api/auth/request-code/route.ts', 'app/api/auth/forgot-password/route.ts',
       'app/api/auth/verify-code/route.ts', 'app/api/auth/update-password/route.ts', 'app/api/auth/set-password/route.ts',
-      'app/api/auth/verify-reset-token/route.ts', 'app/api/inquiries/route.ts', 'app/api/inquiries/uploads/route.ts', 'app/api/share/[token]/files/[id]/comments/route.ts',
+      'app/api/auth/verify-reset-token/route.ts', 'app/api/inquiries/route.ts', 'app/api/inquiries/uploads/route.ts', 'lib/sharedComments.ts', // the share-comments routes delegate to this handler
     ];
     for (const f of must) expect(readFileSync(path.join(root, f), 'utf8'), f).toMatch(/@\/lib\/rateLimit/);
   });

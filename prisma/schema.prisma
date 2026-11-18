@@ -497,3 +497,18 @@ model ServiceMigrationAudit {
 
   @@map("service_migration_audit")
 }
+
+// The Zoho mailbox the admin Inbox reads. One row at most; the refresh token is encrypted (see lib/zohoMail.ts).
+model ZohoConnection {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  region          String @default("com")
+  accountId       String @map("account_id")
+  mailboxAddress  String @map("mailbox_address")
+  refreshTokenEnc String @map("refresh_token_enc")
+  connectedById   String? @map("connected_by_id") @db.Uuid
+
+  @@map("zoho_connections")
+}

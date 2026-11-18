@@ -324,6 +324,42 @@ Nothing is sent from inside a request any more. Instead:
 ### Execution: what runs the retries
 `vercel.json` runs `/api/cron/process-email-outbox` and `/api/cron/cleanup-uploads` **once a day** — the most the Vercel Hobby plan allows (a more frequent schedule would make a Hobby deployment fail). Because that is slow for retries, the immediate `after()` send and the "admin opened" trigger do the real work; the daily job is the backstop. **For minutes-level retries**, change the schedule to `*/5 * * * *` on Vercel Pro, or call the endpoint from any scheduler (GitHub Actions, Supabase `pg_cron` + `pg_net`, an uptime pinger) with `Authorization: Bearer $CRON_SECRET`.
 
+### Zoho Mail (kody@dreamable.studio): sending and receiving
+**Sending** goes through the existing SMTP code; nothing in the app needs to change. **Receiving** is Zoho hosting the mailbox, which needs the domain's DNS pointed at Zoho; the admin Inbox (below) then reads that mailbox.
+
+1. **DNS (at your domain registrar; US data centre values, check the Zoho admin console for yours):**
+   * MX: `mx.zoho.com` priority 10, `mx2.zoho.com` priority 20, `mx3.zoho.com` priority 50. This is what makes mail *to* `@dreamable.studio` arrive.
+   * SPF (TXT on the root): `v=spf1 include:zoho.com ~all`, merged into any existing SPF record (a domain may have only one).
+   * DKIM (TXT): Zoho Mail Admin Console → Email Configuration → DKIM → add a selector → publish the TXT record it shows, then click Verify. Without SPF + DKIM, mail from the site is likely to land in spam.
+   * DMARC (TXT `_dmarc`), recommended once SPF/DKIM pass: `v=DMARC1; p=none; rua=mailto:kody@dreamable.studio`.
+2. **App password:** Zoho → Accounts → Security → App Passwords → generate one named "Dreamable site". (Needs two-factor authentication on the account.) SMTP/IMAP access must also be enabled for the mailbox, and some Zoho plans, including the free one, may not include it; check your plan.
+3. **Vercel → Settings → Environment Variables (Production):**
+
+   | Variable | Value |
+   |---|---|
+   | `SMTP_HOST` | `smtp.zoho.com` (`.eu`, `.in`, `.com.au`, `.jp` for other regions) |
+   | `SMTP_PORT` | `465` |
+   | `SMTP_USER` | `kody@dreamable.studio` |
+   | `SMTP_PASS` | the app password |
+   | `INQUIRY_FROM_EMAIL` | `kody@dreamable.studio` (Zoho only lets you send *as* the logged-in mailbox or an alias on it) |
+   | `INQUIRY_TO_EMAIL` | `kody@dreamable.studio` |
+
+   Redeploy afterwards. Replies from customers go to `kody@dreamable.studio` like any other mail.
+4. **Check it before relying on it:** put the same values in `.env.local` and run `node --env-file=.env.local scripts/verify-smtp.mjs` (connects and logs in; sends nothing), then add `--to you@gmail.com` to send one test message.
+
+#### Reading the mailbox in the admin (Inbox screen)
+Admin → **Inbox** lists recent mail from the Zoho mailbox and opens a message to read it. It is **read-only** (the site asks Zoho for `ZohoMail.accounts.READ`, `folders.READ` and `messages.READ` only: it can't send, delete or move mail) and **nothing is stored** except the connection itself. Sending still uses SMTP above.
+
+1. **Run the SQL first.** `prisma/migrations/20261118000000_zoho_mail_connection` (also the last section of `prisma/APPLY_ALL_PENDING.sql`) in the Supabase SQL editor. It adds one table, `zoho_connections`; the Zoho refresh token is stored in it **encrypted** (AES-256-GCM, key derived from `RESET_SECRET`; changing `RESET_SECRET` just means reconnecting).
+2. **Vercel env vars (Production), then redeploy:** `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` (from the Zoho API Console client) and, only if your account isn't on the US data centre, `ZOHO_REGION` (`eu`, `in`, `com.au`, `jp`). The client's **Authorized Redirect URI** in Zoho must be exactly `https://dreamable.studio/api/auth/zoho/callback` (built from `APP_URL`; override with `ZOHO_REDIRECT_URI` if needed).
+3. **Connect:** sign in as an admin → Inbox → **Connect Zoho Mail** → approve in Zoho. You land back on the Inbox. **Disconnect** (top right of the Inbox) revokes the grant and deletes the saved token.
+
+Safety: only a signed-in admin can start or finish connecting, and the return trip is checked against a one-time `state` cookie. Email HTML comes from outside senders, so it is shown only in a frame with **no scripts, no forms, no links that open, and no images loaded from the internet** (images embedded in the message still show), and Zoho ids are validated before they are put into an API address. Mail responses are never cached.
+
+Not tested against live Zoho (no credentials were available when this was written): the list/read calls follow Zoho's published API; the first real connection is the test. The "unread" dot assumes Zoho's `status: "0"` means unread, and the Zoho web link opens the inbox rather than the individual message.
+
+**Never put the Client Secret in the repo or in chat.** If it was shared, regenerate it in the Zoho API Console.
+
 ### SMTP and where email is really sent
 Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `INQUIRY_FROM_EMAIL`, `INQUIRY_TO_EMAIL` in Vercel (Production). Connection/greeting/socket timeouts are bounded so a dead mail server can't hang a function. In production a missing setting is no longer silently skipped: the email fails, retries, and shows up for staff.
 
