@@ -8,10 +8,10 @@ import { useToast } from '@/components/Toast';
 import { normalizeWebsite } from '@/lib/companyWebsite';
 
 /**
- * The "Company Information" group on a client (shown when their row is expanded in the Clients list): the company's name
+ * The "Company Information" group on a client's page: the company's name
  * and its website, which an admin can set or change here. The website is no longer asked for when adding a client.
  */
-export default function ClientCompanyInfo({ company, onSaved }: { company: { id: string; name: string; website: string | null } | null; onSaved: () => void }) {
+export default function ClientCompanyInfo({ company, onSaved, flush = false }: { company: { id: string; name: string; website: string | null } | null; onSaved: () => void; flush?: boolean }) {
   const toast = useToast();
   const saved = company?.website ?? '';
   const [value, setValue] = useState(saved);
@@ -20,7 +20,7 @@ export default function ClientCompanyInfo({ company, onSaved }: { company: { id:
 
   if (!company) {
     return (
-      <div className="mx-6 mb-4 rounded-xl border border-[#E4E8F3] bg-white p-5">
+      <div className={`${flush ? '' : 'mx-6 mb-4 '}rounded-2xl border border-[#E2E4EA] bg-white p-5`}>
         <ModalSectionHeader icon={Building03Icon}>Company Information</ModalSectionHeader>
         <p className="mt-3 text-sm text-[#888]">No company on file for this client.</p>
       </div>
@@ -50,7 +50,7 @@ export default function ClientCompanyInfo({ company, onSaved }: { company: { id:
   }
 
   return (
-    <form onSubmit={save} noValidate className="mx-6 mb-4 rounded-xl border border-[#E4E8F3] bg-white p-5">
+    <form onSubmit={save} noValidate className={`${flush ? '' : 'mx-6 mb-4 '}rounded-2xl border border-[#E2E4EA] bg-white p-5`}>
       <ModalSectionHeader icon={Building03Icon}>Company Information</ModalSectionHeader>
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">

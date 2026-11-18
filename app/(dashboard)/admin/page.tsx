@@ -178,7 +178,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       })}
       recentInquiries={recentInquiries.map((i) => ({ ...i, service: canonicalServiceLabel(i.service), createdAt: i.createdAt.toISOString() }))}
       recentUsers={recentUsers.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}
-      clients={clients.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() }))}
+      clients={clients.map((c) => ({ ...c, createdAt: c.createdAt.toISOString(), invitedAt: c.invitedAt?.toISOString() ?? null, lastLoginAt: c.lastLoginAt?.toISOString() ?? null }))}
       companies={companies}
       services={services}
       comments={comments.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() }))}

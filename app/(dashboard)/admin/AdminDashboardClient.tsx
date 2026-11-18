@@ -24,10 +24,9 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import DialogFocus from '@/components/DialogFocus';
 import ProjectCard from '@/components/ProjectCard';
 import { ModalCloseButton, ModalSectionHeader, MODAL_CANCEL_CLASS } from '@/components/ModalParts';
-import ClientNoticesScreen from '@/components/ClientNotices';
+import ClientDetail from '@/components/ClientDetail';
 import InboxPanel from '@/components/InboxPanel';
 import SearchSelect from '@/components/dropdowns/SearchSelect';
-import ClientCompanyInfo from '@/components/ClientCompanyInfo';
 import { noticeAlertLevel, type ClientNotice } from '@/lib/clientNotices';
 import {
   ChartRoseIcon,
@@ -117,6 +116,8 @@ interface ClientRecord {
   status: string;
   admin: boolean;
   createdAt: string;
+  invitedAt?: string | null;
+  lastLoginAt: string | null;
   company: { id: string; name: string; website: string | null; status: string } | null;
 }
 
@@ -476,21 +477,13 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
     setInquiryDirection(-1);
     setSelectedInquiryId(null);
   }
-  const [expandedClientIds, setExpandedClientIds] = useState<Set<string>>(new Set());
   // The client whose Notices screen is open (replaces the Clients list while set).
-  const [noticesClientId, setNoticesClientId] = useState<string | null>(null);
-  const noticesClient = noticesClientId ? clients.find((c) => c.id === noticesClientId) ?? null : null;
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const selectedClient = selectedClientId ? clients.find((c) => c.id === selectedClientId) ?? null : null;
   const [clientFilter, setClientFilter] = useState({ search: '', status: '' });
   const [projectFilter, setProjectFilter] = useState({ search: '', status: '', service: '' });
   const [invoiceFilter, setInvoiceFilter] = useState({ search: '', status: '' });
 
-  function toggleClientExpand(id: string) {
-    setExpandedClientIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
   const [showAddClient, setShowAddClient] = useState(false);
   const [addForm, setAddForm] = useState({
     name: '', email: '',
@@ -874,7 +867,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
               return (
                 <button
                   key={id}
-                  onClick={() => { setActiveView(id); setNoticesClientId(null); setBillingSubView(null); setSelectedInquiryId(null); setSelectedProjectId(null); setSelectedFolderId(null); }}
+                  onClick={() => { setActiveView(id); setSelectedClientId(null); setBillingSubView(null); setSelectedInquiryId(null); setSelectedProjectId(null); setSelectedFolderId(null); }}
                   title={label}
                   className={
                     isActive
@@ -1339,24 +1332,40 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
           <NotificationsPanel onOpen={openLink} onUnreadChange={setUnread} />
         )}
 
-        {activeView === 'clients' && noticesClient && (
-          <ClientNoticesScreen
-            client={noticesClient}
-            notices={clientNotices[noticesClient.id] ?? []}
-            onBack={() => setNoticesClientId(null)}
-            onAction={(n) => {
-              if (n.action?.kind === 'resend-invite') resendInvite(noticesClient.id, noticesClient.name);
-              else if (n.action?.kind === 'open-billing') { setNoticesClientId(null); setActiveView('billing'); }
-              else if (n.action?.kind === 'open-project' && n.action.projectId) { setNoticesClientId(null); setActiveView('projects'); openProject(n.action.projectId); }
+        {activeView === 'clients' && selectedClient && (
+          <ClientDetail
+            client={{ id: selectedClient.id, name: selectedClient.name, email: selectedClient.email, role: selectedClient.role, status: selectedClient.status, createdAt: selectedClient.createdAt, lastLoginAt: selectedClient.lastLoginAt, company: selectedClient.company ? { id: selectedClient.company.id, name: selectedClient.company.name, website: selectedClient.company.website } : null }}
+            notices={clientNotices[selectedClient.id] ?? []}
+            projectCount={projects.filter(p => p.primaryUser?.id === selectedClient.id).length}
+            invoiceCount={invoices.filter(inv => inv.clientUserId === selectedClient.id).length}
+            projectCards={projects.filter(p => p.primaryUser?.id === selectedClient.id).map(p => (
+              <li key={p.id}>
+                <ProjectCard
+                  project={p}
+                  statusBadge={<Badge status={p.status} />}
+                  files={deliverables.filter(d => d.projectId === p.id).length}
+                  invoices={invoices.filter(inv => inv.projectId === p.id).length}
+                  onOpen={() => { setSelectedClientId(null); setActiveView('projects'); openProject(p.id); }}
+                />
+              </li>
+            ))}
+            onBack={() => setSelectedClientId(null)}
+            onCreateProject={() => openProjectForClient(selectedClient)}
+            onResendInvite={() => resendInvite(selectedClient.id, selectedClient.name)}
+            onNoticeAction={(n) => {
+              if (n.action?.kind === 'resend-invite') resendInvite(selectedClient.id, selectedClient.name);
+              else if (n.action?.kind === 'open-billing') { setSelectedClientId(null); setActiveView('billing'); }
+              else if (n.action?.kind === 'open-project' && n.action.projectId) { setSelectedClientId(null); setActiveView('projects'); openProject(n.action.projectId); }
             }}
+            onCompanySaved={() => router.refresh()}
           />
         )}
 
-        {activeView === 'clients' && !noticesClient && (
+        {activeView === 'clients' && !selectedClient && (
           <RecordList
             rows={visibleClients}
             rowKey={(c) => c.id}
-            onRowClick={(c) => toggleClientExpand(c.id)}
+            onRowClick={(c) => setSelectedClientId(c.id)}
             search={{ value: clientFilter.search, onChange: (v) => setClientFilter(f => ({ ...f, search: v })), placeholder: 'Search by name or email…' }}
             filters={
               <Dropdown
@@ -1445,9 +1454,9 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                   return (
                     <button
                       type="button"
-                      onClick={() => setNoticesClientId(c.id)}
+                      onClick={() => setSelectedClientId(c.id)}
                       className="relative flex h-8 w-8 items-center justify-center rounded-full text-[#4b5260] hover:bg-[#F1F2F5] transition-colors"
-                      title={`Notices and information about ${c.name}`}
+                      title={`Open ${c.name}’s page (notices and information)`}
                       aria-label={level ? `Notices for ${c.name}: ${level === 'error' ? 'needs attention' : 'has warnings'}` : `Notices for ${c.name}`}
                     >
                       <HugeiconsIcon icon={Notification03Icon} size={19} color="currentColor" strokeWidth={1.5} />
@@ -1457,34 +1466,6 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 })()}
                 </div>
               ),
-            }}
-            expanded={(c) => expandedClientIds.has(c.id)}
-            renderExpanded={(c) => {
-              const clientProjects = projects.filter(p => p.primaryUser?.id === c.id);
-              return (
-                <>
-                <ClientCompanyInfo key={`${c.company?.id}-${c.company?.website ?? ''}`} company={c.company ? { id: c.company.id, name: c.company.name, website: c.company.website } : null} onSaved={() => router.refresh()} />
-                {clientProjects.length === 0 ? (
-                <p className="px-6 pb-6 pt-1 text-center text-sm text-[#666]">There are currently no projects for {c.name}.</p>
-              ) : (
-                <div className="mx-6 mb-5 rounded-xl bg-[#F3F5FB] border border-[#E4E8F3] p-4">
-                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {clientProjects.map(p => (
-                      <li key={p.id}>
-                        <ProjectCard
-                          project={p}
-                          statusBadge={<Badge status={p.status} />}
-                          files={deliverables.filter(d => d.projectId === p.id).length}
-                          invoices={invoices.filter(inv => inv.projectId === p.id).length}
-                          onOpen={() => { setActiveView('projects'); openProject(p.id); }}
-                        />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-                </>
-              );
             }}
           />
         )}

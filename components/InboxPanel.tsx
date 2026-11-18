@@ -37,7 +37,7 @@ function frameDoc(html: string) {
 
 function Notice({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="mx-auto max-w-[620px] rounded-2xl border border-[#E2E4EA] bg-white p-8 text-center shadow-sm">
+    <div className="w-full rounded-2xl border border-[#E2E4EA] bg-white p-8 text-center shadow-sm">
       <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EEF2FF] text-[#4f6df5]">
         <HugeiconsIcon icon={Mailbox01Icon} size={24} color="currentColor" strokeWidth={1.5} />
       </span>
@@ -174,7 +174,7 @@ export default function InboxPanel() {
   if (open) {
     const ready = body && body.id === open.id ? body : null;
     return (
-      <section aria-labelledby="inbox-message-title" className="mx-auto w-full max-w-[900px]">
+      <section aria-labelledby="inbox-message-title" className="w-full">
         <button type="button" onClick={() => setOpen(null)} className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-[#D5D8DE] bg-white py-1.5 pl-2.5 pr-4 text-sm font-medium text-[#4b5260] transition-colors hover:bg-[#F5F6F8] hover:text-[#1a1a1a]">
           <HugeiconsIcon icon={ArrowLeft01Icon} size={16} color="currentColor" strokeWidth={2} />
           Back to inbox
@@ -211,7 +211,7 @@ export default function InboxPanel() {
 
   // ── The list ──
   return (
-    <section className="mx-auto w-full max-w-[1000px]">
+    <section className="w-full">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#E2E4EA] bg-white px-5 py-4 shadow-sm">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-[#1a1a1a]">{inbox.mailbox}</p>
