@@ -348,17 +348,24 @@ Nothing is sent from inside a request any more. Instead:
 4. **Check it before relying on it:** put the same values in `.env.local` and run `node --env-file=.env.local scripts/verify-smtp.mjs` (connects and logs in; sends nothing), then add `--to you@gmail.com` to send one test message.
 
 #### Reading the mailbox in the admin (Inbox screen)
-Admin → **Inbox** lists recent mail from the Zoho mailbox and opens a message to read it. It is **read-only** (the site asks Zoho for `ZohoMail.accounts.READ`, `folders.READ` and `messages.READ` only: it can't send, delete or move mail) and **nothing is stored** except the connection itself. Sending still uses SMTP above.
+Admin → **Message Hub → Inbox** lists recent mail from the Zoho mailbox and opens a message to read it. It is **read-only** (the site asks Zoho for `ZohoMail.accounts.READ`, `folders.READ` and `messages.READ` only: it can't send, delete or move mail) and **nothing is stored** except the connection itself. Sending still uses SMTP above.
 
 1. **Run the SQL first.** `prisma/migrations/20261118000000_zoho_mail_connection` (also the last section of `prisma/APPLY_ALL_PENDING.sql`) in the Supabase SQL editor. It adds one table, `zoho_connections`; the Zoho refresh token is stored in it **encrypted** (AES-256-GCM, key derived from `RESET_SECRET`; changing `RESET_SECRET` just means reconnecting).
 2. **Vercel env vars (Production), then redeploy:** `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` (from the Zoho API Console client) and, only if your account isn't on the US data centre, `ZOHO_REGION` (`eu`, `in`, `com.au`, `jp`). The client's **Authorized Redirect URI** in Zoho must be exactly `https://dreamable.studio/api/auth/zoho/callback` (built from `APP_URL`; override with `ZOHO_REDIRECT_URI` if needed).
-3. **Connect:** sign in as an admin → Inbox → **Connect Zoho Mail** → approve in Zoho. You land back on the Inbox. **Disconnect** (top right of the Inbox) revokes the grant and deletes the saved token.
+3. **Connect:** sign in as an admin → Message Hub → Inbox → **Connect Zoho Mail** → approve in Zoho. You land back on the Inbox. **Disconnect** (top right of the Inbox) revokes the grant and deletes the saved token.
 
 Safety: only a signed-in admin can start or finish connecting, and the return trip is checked against a one-time `state` cookie. Email HTML comes from outside senders, so it is shown only in a frame with **no scripts, no forms, no links that open, and no images loaded from the internet** (images embedded in the message still show), and Zoho ids are validated before they are put into an API address. Mail responses are never cached.
 
 Not tested against live Zoho (no credentials were available when this was written): the list/read calls follow Zoho's published API; the first real connection is the test. The "unread" dot assumes Zoho's `status: "0"` means unread, and the Zoho web link opens the inbox rather than the individual message.
 
 **Never put the Client Secret in the repo or in chat.** If it was shared, regenerate it in the Zoho API Console.
+
+### Message Hub: sending email from templates
+Admin → **Message Hub** has two tabs: **Inbox** (above) and **Templates**. Templates lists the emails you can send (Welcome, Project Kickoff, Order Delivery, Project Update, Check-in, Blank Message). Click one and the list collapses into a composer: pick a client (fills in the address and first name) or type any address, edit the subject and the template's fields, watch the live preview, and **Send email**. **Edit the HTML directly** switches the fields for the raw HTML (the preview and the sent email both use it); the back button returns to the template list.
+
+* **Where templates live:** `lib/emailTemplates.ts` (the fields and wording) and `lib/emailLayout.ts` (the branded frame: logo header, card, button, footer; table-based, inline styles, 600px wide). Add a template by adding an entry to `TEMPLATES`; the tests render every template and check escaping. Typed text is always escaped; button links must be `http(s)`; a plain-text version is generated automatically (`lib/emailText.ts`).
+* **Sending:** the composed email is queued in the email outbox as event `admin.message`, like every other email (retried on failure, failures shown in Notifications, the send is recorded in the audit log). It sends from `INQUIRY_FROM_EMAIL`, so replies come back to that mailbox. Preview and local environments suppress real delivery, as for all email.
+* **Not built:** saving drafts, attachments, scheduling, a sent-messages list (sent messages are in the outbox/audit log only), and editing the templates' wording from the admin.
 
 ### SMTP and where email is really sent
 Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `INQUIRY_FROM_EMAIL`, `INQUIRY_TO_EMAIL` in Vercel (Production). Connection/greeting/socket timeouts are bounded so a dead mail server can't hang a function. In production a missing setting is no longer silently skipped: the email fails, retries, and shows up for staff.

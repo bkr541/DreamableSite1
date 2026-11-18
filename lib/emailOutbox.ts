@@ -18,7 +18,7 @@ import { logRef, logSecurity } from './securityLog';
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
-export type EmailEvent = 'inquiry.notification' | 'inquiry.confirmation' | 'auth.reset_link' | 'auth.recovery_code' | 'client.invitation';
+export type EmailEvent = 'inquiry.notification' | 'inquiry.confirmation' | 'auth.reset_link' | 'auth.recovery_code' | 'client.invitation' | 'admin.message';
 
 export const EVENT_LABELS: Record<EmailEvent, string> = {
   'inquiry.notification': 'New inquiry alert to staff',
@@ -26,6 +26,7 @@ export const EVENT_LABELS: Record<EmailEvent, string> = {
   'auth.reset_link': 'Password reset link',
   'auth.recovery_code': 'Password reset code',
   'client.invitation': 'Client portal invitation',
+  'admin.message': 'Message sent by staff',
 };
 
 export const MAX_ATTEMPTS = 8;
@@ -39,7 +40,8 @@ export interface EnqueueInput {
   recipient: string;
   /** Same key = same email. Include whatever makes this send distinct (e.g. the inquiry id). */
   dedupeKey: string;
-  /** References only (ids). Never a token, a code or a password. */
+  /** References only (ids), never a token, a code or a password. The one exception is 'admin.message', which carries the
+   *  subject and body a staff member wrote (needed so a failed send can be retried). */
   payload?: Record<string, string>;
   entityType?: string;
   entityId?: string;
@@ -86,6 +88,12 @@ interface Job { id: string; eventType: string; recipient: string; payload: unkno
 /** Builds the email for a job from current data. Secrets (links, codes) are created here, at send time. */
 async function render(job: Job): Promise<{ to: string; mail: BuiltMail }> {
   const p = (job.payload ?? {}) as Record<string, string>;
+
+  // A message an admin composed in Message Hub: it was fully written when queued, nothing to look up.
+  if (job.eventType === 'admin.message') {
+    if (!p.subject || !p.html) throw new Suppress('the message has no content');
+    return { to: job.recipient, mail: { subject: p.subject, html: p.html, text: p.text ?? '' } };
+  }
 
   if (job.eventType === 'inquiry.notification' || job.eventType === 'inquiry.confirmation') {
     const inquiry = await prisma.inquiry.findUnique({

@@ -11,7 +11,7 @@ import { encryptToken, statesMatch, ZOHO_STATE_COOKIE, ZOHO_STATE_COOKIE_PATH } 
 // one-time state; everyone else is bounced. The refresh token is encrypted before it touches the database.
 export async function GET(req: NextRequest) {
   const done = (status: string) => {
-    const res = NextResponse.redirect(new URL(`/admin?view=inbox&zoho=${status}`, req.url));
+    const res = NextResponse.redirect(new URL(`/admin?view=messages&hub=inbox&zoho=${status}`, req.url));
     res.cookies.set(ZOHO_STATE_COOKIE, '', { path: ZOHO_STATE_COOKIE_PATH, maxAge: 0 });
     return res;
   };

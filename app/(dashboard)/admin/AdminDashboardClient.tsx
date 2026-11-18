@@ -25,7 +25,7 @@ import DialogFocus from '@/components/DialogFocus';
 import ProjectCard from '@/components/ProjectCard';
 import { ModalCloseButton, ModalSectionHeader, MODAL_CANCEL_CLASS } from '@/components/ModalParts';
 import ClientDetail from '@/components/ClientDetail';
-import InboxPanel from '@/components/InboxPanel';
+import MessageHub, { type HubTab } from '@/components/MessageHub';
 import SearchSelect from '@/components/dropdowns/SearchSelect';
 import { noticeAlertLevel, type ClientNotice } from '@/lib/clientNotices';
 import {
@@ -190,6 +190,10 @@ interface Props {
   invitations: Record<string, { state: InvitationState; at: string | null }>;
   /** Everything worth knowing about each client, keyed by user id (see lib/clientNotices.ts). */
   clientNotices: Record<string, ClientNotice[]>;
+  /** Which Message Hub tab to open first. */
+  initialHubTab: HubTab;
+  /** The site's public address, used by email templates for the logo and portal links. */
+  baseUrl: string;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -293,7 +297,7 @@ const NAV_ITEMS = [
   { id: 'clients',       label: 'Clients',       icon: UserGroup02Icon },
   { id: 'projects',      label: 'Projects',      icon: Briefcase06Icon },
   { id: 'billing',       label: 'Billing',       icon: CreditCardPosIcon },
-  { id: 'inbox',         label: 'Inbox',         icon: Mailbox01Icon },
+  { id: 'messages',      label: 'Message Hub',   icon: Mailbox01Icon },
   { id: 'notifications', label: 'Notifications', icon: ComplaintIcon },
 ] as const;
 
@@ -311,12 +315,12 @@ const VIEW_META: Record<ViewId, { title: string; subtitle: string }> = {
   clients:       { title: 'Clients',          subtitle: 'Manage your client accounts and relationships' },
   projects:      { title: 'Projects',         subtitle: 'Track and manage all active projects' },
   billing:       { title: 'Billing',          subtitle: 'Create and manage client invoices' },
-  inbox:         { title: 'Inbox',            subtitle: 'Recent mail to kody@dreamable.studio, read from Zoho' },
+  messages:      { title: 'Message Hub',      subtitle: 'Read your inbox and send email from templates' },
   notifications: { title: 'Notifications',   subtitle: 'New inquiries, approvals, uploads, comments and email delivery' },
   profile:       { title: 'User Information', subtitle: 'Your account details' },
 };
 
-export default function AdminDashboardClient({ session, initialView, initialInquiryId, initialProjectId, initialTab, initialBilling, stats, recentInquiries, inquiries, deliverables, folders, comments, initialFolderId, recentUsers, clients, companies, services, projects, invoices, adminCompany, unreadNotifications, invitations, clientNotices }: Props) {
+export default function AdminDashboardClient({ session, initialView, initialInquiryId, initialProjectId, initialTab, initialBilling, stats, recentInquiries, inquiries, deliverables, folders, comments, initialFolderId, recentUsers, clients, companies, services, projects, invoices, adminCompany, unreadNotifications, invitations, clientNotices, initialHubTab, baseUrl }: Props) {
   const router = useRouter();
   const [activeView, setActiveView] = useState<ViewId>(initialView);
   const [unread, setUnread] = useState(unreadNotifications);
@@ -1326,7 +1330,13 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
           )}
         </AnimatePresence>
 
-        {activeView === 'inbox' && <InboxPanel />}
+        {activeView === 'messages' && (
+          <MessageHub
+            initialTab={initialHubTab}
+            baseUrl={baseUrl}
+            clients={clients.filter((c) => !c.admin).map((c) => ({ id: c.id, name: c.name, email: c.email }))}
+          />
+        )}
 
         {activeView === 'notifications' && (
           <NotificationsPanel onOpen={openLink} onUnreadChange={setUnread} />

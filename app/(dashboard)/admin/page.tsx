@@ -5,12 +5,13 @@ import { ToastProvider } from '@/components/Toast';
 import { dispatchOutbox } from '@/lib/dispatch';
 import { invitationState, type InvitationState } from '@/lib/invitations';
 import { canonicalServiceLabel } from '@/lib/services';
+import { siteUrl } from '@/lib/site';
 import { buildClientNotices, type ClientNotice } from '@/lib/clientNotices';
 import { EVENT_LABELS, type EmailEvent } from '@/lib/emailOutbox';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-const VIEWS = ['dashboard', 'inquiries', 'clients', 'projects', 'billing', 'inbox', 'notifications', 'profile'] as const;
+const VIEWS = ['dashboard', 'inquiries', 'clients', 'projects', 'billing', 'messages', 'notifications', 'profile'] as const;
 
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
@@ -22,7 +23,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   // The old Workspace screen only held a shortcut to invoices, so its bookmarks now land on Billing.
   const rawView = one(sp.view);
-  const view = rawView === 'workspace' ? 'billing' : rawView;
+  const view = rawView === 'workspace' ? 'billing' : rawView === 'inbox' ? 'messages' : rawView; // old bookmarks keep working
   const initialView = (VIEWS as readonly string[]).includes(view ?? '') ? (view as (typeof VIEWS)[number]) : 'dashboard';
 
   const [totalUsers, totalProjects, activeProjects, openInquiries, allInquiries, deliverables, folders, comments, recentInquiries, recentUsers, clients, companies, services, projects, invoices, adminUser] =
@@ -197,6 +198,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       unreadNotifications={unreadNotifications}
       invitations={invitations}
       clientNotices={clientNotices}
+      initialHubTab={one(sp.hub) === 'templates' ? 'templates' : 'inbox'}
+      baseUrl={siteUrl()}
     />
     </ToastProvider>
   );

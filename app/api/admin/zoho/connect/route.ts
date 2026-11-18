@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   if (!auth.ok) return auth.response;
 
   const cfg = zohoConfig();
-  if (!cfg.ok) return NextResponse.redirect(new URL('/admin?view=inbox&zoho=not_configured', req.url));
+  if (!cfg.ok) return NextResponse.redirect(new URL('/admin?view=messages&hub=inbox&zoho=not_configured', req.url));
 
   const state = newState();
   const res = NextResponse.redirect(authorizeUrl(cfg.config, state));
