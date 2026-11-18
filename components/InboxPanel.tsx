@@ -163,7 +163,7 @@ export default function InboxPanel() {
         <p>
           {inbox.state === 'reconnect'
             ? `Zoho no longer accepts the saved connection for ${inbox.mailbox}. Sign in again to restore the inbox.`
-            : 'Sign in to Zoho once to read kody@dreamable.studio’s inbox here. The site gets read-only access: it can’t send, delete or move mail.'}
+            : 'Sign in to Zoho once to read your mailbox here. This connection is read-only: it can read mail but can’t send, delete or move it. (Emails the site sends, such as from Templates, use separate email settings.)'}
         </p>
         <a href="/api/admin/zoho/connect" className={connectBtn}>{inbox.state === 'reconnect' ? 'Reconnect Zoho Mail' : 'Connect Zoho Mail'}</a>
       </Notice>
