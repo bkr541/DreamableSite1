@@ -95,6 +95,7 @@ model Deliverable {
   category    String?
   title       String?
   description String?
+  externalLink String? @map("external_link")
   watermark   Boolean @default(false)
   fileName    String @map("file_name")
   contentType String @map("content_type")
@@ -159,6 +160,7 @@ model DeliverableFolder {
 
   name        String
   description String?
+  externalLink String? @map("external_link")
   isPublic    Boolean @default(false) @map("is_public")
   shareToken  String  @unique @map("share_token")
 
@@ -388,6 +390,9 @@ model Project {
   timeline    String?
 
   status String @default("ONBOARDING")
+
+  // Optional link to a file host (Dropbox, Google Drive, …) for larger deliverables.
+  externalLink String? @map("external_link")
 
   startDate     DateTime? @map("start_date") @db.Date
   targetEndDate DateTime? @map("target_end_date") @db.Date

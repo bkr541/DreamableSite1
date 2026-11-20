@@ -25,6 +25,9 @@ import DialogFocus from '@/components/DialogFocus';
 import ProjectCard from '@/components/ProjectCard';
 import { ModalCloseButton, ModalSectionHeader, MODAL_CANCEL_CLASS } from '@/components/ModalParts';
 import ClientDetail from '@/components/ClientDetail';
+import { ExternalLinkField } from '@/components/ExternalLink';
+import ProjectExternalLinks, { type LinkedItem } from '@/components/ProjectExternalLinks';
+import { normalizeExternalLink } from '@/lib/externalLink';
 import MessageHub, { type HubTab } from '@/components/MessageHub';
 import SearchSelect from '@/components/dropdowns/SearchSelect';
 import { noticeAlertLevel, type ClientNotice } from '@/lib/clientNotices';
@@ -38,6 +41,7 @@ import {
   UserAdd02Icon,
   User02Icon,
   Mailbox01Icon,
+  LinkSquare02Icon,
   Notification03Icon,
   Building03Icon,
   Flag01Icon,
@@ -160,6 +164,7 @@ interface ProjectRecord {
   createdAt: string;
   startDate: string | null;
   targetEndDate: string | null;
+  externalLink: string | null;
   company: { id: string; name: string } | null;
   primaryUser: { id: string; name: string; email: string } | null;
 }
@@ -675,7 +680,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [projectForm, setProjectForm] = useState({
     name: '', companyId: '', primaryUserId: '', service: '', subCategory: '',
-    description: '', budgetRange: '', timeline: '',
+    description: '', budgetRange: '', timeline: '', externalLink: '',
     status: 'ONBOARDING', startDate: '', targetEndDate: '',
   });
   const [projectForClient, setProjectForClient] = useState<ClientRecord | null>(null);
@@ -687,7 +692,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
   function resetProjectForm() {
     setProjectForm({
       name: '', companyId: '', primaryUserId: '', service: '', subCategory: '',
-      description: '', budgetRange: '', timeline: '',
+      description: '', budgetRange: '', timeline: '', externalLink: '',
       status: 'ONBOARDING', startDate: '', targetEndDate: '',
     });
     setProjectFieldError(null);
@@ -715,6 +720,8 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
     } else if (!projectForm.companyId) { setProjectFieldError({ field: 'companyId', message: 'Company is required.' }); return; }
     if (!projectForm.service) { setProjectFieldError({ field: 'service', message: 'Service is required.' }); return; }
     if (!projectForm.description.trim()) { setProjectFieldError({ field: 'description', message: 'Description is required.' }); return; }
+    const link = normalizeExternalLink(projectForm.externalLink);
+    if (!link.ok) { setProjectError(`External link: ${link.error}`); return; }
 
     setProjectSubmitting(true);
     try {
@@ -1592,6 +1599,7 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                 <DetailTabs tab={detailTab} onChange={(t) => { setDetailTab(t); if (t !== 'deliverables') setSelectedFolderId(null); }} />
                 <div className="px-6 py-4 space-y-3">
                   {detailTab === 'info' ? (
+                  <>
                   <InquirySection icon={Briefcase06Icon} label="Project">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       {[
@@ -1607,6 +1615,19 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                       ))}
                     </div>
                   </InquirySection>
+                  <InquirySection icon={LinkSquare02Icon} label="External links">
+                    <ProjectExternalLinks
+                      key={`${selectedProject.id}-${selectedProject.externalLink ?? ''}`}
+                      projectId={selectedProject.id}
+                      link={selectedProject.externalLink}
+                      items={[
+                        ...folders.filter(f => f.projectId === selectedProject.id && f.externalLink).map((f): LinkedItem => ({ id: f.id, kind: 'Folder', name: f.name, url: f.externalLink! })),
+                        ...deliverables.filter(d => d.projectId === selectedProject.id && d.externalLink).map((d): LinkedItem => ({ id: d.id, kind: 'File', name: d.title || d.fileName, url: d.externalLink! })),
+                      ]}
+                      onSaved={() => router.refresh()}
+                    />
+                  </InquirySection>
+                  </>
                   ) : (
                   <InquirySection icon={PackageIcon} label="Deliverables">
                     <DeliverablesPanel
@@ -2012,6 +2033,13 @@ export default function AdminDashboardClient({ session, initialView, initialInqu
                     />
                     {projectFieldError?.field === 'description' && <p className="text-xs text-[#e05252]">{projectFieldError.message}</p>}
                   </div>
+
+                  <ExternalLinkField
+                    id="project-external-link"
+                    value={projectForm.externalLink}
+                    onChange={(v) => setProjectForm(f => ({ ...f, externalLink: v }))}
+                    hint="Optional. A Dropbox, Google Drive or similar link where clients can download larger files."
+                  />
                 </div>
 
                 {/* Scope & Timeline */}

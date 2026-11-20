@@ -3,6 +3,7 @@ import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { canWatermark } from '@/lib/watermark';
 import { removeObjects } from '@/lib/storage';
+import { normalizeExternalLink } from '@/lib/externalLink';
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin(req);
@@ -29,8 +30,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
 
   try {
-    const { title, description, watermark } = await req.json();
-    const data: { title?: string; description?: string | null; watermark?: boolean } = {};
+    const { title, description, watermark, externalLink } = await req.json();
+    const data: { title?: string; description?: string | null; watermark?: boolean; externalLink?: string | null } = {};
+
+    if (externalLink !== undefined) {
+      const link = normalizeExternalLink(externalLink);
+      if (!link.ok) return NextResponse.json({ ok: false, error: link.error }, { status: 400 });
+      data.externalLink = link.value;
+    }
 
     if (title !== undefined) {
       if (typeof title !== 'string' || !title.trim()) {

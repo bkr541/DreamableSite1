@@ -28,6 +28,8 @@ import { PreviewFile, formatBytes } from '@/components/FilePreviewModal';
 import { DELIVERABLE_MAX_FILES, getDeliverableCategories, OTHER_CATEGORY } from '@/lib/deliverables';
 import { pool, putFile, readUploadResponse, uploadLegacyDeliverables } from '@/lib/clientUpload';
 import DialogFocus from '@/components/DialogFocus';
+import { ExternalLinkField } from '@/components/ExternalLink';
+import { normalizeExternalLink } from '@/lib/externalLink';
 import { MODAL_CANCEL_CLASS } from '@/components/ModalParts';
 
 export interface FolderRecord {
@@ -36,6 +38,7 @@ export interface FolderRecord {
   projectId: string | null;
   name: string;
   description: string | null;
+  externalLink: string | null;
   isPublic: boolean;
   shareToken: string;
   commentsEnabled: boolean;
@@ -52,6 +55,7 @@ export interface DeliverableRecord {
   folderId: string | null;
   title: string | null;
   description: string | null;
+  externalLink: string | null;
   fileName: string;
   size: number;
   watermark: boolean;
@@ -123,7 +127,7 @@ function Dialog({ title, onClose, children, busy = false }: { title: string; onC
   );
 }
 
-export interface FolderValues { name: string; description: string; isPublic: boolean; commentsEnabled: boolean; commentsModerated: boolean }
+export interface FolderValues { name: string; description: string; externalLink: string; isPublic: boolean; commentsEnabled: boolean; commentsModerated: boolean }
 
 /** Create / edit folder form. */
 function FolderDialog({
@@ -141,6 +145,7 @@ function FolderDialog({
   const router = useRouter();
   const [name, setName] = useState(folder?.name ?? '');
   const [description, setDescription] = useState(folder?.description ?? '');
+  const [externalLink, setExternalLink] = useState(folder?.externalLink ?? '');
   const [isPublic, setIsPublic] = useState(folder?.isPublic ?? false);
   const [commentsEnabled, setCommentsEnabled] = useState(folder?.commentsEnabled ?? true);
   const [commentsModerated, setCommentsModerated] = useState(folder?.commentsModerated ?? false);
@@ -177,7 +182,7 @@ function FolderDialog({
     if (!name.trim()) { setError('Folder name is required.'); return; }
     setSaving(true);
     setError('');
-    const err = await onSave({ name, description, isPublic, commentsEnabled, commentsModerated });
+    const err = await onSave({ name, description, externalLink, isPublic, commentsEnabled, commentsModerated });
     setSaving(false);
     if (err) setError(err);
   }
@@ -228,6 +233,8 @@ function FolderDialog({
             className={`${inputCls} resize-none`}
           />
         </div>
+
+        <ExternalLinkField id="folder-external-link" value={externalLink} onChange={setExternalLink} hint="Optional. Where clients can download this folder's larger files (Dropbox, Google Drive, …)." />
 
         <div className="rounded-xl border border-[#E4E8F3] bg-[#F6F7FB] p-4 space-y-2">
           <Toggle checked={isPublic} onChange={setIsPublic} label="Publicly accessible" id="folder-public" />
@@ -291,6 +298,7 @@ function EditFileDialog({ file, onClose }: { file: DeliverableRecord; onClose: (
   const toast = useToast();
   const [title, setTitle] = useState(file.title || file.fileName);
   const [description, setDescription] = useState(file.description ?? '');
+  const [externalLink, setExternalLink] = useState(file.externalLink ?? '');
   const [watermark, setWatermark] = useState(file.watermark);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -305,7 +313,7 @@ function EditFileDialog({ file, onClose }: { file: DeliverableRecord; onClose: (
       const res = await fetch(`/api/admin/deliverables/${file.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, description, watermark: watermarkable ? watermark : false }),
+        body: JSON.stringify({ title, description, externalLink, watermark: watermarkable ? watermark : false }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || 'Could not save.');
@@ -334,6 +342,7 @@ function EditFileDialog({ file, onClose }: { file: DeliverableRecord; onClose: (
           <label htmlFor="edit-file-description" className="text-sm font-medium text-[#555]">Description</label>
           <textarea id="edit-file-description" rows={3} maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} className={`${inputCls} resize-none`} />
         </div>
+        <ExternalLinkField id="edit-file-link" value={externalLink} onChange={setExternalLink} hint="Optional. A Dropbox or Google Drive link to a larger version of this file." />
         <div className="rounded-xl border border-[#E4E8F3] bg-[#F6F7FB] p-4 space-y-1.5">
           <Toggle checked={watermarkable && watermark} onChange={setWatermark} label="Watermark" disabled={!watermarkable} />
           <p className="text-xs leading-relaxed text-[#777]">
@@ -355,6 +364,7 @@ interface PendingFile {
   previewUrl: string;
   title: string;
   description: string;
+  externalLink: string;
   watermark: boolean;
   /** Direct-upload state: uploading shows a progress bar, verifying is the server's check, failed keeps the file for a retry. */
   state?: 'uploading' | 'verifying' | 'failed';
@@ -379,7 +389,7 @@ function UploadSection({ folder }: { folder: FolderRecord }) {
     const added = list.map<PendingFile>((file) => {
       const previewUrl = URL.createObjectURL(file);
       urlsRef.current.push(previewUrl);
-      return { file, previewUrl, title: file.name.replace(/\.[^.]+$/, ''), description: '', watermark: false };
+      return { file, previewUrl, title: file.name.replace(/\.[^.]+$/, ''), description: '', externalLink: '', watermark: false };
     });
     setItems((prev) => [...prev, ...added]);
     setError('');
@@ -423,6 +433,8 @@ function UploadSection({ folder }: { folder: FolderRecord }) {
     if (items.length > DELIVERABLE_MAX_FILES) { setError(`Upload up to ${DELIVERABLE_MAX_FILES} files at a time.`); return; }
     const missing = items.findIndex((it) => !it.title.trim());
     if (missing !== -1) { setError(`Add a title for ${items[missing].file.name}.`); return; }
+    const badLink = items.findIndex((it) => it.externalLink.trim() && !normalizeExternalLink(it.externalLink).ok);
+    if (badLink !== -1) { setError(`${items[badLink].file.name}: the external link isn’t a valid web link.`); return; }
 
     setUploading(true);
     setError('');
@@ -432,7 +444,7 @@ function UploadSection({ folder }: { folder: FolderRecord }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           folderId: folder.id,
-          files: items.map((it) => ({ name: it.file.name, size: it.file.size, contentType: it.file.type, title: it.title, description: it.description, watermark: it.watermark })),
+          files: items.map((it) => ({ name: it.file.name, size: it.file.size, contentType: it.file.type, title: it.title, description: it.description, externalLink: it.externalLink, watermark: it.watermark })),
         }),
       });
       const plan = await readUploadResponse<
@@ -552,6 +564,7 @@ function UploadSection({ folder }: { folder: FolderRecord }) {
                       />
                     </div>
                   </div>
+                  <ExternalLinkField id={`file-link-${i}`} label="External link (optional)" value={it.externalLink} onChange={(v) => patch(i, { externalLink: v })} />
                   <div className="flex items-center gap-3">
                     <Toggle checked={watermarkable && it.watermark} onChange={(v) => patch(i, { watermark: v })} label="Watermark" disabled={!watermarkable} />
                     {!watermarkable && <span className="text-xs text-[#999]">Images and PDFs only</span>}

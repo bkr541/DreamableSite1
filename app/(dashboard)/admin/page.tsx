@@ -44,11 +44,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       prisma.deliverable.findMany({
         where: { status: 'READY' }, // files still uploading or being verified aren't listed
         orderBy: { createdAt: 'asc' },
-        select: { id: true, inquiryId: true, projectId: true, folderId: true, title: true, description: true, fileName: true, size: true, watermark: true, createdAt: true },
+        select: { id: true, inquiryId: true, projectId: true, folderId: true, title: true, description: true, externalLink: true, fileName: true, size: true, watermark: true, createdAt: true },
       }),
       prisma.deliverableFolder.findMany({
         orderBy: { createdAt: 'asc' },
-        select: { id: true, inquiryId: true, projectId: true, name: true, description: true, isPublic: true, shareToken: true, commentsEnabled: true, commentsModerated: true, shareRotatedAt: true, createdAt: true },
+        select: { id: true, inquiryId: true, projectId: true, name: true, description: true, externalLink: true, isPublic: true, shareToken: true, commentsEnabled: true, commentsModerated: true, shareRotatedAt: true, createdAt: true },
       }),
       // Comments are newer than the rest of the schema; an unmigrated database shows none instead of breaking the page.
       prisma.deliverableComment
@@ -94,7 +94,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       prisma.project.findMany({
         orderBy: { createdAt: 'desc' },
         select: {
-          id: true, name: true, service: true, status: true, createdAt: true, startDate: true, targetEndDate: true,
+          id: true, name: true, service: true, status: true, createdAt: true, startDate: true, targetEndDate: true, externalLink: true,
           company: { select: { id: true, name: true } },
           primaryUser: { select: { id: true, name: true, email: true } },
         },

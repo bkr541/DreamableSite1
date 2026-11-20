@@ -7,6 +7,7 @@ import { UPLOAD_EXT, fileTypeFor, safeFileName } from '@/lib/fileTypes';
 import { canWatermark } from '@/lib/watermark';
 import { storage, storageConfigured } from '@/lib/storage';
 import { maybeSweep } from '@/lib/uploadFlow';
+import { normalizeExternalLink } from '@/lib/externalLink';
 
 const fail = (error: string, status: number) => NextResponse.json({ ok: false, error }, { status });
 
@@ -37,8 +38,11 @@ export async function POST(req: NextRequest) {
       if (!name || !UPLOAD_EXT.test(name) || !fileTypeFor(name)) return fail(`${name || 'That file'} is not a supported file type.`, 400);
       if (!Number.isInteger(size) || size <= 0) return fail(`${name} is empty.`, 400);
       if (size > DELIVERABLE_MAX_BYTES) return fail(`${name} is larger than 25 MB.`, 400);
+      const link = normalizeExternalLink(f?.externalLink);
+      if (!link.ok) return fail(`${name}: ${link.error}`, 400);
       const id = randomUUID();
       planned.push({
+        externalLink: link.value,
         id, key: `deliverables/${id}`, name, size,
         declaredType: typeof f?.contentType === 'string' ? f.contentType.slice(0, 120) : '',
         title: (typeof f?.title === 'string' ? f.title.trim().slice(0, 200) : '') || name,
@@ -59,7 +63,7 @@ export async function POST(req: NextRequest) {
     await prisma.deliverable.createMany({
       data: planned.map((p) => ({
         id: p.id, folderId: folder.id, inquiryId: folder.inquiryId, projectId: folder.projectId,
-        title: p.title, description: p.description, watermark: p.watermark,
+        title: p.title, description: p.description, externalLink: p.externalLink, watermark: p.watermark,
         fileName: p.name, contentType: p.declaredType || 'application/octet-stream', size: p.size,
         storageKey: p.key, status: 'PENDING',
       })),

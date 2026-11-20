@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { removeObjects } from '@/lib/storage';
 import { recordAudit } from '@/lib/audit';
 import { shareChange } from '@/lib/shareLinks';
+import { normalizeExternalLink } from '@/lib/externalLink';
 
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 
@@ -13,8 +14,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
 
   try {
-    const { name, description, isPublic, commentsEnabled, commentsModerated } = await req.json();
-    const data: { name?: string; description?: string | null; isPublic?: boolean; commentsEnabled?: boolean; commentsModerated?: boolean; shareToken?: string; shareRotatedAt?: Date } = {};
+    const { name, description, externalLink, isPublic, commentsEnabled, commentsModerated } = await req.json();
+    const data: { name?: string; description?: string | null; externalLink?: string | null; isPublic?: boolean; commentsEnabled?: boolean; commentsModerated?: boolean; shareToken?: string; shareRotatedAt?: Date } = {};
 
     if (name !== undefined) {
       if (typeof name !== 'string' || !name.trim()) return fail('Folder name is required.');
@@ -23,6 +24,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
     if (description !== undefined) {
       data.description = typeof description === 'string' && description.trim() ? description.trim().slice(0, 1000) : null;
+    }
+    if (externalLink !== undefined) {
+      const link = normalizeExternalLink(externalLink);
+      if (!link.ok) return fail(link.error);
+      data.externalLink = link.value;
     }
     // Switching sharing off or on always replaces the link, so an old URL can never come back to life.
     let shareEvent: 'share_revoke' | 'share_enable' | null = null;

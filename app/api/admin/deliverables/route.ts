@@ -1,3 +1,4 @@
+import { normalizeExternalLink } from '@/lib/externalLink';
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest) {
     const watermarks: unknown = JSON.parse(String(form.get('watermarks') ?? '[]'));
     const descriptions: unknown = JSON.parse(String(form.get('descriptions') ?? '[]'));
     const titles: unknown = JSON.parse(String(form.get('titles') ?? '[]'));
+    const externalLinks: unknown = JSON.parse(String(form.get('externalLinks') ?? '[]'));
     const files = form.getAll('files').filter((f): f is File => f instanceof File && f.size > 0);
 
     if (!folderId) return fail('Create or choose a folder first.', 400);
@@ -46,6 +48,8 @@ export async function POST(req: NextRequest) {
       const name = safeFileName(f.name);
       const checked = await validateUpload({ fileName: name, declaredType: f.type, bytes });
       if (!checked.ok) return fail(checked.error, 400);
+      const link = normalizeExternalLink(Array.isArray(externalLinks) ? externalLinks[i] : null);
+      if (!link.ok) return fail(`${name}: ${link.error}`, 400);
       rows.push({
         id: randomUUID(),
         folderId: folder.id,
@@ -57,6 +61,7 @@ export async function POST(req: NextRequest) {
         title: (Array.isArray(titles) && typeof titles[i] === 'string' ? titles[i].trim().slice(0, 200) : '') || name,
         description:
           (Array.isArray(descriptions) && typeof descriptions[i] === 'string' ? descriptions[i].trim().slice(0, 500) : '') || null,
+        externalLink: link.value,
         fileName: name,
         contentType: checked.contentType,
         size: bytes.length,

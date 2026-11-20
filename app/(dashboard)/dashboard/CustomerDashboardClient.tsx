@@ -9,6 +9,7 @@ import FileTile from '@/components/FileTile';
 import FilePreviewModal, { PreviewFile } from '@/components/FilePreviewModal';
 import AccountPanel from '@/components/AccountPanel';
 import InvoicesPanel, { type CustomerInvoice } from '@/components/InvoicesPanel';
+import { ExternalLinkChip } from '@/components/ExternalLink';
 
 interface Deliverable {
   id: string;
@@ -17,6 +18,7 @@ interface Deliverable {
   folderId: string | null;
   title: string | null;
   description: string | null;
+  externalLink: string | null;
   fileName: string;
   size: number;
 }
@@ -27,6 +29,7 @@ interface Folder {
   projectId: string | null;
   name: string;
   description: string | null;
+  externalLink: string | null;
 }
 
 interface Project {
@@ -35,6 +38,7 @@ interface Project {
   service: string;
   status: string;
   description: string;
+  externalLink: string | null;
   startDate: string | null;
   targetEndDate: string | null;
   createdAt: string;
@@ -107,19 +111,22 @@ function fmtDate(iso: string | null) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-/** Files grouped under the folder they were delivered in. */
+/** Files grouped under the folder they were delivered in. A folder with a download link is listed even if it holds no files yet. */
 function DeliverableGroups({ folders, items, onPreview }: { folders: Folder[]; items: Deliverable[]; onPreview: (f: PreviewFile) => void }) {
   const groups = [
-    ...folders.map((f) => ({ id: f.id, name: f.name, description: f.description, items: items.filter((d) => d.folderId === f.id) })),
+    ...folders.map((f) => ({ id: f.id, name: f.name, description: f.description, link: f.externalLink, items: items.filter((d) => d.folderId === f.id) })),
     // Files delivered before folders existed still show up.
-    { id: 'unfiled', name: 'Other files', description: null as string | null, items: items.filter((d) => !d.folderId) },
-  ].filter((g) => g.items.length > 0);
+    { id: 'unfiled', name: 'Other files', description: null as string | null, link: null as string | null, items: items.filter((d) => !d.folderId) },
+  ].filter((g) => g.items.length > 0 || g.link);
 
   return (
     <div className="space-y-5">
       {groups.map((g) => (
         <div key={g.id}>
-          <p className="text-xs font-semibold text-[#555] mb-0.5">{g.name}</p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mb-0.5">
+            <p className="text-xs font-semibold text-[#555]">{g.name}</p>
+            {g.link && <ExternalLinkChip url={g.link} prefix="Download from" />}
+          </div>
           {g.description && <p className="text-xs text-[#888] mb-2">{g.description}</p>}
           <div className="flex flex-wrap gap-3 mt-2">
             {g.items.map((d) => (
@@ -134,6 +141,16 @@ function DeliverableGroups({ folders, items, onPreview }: { folders: Folder[]; i
               />
             ))}
           </div>
+          {g.items.some((d) => d.externalLink) && (
+            <ul className="mt-3 space-y-1.5">
+              {g.items.filter((d) => d.externalLink).map((d) => (
+                <li key={d.id} className="flex flex-wrap items-center gap-2 text-xs text-[#666]">
+                  <span className="truncate font-medium text-[#555]">{d.title || d.fileName}</span>
+                  <ExternalLinkChip url={d.externalLink!} prefix="Larger version on" />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       ))}
     </div>
@@ -225,9 +242,15 @@ export default function CustomerDashboardClient({ session, user, deliverables, f
                   </div>
                 </div>
 
-                {deliverables.some((d) => d.projectId === project.id) && (
+                {(project.externalLink || deliverables.some((d) => d.projectId === project.id) || folders.some((f) => f.projectId === project.id && f.externalLink)) && (
                   <div className="pt-4 border-t border-[#F5F5F5]">
                     <p className="text-xs font-semibold text-[#999] uppercase tracking-widest mb-4">Deliverables</p>
+                    {project.externalLink && (
+                      <div className="mb-5 rounded-xl border border-[#E4E8F3] bg-[#F6F7FB] p-4">
+                        <p className="mb-2 text-xs text-[#666]">Larger files for this project are available to download here.</p>
+                        <ExternalLinkChip url={project.externalLink} prefix="Download from" />
+                      </div>
+                    )}
                     <DeliverableGroups
                       folders={folders.filter((f) => f.projectId === project.id)}
                       items={deliverables.filter((d) => d.projectId === project.id)}

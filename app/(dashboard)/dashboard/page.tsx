@@ -26,6 +26,7 @@ export default async function DashboardPage() {
           service: true,
           status: true,
           description: true,
+          externalLink: true,
           startDate: true,
           targetEndDate: true,
           createdAt: true,
@@ -45,7 +46,7 @@ export default async function DashboardPage() {
       ],
     },
     orderBy: { createdAt: 'asc' },
-    select: { id: true, inquiryId: true, projectId: true, folderId: true, title: true, description: true, fileName: true, size: true },
+    select: { id: true, inquiryId: true, projectId: true, folderId: true, title: true, description: true, externalLink: true, fileName: true, size: true },
   });
 
   const folders = await prisma.deliverableFolder.findMany({
@@ -56,7 +57,7 @@ export default async function DashboardPage() {
       ],
     },
     orderBy: { createdAt: 'asc' },
-    select: { id: true, inquiryId: true, projectId: true, name: true, description: true },
+    select: { id: true, inquiryId: true, projectId: true, name: true, description: true, externalLink: true },
   });
 
   // Only invoices linked to THIS account, and only once issued (drafts are internal). Read-only: the customer can look at

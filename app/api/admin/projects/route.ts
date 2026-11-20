@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { canonicalServiceLabel } from '@/lib/services';
+import { normalizeExternalLink } from '@/lib/externalLink';
 
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 
@@ -11,13 +12,15 @@ export async function POST(req: NextRequest) {
 
   const {
     name, companyId, newCompanyName, primaryUserId, service, subCategory, description,
-    budgetRange, timeline, status, startDate, targetEndDate,
+    budgetRange, timeline, status, startDate, targetEndDate, externalLink,
   } = await req.json();
 
   if (!name?.trim()) return fail('Project name is required.');
   if (!companyId && !newCompanyName?.trim()) return fail('Company is required.');
   if (!service?.trim()) return fail('Service is required.');
   if (!description?.trim()) return fail('Description is required.');
+  const link = normalizeExternalLink(externalLink);
+  if (!link.ok) return fail(link.error);
 
   try {
     // The client and company have to agree, otherwise the project would be linked to a mismatched pair.
@@ -53,6 +56,7 @@ export async function POST(req: NextRequest) {
           description: description.trim(),
           budgetRange: budgetRange?.trim() || null,
           timeline: timeline?.trim() || null,
+          externalLink: link.value,
           status: status || 'ONBOARDING',
           startDate: startDate ? new Date(startDate) : null,
           targetEndDate: targetEndDate ? new Date(targetEndDate) : null,

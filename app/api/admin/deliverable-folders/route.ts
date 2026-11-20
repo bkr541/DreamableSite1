@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { newShareToken } from '@/lib/shareLinks';
+import { normalizeExternalLink } from '@/lib/externalLink';
 
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 
@@ -10,12 +11,14 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return auth.response;
 
   try {
-    const { targetType, targetId, name, description, isPublic, commentsEnabled, commentsModerated } = await req.json();
+    const { targetType, targetId, name, description, externalLink, isPublic, commentsEnabled, commentsModerated } = await req.json();
 
     if (targetType !== 'inquiry' && targetType !== 'project') return fail('Invalid target.');
     if (!targetId || typeof targetId !== 'string') return fail('Invalid target.');
     if (typeof name !== 'string' || !name.trim()) return fail('Folder name is required.');
     if (name.trim().length > 120) return fail('Folder name must be 120 characters or fewer.');
+    const link = normalizeExternalLink(externalLink);
+    if (!link.ok) return fail(link.error);
 
     const target =
       targetType === 'inquiry'
@@ -28,6 +31,7 @@ export async function POST(req: NextRequest) {
         [targetType === 'inquiry' ? 'inquiryId' : 'projectId']: targetId,
         name: name.trim(),
         description: typeof description === 'string' && description.trim() ? description.trim().slice(0, 1000) : null,
+        externalLink: link.value,
         isPublic: isPublic === true,
         commentsEnabled: commentsEnabled !== false,
         commentsModerated: commentsModerated === true,

@@ -43,6 +43,7 @@ interface LegacyDeliverable {
   file: File;
   title: string;
   description: string;
+  externalLink?: string;
   watermark: boolean;
 }
 
@@ -62,6 +63,7 @@ export async function uploadLegacyDeliverables(
       body.append('files', item.file);
       body.append('titles', JSON.stringify([item.title]));
       body.append('descriptions', JSON.stringify([item.description]));
+      body.append('externalLinks', JSON.stringify([item.externalLink ?? '']));
       body.append('watermarks', JSON.stringify([item.watermark]));
       const response = await fetch('/api/admin/deliverables', { method: 'POST', body });
       const data = await readUploadResponse<{ count: number }>(response);
