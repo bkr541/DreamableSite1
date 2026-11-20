@@ -49,7 +49,7 @@ function Notice({ title, children }: { title: string; children: React.ReactNode 
 
 const connectBtn = 'inline-flex h-10 items-center justify-center rounded-full bg-[#1a2030] px-6 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:shadow-md';
 
-export default function InboxPanel() {
+export default function InboxPanel({ onReply }: { onReply: (start: { to?: string; subject?: string; firstName?: string }) => void }) {
   const toast = useToast();
   const [inbox, setInbox] = useState<Inbox>({ state: 'loading' });
   const [busyMore, setBusyMore] = useState(false);
@@ -187,13 +187,14 @@ export default function InboxPanel() {
               {open.receivedAt && <p className="text-xs text-[#999]">{new Date(open.receivedAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>}
             </div>
             {open.fromAddress && (
-              <a
-                href={`mailto:${encodeURIComponent(open.fromAddress).replace(/%40/g, '@')}?subject=${encodeURIComponent(/^re:/i.test(open.subject) ? open.subject : `Re: ${open.subject}`)}`}
+              <button
+                type="button"
+                onClick={() => onReply({ to: open.fromAddress, subject: /^re:/i.test(open.subject) ? open.subject : `Re: ${open.subject}`, firstName: open.fromName.split(/\s+/)[0] && open.fromName !== open.fromAddress ? open.fromName.split(/\s+/)[0] : undefined })}
                 className="inline-flex h-9 items-center gap-2 rounded-full border border-[#D5D8DE] bg-white px-4 text-sm font-medium text-[#4b5260] transition-colors hover:bg-[#F5F6F8]"
               >
                 <HugeiconsIcon icon={MailReply01Icon} size={16} color="currentColor" strokeWidth={1.75} />
                 Reply
-              </a>
+              </button>
             )}
           </div>
           {!ready && <p className="p-8 text-center text-sm text-[#999]" role="status">Loading message…</p>}

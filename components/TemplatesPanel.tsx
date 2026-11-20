@@ -13,6 +13,9 @@ import { TEMPLATES, initialValues, type EmailTemplate } from '@/lib/emailTemplat
 
 export interface HubClient { id: string; name: string; email: string }
 
+/** Opens the Blank Message composer straight away, optionally addressed and titled (used by "New email" and "Reply"). */
+export interface ComposeStart { to?: string; subject?: string; firstName?: string }
+
 const ICONS: Record<string, typeof Layout01Icon> = {
   welcome: UserCheck01Icon,
   'project-kickoff': Rocket01Icon,
@@ -25,12 +28,12 @@ const ICONS: Record<string, typeof Layout01Icon> = {
 const input = 'w-full rounded-xl border bg-white px-4 py-2.5 text-sm text-[#1a1a1a] placeholder:text-[#bbb] transition-all focus:outline-none focus:ring-2 focus:ring-purple-200/50';
 const secondaryBtn = 'inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[#D5D8DE] bg-white px-5 text-sm font-medium text-[#4b5260] transition-colors hover:bg-[#F5F6F8] hover:text-[#1a1a1a]';
 
-export default function TemplatesPanel({ clients, baseUrl }: { clients: HubClient[]; baseUrl: string }) {
-  const [openId, setOpenId] = useState<string | null>(null);
+export default function TemplatesPanel({ clients, baseUrl, start }: { clients: HubClient[]; baseUrl: string; start?: ComposeStart | null }) {
+  const [openId, setOpenId] = useState<string | null>(start ? 'blank' : null);
   const [search, setSearch] = useState('');
   const open = TEMPLATES.find((t) => t.id === openId) ?? null;
 
-  if (open) return <Composer key={open.id} template={open} clients={clients} baseUrl={baseUrl} onBack={() => setOpenId(null)} />;
+  if (open) return <Composer key={open.id} template={open} clients={clients} baseUrl={baseUrl} prefill={open.id === 'blank' ? start ?? null : null} onBack={() => setOpenId(null)} />;
 
   const q = search.trim().toLowerCase();
   const rows = TEMPLATES.filter((t) => !q || `${t.name} ${t.description} ${t.category} ${t.subject}`.toLowerCase().includes(q));
@@ -64,12 +67,12 @@ export default function TemplatesPanel({ clients, baseUrl }: { clients: HubClien
   );
 }
 
-function Composer({ template, clients, baseUrl, onBack }: { template: EmailTemplate; clients: HubClient[]; baseUrl: string; onBack: () => void }) {
+function Composer({ template, clients, baseUrl, prefill, onBack }: { template: EmailTemplate; clients: HubClient[]; baseUrl: string; prefill: ComposeStart | null; onBack: () => void }) {
   const toast = useToast();
   const [clientId, setClientId] = useState('');
-  const [to, setTo] = useState('');
-  const [subject, setSubject] = useState(template.subject);
-  const [values, setValues] = useState(() => initialValues(template, baseUrl));
+  const [to, setTo] = useState(prefill?.to ?? '');
+  const [subject, setSubject] = useState(prefill?.subject ?? template.subject);
+  const [values, setValues] = useState<Record<string, string>>(() => ({ ...initialValues(template, baseUrl), ...(prefill?.firstName ? { firstName: prefill.firstName } : {}) }));
   const [rawHtml, setRawHtml] = useState<string | null>(null); // set while the admin is editing the HTML itself
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');

@@ -20,6 +20,14 @@ describe('Message Hub', () => {
   it('the Zoho sign-in returns to the Inbox tab inside Message Hub', () => {
     for (const f of ['app/api/admin/zoho/connect/route.ts', 'app/api/auth/zoho/callback/route.ts']) expect(read(f), f).toContain('view=messages&hub=inbox&zoho=');
   });
+  it('offers a New email button, and Reply opens the composer instead of the computer\'s mail app', () => {
+    const hub = read('components/MessageHub.tsx');
+    expect(hub).toContain('New email');
+    expect(hub).toContain('<InboxPanel onReply={openCompose} />');
+    const inbox = read('components/InboxPanel.tsx');
+    expect(inbox).toContain('onReply(');
+    expect(inbox).not.toContain('mailto:');
+  });
   it('shows the email preview in a script-free frame', () => {
     const src = read('components/TemplatesPanel.tsx');
     expect(src).toMatch(/<iframe[^>]*sandbox=""/);
